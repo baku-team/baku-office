@@ -13,8 +13,14 @@ interface Env {
   // secrets（wrangler secret put）
   MASTER_KEY?: string;
   VERIFY_PUBLIC_JWK?: string;
+  // 組織ログイン（Google OAuth・§6.2）。未設定時は dev ログイン。
   GOOGLE_CLIENT_ID?: string;
   GOOGLE_CLIENT_SECRET?: string;
+  // 個人ログイン（LINE Login / Discord・§6.2）。未設定時は local(id/pass)。
+  LINE_LOGIN_CHANNEL_ID?: string;
+  LINE_LOGIN_CHANNEL_SECRET?: string;
+  DISCORD_CLIENT_ID?: string;
+  DISCORD_CLIENT_SECRET?: string;
   // R2 高度モード（任意）
   MEDIA_R2?: R2Bucket;
 }
