@@ -23,6 +23,8 @@ interface Env {
   DISCORD_CLIENT_SECRET?: string;
   // R2 高度モード（任意）
   MEDIA_R2?: R2Bucket;
+  // リマインダー drain（外部スケジューラ）保護用。
+  INTERNAL_KEY?: string;
 }
 
 type Runtime = import("@astrojs/cloudflare").Runtime<Env>;
