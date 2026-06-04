@@ -4,6 +4,7 @@
 import { getApiKey } from "./client.ts";
 import * as T from "./agent-tools.ts";
 import { webSearch, makeDocument } from "./media-ai.ts";
+import { listSkills, runSkill } from "./skills.ts";
 
 const SYSTEM =
   "あなたは団体の会計・庶務を補助するLINEアシスタント『baku-office』です。日本語で簡潔に。" +
@@ -30,6 +31,10 @@ const GEMINI_TOOLS = [
 const CLAUDE_TOOLS = [
   { name: "make_document", description: "資料を生成（type=md/csv/txt）してDLリンクを返す", parameters: { type: "object", properties: { type: { type: "string" }, title: { type: "string" }, content: { type: "string" } }, required: ["title", "content"] } },
 ];
+// 高度なオプション：有効化済みのユーザー追加スキル（要Claudeキー）。
+function skillTool(names: string[]) {
+  return { name: "run_skill", description: `登録済みの業務スキルを実行（利用可能: ${names.join(", ")}）`, parameters: { type: "object", properties: { name: { type: "string" }, input: { type: "string" } }, required: ["name", "input"] } };
+}
 
 type Part = { text?: string; functionCall?: { name: string; args: Record<string, unknown> }; functionResponse?: { name: string; response: unknown }; inlineData?: { mimeType: string; data: string } };
 type Content = { role: string; parts: Part[] };
@@ -57,6 +62,7 @@ async function execTool(env: Env, owner: string, baseUrl: string, name: string, 
     case "search_members": return T.searchMembers(env, { query: String(args.query ?? "") });
     case "web_search": return (await webSearch(env, String(args.query))) ?? "web検索は未設定です。";
     case "make_document": return makeDocument(env, owner, baseUrl, { type: String(args.type ?? "md"), title: String(args.title), content: String(args.content) });
+    case "run_skill": return runSkill(env, owner, baseUrl, String(args.name), String(args.input ?? ""));
     default: return "未知のツール";
   }
 }
@@ -67,7 +73,8 @@ export async function runAgent(env: Env, lineUserId: string, text: string, image
   const key = await getApiKey(env, "gemini");
   if (!key) return "AI機能が未設定です。管理画面の『連携設定』で Gemini APIキーを登録してください。";
   const hasClaude = !!(await getApiKey(env, "claude"));
-  const decls = [...TOOLS, ...GEMINI_TOOLS, ...(hasClaude ? CLAUDE_TOOLS : [])];
+  const enabledSkills = hasClaude ? await listSkills(env, true) : [];
+  const decls = [...TOOLS, ...GEMINI_TOOLS, ...(hasClaude ? CLAUDE_TOOLS : []), ...(enabledSkills.length ? [skillTool(enabledSkills.map((s) => s.name))] : [])];
   const owner = `line:${lineUserId}`;
   const firstParts: Part[] = [{ text: text || "（画像）" }];
   if (image) firstParts.push({ inlineData: { mimeType: image.mimeType, data: image.dataB64 } });

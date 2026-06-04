@@ -1,0 +1,64 @@
+---
+export const prerender = false;
+const env = Astro.locals.runtime.env;
+const { getSession } = await import("../../lib/auth.ts");
+const ses = await getSession(env, Astro.request);
+if (!ses || ses.role !== "admin" || ses.ctx !== "org") return Astro.redirect("/login", 302);
+const { listSkills } = await import("../../lib/skills.ts");
+const { storageMode } = await import("../../lib/storage.ts");
+const skills = await listSkills(env);
+const mode = storageMode(env);
+---
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" /><title>高度なオプション — baku-office</title>
+<style>body{font-family:system-ui,sans-serif;max-width:820px;margin:0 auto;color:#1c2530}header{background:#0f172a;color:#fff;padding:.8rem 1.25rem}header a{color:#cbd5e1;text-decoration:none;margin-right:1rem;font-size:.9rem}main{padding:1.25rem}h2{border-bottom:2px solid #e2e8f0;padding-bottom:.3rem;margin-top:1.8rem}input,textarea,select{width:100%;padding:.45rem;border:1px solid #cbd5e1;border-radius:6px;margin:.2rem 0}button{padding:.4rem .8rem;border:0;border-radius:6px;cursor:pointer}table{border-collapse:collapse;width:100%;font-size:.9rem}th,td{border:1px solid #e2e8f0;padding:.4rem .6rem}th{background:#f8fafc}.muted{color:#64748b;font-size:.88rem}.warn{background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;padding:.6rem .9rem;margin:.5rem 0}.pill{font-size:.75rem;padding:.1rem .5rem;border-radius:999px;background:#eef2ff;color:#3730a3}</style></head>
+<body>
+<header><a href="/">ホーム</a><a href="/settings/keys">連携設定</a><a href="/settings/advanced">高度なオプション</a></header>
+<main>
+<h1>高度なオプション</h1>
+<div class="warn">⚠️ ここでは<strong>従量課金につながる機能</strong>を扱います。利用には対応APIキー（Claude等）の登録と、各サービスの課金が必要です。</div>
+
+<h2>ストレージ（R2・高度モード）</h2>
+<p class="muted">現在：<strong>{mode === "r2" ? "高度モード（R2・大容量/高速）" : "標準モード（KV・5MBまで・カード不要）"}</strong>。R2はカード登録が前提（§11）。有効化すると `wrangler.jsonc` の `MEDIA_R2` を有効にして再デプロイ後、自動で高度モードになります。</p>
+
+<h2>Agent Skills（コード実行・従量課金）</h2>
+<p class="muted">SKILL.md を登録して独自の業務スキルを追加します（請求書生成・議事録フォーマット等）。スキルは<strong>データとして保存</strong>され、固定ランタイムがロードして Claude 経由で実行（Worker内でevalは行いません）。<br>
+モード：<strong>instruction</strong>＝通常のLLM費／<strong>code</strong>＝Anthropic code execution（コンテナ実行＝追加の従量課金）。<strong>管理者がレビューして有効化</strong>したものだけが動きます。LINEエージェントから「〇〇スキルで…」で呼べます（要 Z＋Claudeキー）。</p>
+<details><summary>スキルを追加</summary>
+  <input id="sname" placeholder="スキル名（呼び出し名・例：請求書生成）" />
+  <input id="sdesc" placeholder="説明（任意）" />
+  <select id="smode"><option value="instruction">instruction（通常費）</option><option value="code">code（コード実行・従量課金）</option></select>
+  <textarea id="smd" rows="6" placeholder="SKILL.md（手順・テンプレート・出力形式）"></textarea>
+  <button id="add" style="background:#2563eb;color:#fff">登録（無効状態で保存）</button>
+</details>
+<table style="margin-top:1rem"><thead><tr><th>名前</th><th>モード</th><th>状態</th><th>操作</th></tr></thead><tbody>
+  {skills.map((s)=>(
+    <tr data-id={s.id}>
+      <td>{s.name}<div class="muted">{s.description ?? ""}</div></td>
+      <td><span class="pill">{s.mode}</span></td>
+      <td>{s.enabled ? "有効" : "無効"}</td>
+      <td>
+        {s.enabled
+          ? <button class="dis" style="background:#d97706;color:#fff">無効化</button>
+          : <button class="en" style="background:#16a34a;color:#fff">有効化</button>}
+        <button class="del" style="background:#ef4444;color:#fff">削除</button>
+      </td>
+    </tr>
+  ))}
+  {skills.length===0 && (<tr><td colspan="4" class="muted">スキルは未登録です。</td></tr>)}
+</tbody></table>
+
+<script type="module">
+  const post=(b)=>fetch("/api/skills",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(b)}).then(r=>r.json());
+  document.getElementById("add").onclick=async()=>{
+    await post({_action:"create",name:document.getElementById("sname").value,description:document.getElementById("sdesc").value,mode:document.getElementById("smode").value,skill_md:document.getElementById("smd").value});
+    location.reload();
+  };
+  document.querySelectorAll("tr[data-id]").forEach(tr=>{
+    const id=tr.dataset.id;
+    tr.querySelector(".en")?.addEventListener("click",async()=>{await post({_action:"enable",id,enabled:true});location.reload();});
+    tr.querySelector(".dis")?.addEventListener("click",async()=>{await post({_action:"enable",id,enabled:false});location.reload();});
+    tr.querySelector(".del")?.addEventListener("click",async()=>{if(confirm("削除しますか？")){await post({_action:"delete",id});location.reload();}});
+  });
+</script>
+</main></body></html>
