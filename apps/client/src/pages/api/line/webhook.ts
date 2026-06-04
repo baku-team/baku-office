@@ -6,6 +6,7 @@ import { saveFile } from "../../../lib/storage.ts";
 import { enqueueSummary, transcribeAudio } from "../../../lib/media-ai.ts";
 import { randomId } from "@baku-office/shared";
 import { nowSec } from "../../../lib/accounting.ts";
+import { logDiag, looksLikeLimit, PAID_HINT } from "../../../lib/diag.ts";
 
 export const prerender = false;
 
@@ -35,6 +36,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
     const m = ev.message!;
     const work = (async () => {
       let out: string;
+      try {
       if (m.type === "image" && m.id) {
         const img = await fetchLineImage(accessToken, m.id);
         out = img ? await runAgent(env, userId, "この画像（領収書なら record_expense で記録）を処理してください。", img, origin) : "画像を取得できませんでした。";
@@ -62,6 +64,13 @@ export const POST: APIRoute = async ({ request, locals }) => {
       } else return;
       await lineReply(accessToken, reply, out);
       for (const r of await dueReminders(env, `line:${userId}`)) { await linePush(accessToken, userId, `⏰ リマインド：${r.content}`); await markReminderDone(env, r.id); }
+      } catch (e) {
+        // CF制限（CPU時間・waitUntil等）に達した可能性。診断記録＋利用者にWorkers Paid案内。
+        const msg = (e as Error).message ?? String(e);
+        const limit = looksLikeLimit(msg);
+        await logDiag(env, "error", limit ? "limit" : "ai", `agent webhook: ${msg}`);
+        await lineReply(accessToken, reply, limit ? "処理が混み合い完了できませんでした。\n" + PAID_HINT : "処理中にエラーが発生しました。時間をおいて再度お試しください。").catch(() => {});
+      }
     })();
     locals.runtime.ctx.waitUntil(work);
   }

@@ -5,6 +5,7 @@ import { getApiKey } from "./client.ts";
 import * as T from "./agent-tools.ts";
 import { webSearch, makeDocument } from "./media-ai.ts";
 import { listSkills, runSkill } from "./skills.ts";
+import { listCapabilities, invokeCapability, capabilitySummary } from "./capabilities.ts";
 
 const SYSTEM =
   "あなたは団体の会計・庶務を補助するLINEアシスタント『baku-office』です。日本語で簡潔に。" +
@@ -35,15 +36,21 @@ const CLAUDE_TOOLS = [
 function skillTool(names: string[]) {
   return { name: "run_skill", description: `登録済みの業務スキルを実行（利用可能: ${names.join(", ")}）`, parameters: { type: "object", properties: { name: { type: "string" }, input: { type: "string" } }, required: ["name", "input"] } };
 }
+// 任意API能力（設定済みのものだけツール提示）。
+const CAP_TOOLS: Record<string, unknown> = {
+  image_gen: { name: "generate_image", description: "画像を生成してDLリンクを返す", parameters: { type: "object", properties: { prompt: { type: "string" } }, required: ["prompt"] } },
+  tts: { name: "synthesize_speech", description: "テキストを音声合成してDLリンクを返す", parameters: { type: "object", properties: { text: { type: "string" } }, required: ["text"] } },
+  video_gen: { name: "generate_video", description: "動画を生成（非同期）", parameters: { type: "object", properties: { prompt: { type: "string" } }, required: ["prompt"] } },
+};
 
 type Part = { text?: string; functionCall?: { name: string; args: Record<string, unknown> }; functionResponse?: { name: string; response: unknown }; inlineData?: { mimeType: string; data: string } };
 type Content = { role: string; parts: Part[] };
 
-async function gemini(key: string, contents: Content[], decls: unknown[]): Promise<Content | null> {
+async function gemini(key: string, contents: Content[], decls: unknown[], sys: string): Promise<Content | null> {
   const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(key)}`, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ systemInstruction: { parts: [{ text: SYSTEM }] }, contents, tools: [{ functionDeclarations: decls }], generationConfig: { temperature: 0.3, maxOutputTokens: 800 } }),
+    body: JSON.stringify({ systemInstruction: { parts: [{ text: sys }] }, contents, tools: [{ functionDeclarations: decls }], generationConfig: { temperature: 0.3, maxOutputTokens: 800 } }),
   });
   if (!r.ok) { console.log("[gemini]", r.status, (await r.text()).slice(0, 200)); return null; }
   const data = (await r.json()) as { candidates?: { content?: Content }[] };
@@ -63,6 +70,9 @@ async function execTool(env: Env, owner: string, baseUrl: string, name: string, 
     case "web_search": return (await webSearch(env, String(args.query))) ?? "web検索は未設定です。";
     case "make_document": return makeDocument(env, owner, baseUrl, { type: String(args.type ?? "md"), title: String(args.title), content: String(args.content) });
     case "run_skill": return runSkill(env, owner, baseUrl, String(args.name), String(args.input ?? ""));
+    case "generate_image": return invokeCapability(env, owner, baseUrl, "image_gen", String(args.prompt));
+    case "synthesize_speech": return invokeCapability(env, owner, baseUrl, "tts", String(args.text));
+    case "generate_video": return invokeCapability(env, owner, baseUrl, "video_gen", String(args.prompt));
     default: return "未知のツール";
   }
 }
@@ -74,14 +84,19 @@ export async function runAgent(env: Env, lineUserId: string, text: string, image
   if (!key) return "AI機能が未設定です。管理画面の『連携設定』で Gemini APIキーを登録してください。";
   const hasClaude = !!(await getApiKey(env, "claude"));
   const enabledSkills = hasClaude ? await listSkills(env, true) : [];
-  const decls = [...TOOLS, ...GEMINI_TOOLS, ...(hasClaude ? CLAUDE_TOOLS : []), ...(enabledSkills.length ? [skillTool(enabledSkills.map((s) => s.name))] : [])];
+  const caps = await listCapabilities(env, true);
+  const capDecls = caps.map((c) => CAP_TOOLS[c.capability]).filter(Boolean);
+  const decls = [...TOOLS, ...GEMINI_TOOLS, ...(hasClaude ? CLAUDE_TOOLS : []), ...(enabledSkills.length ? [skillTool(enabledSkills.map((s) => s.name))] : []), ...capDecls];
   const owner = `line:${lineUserId}`;
+  // 自己認識：有効な追加能力をシステム文脈へ（AI/エージェントが参照できるように）。
+  const capInfo = await capabilitySummary(env);
+  const sys = capInfo ? `${SYSTEM}\n${capInfo}` : SYSTEM;
   const firstParts: Part[] = [{ text: text || "（画像）" }];
   if (image) firstParts.push({ inlineData: { mimeType: image.mimeType, data: image.dataB64 } });
   const contents: Content[] = [{ role: "user", parts: firstParts }];
 
   for (let hop = 0; hop < 4; hop++) {
-    const out = await gemini(key, contents, decls);
+    const out = await gemini(key, contents, decls, sys);
     if (!out) return "（AIの応答に失敗しました）";
     const calls = out.parts.filter((p) => p.functionCall);
     if (!calls.length) return out.parts.map((p) => p.text ?? "").join("").trim() || "（応答が空でした）";

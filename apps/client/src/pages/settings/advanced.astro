@@ -6,7 +6,9 @@ const ses = await getSession(env, Astro.request);
 if (!ses || ses.role !== "admin" || ses.ctx !== "org") return Astro.redirect("/login", 302);
 const { listSkills } = await import("../../lib/skills.ts");
 const { storageMode } = await import("../../lib/storage.ts");
+const { listCapabilities, CAPABILITY_LABEL } = await import("../../lib/capabilities.ts");
 const skills = await listSkills(env);
+const caps = await listCapabilities(env);
 const mode = storageMode(env);
 ---
 <!doctype html>
@@ -48,8 +50,47 @@ const mode = storageMode(env);
   {skills.length===0 && (<tr><td colspan="4" class="muted">スキルは未登録です。</td></tr>)}
 </tbody></table>
 
+<h2>任意API（画像生成・音声合成・動画生成など）</h2>
+<p class="muted">外部AIサービスをBYOKで追加します。APIキーは暗号化保存（§10.3）。<strong>有効化したものはAI/エージェントが参照・実行</strong>できます（LINEから「画像を作って」等）。各サービスの利用料は団体負担（従量課金）。<strong>管理者がレビューして有効化</strong>。</p>
+<details><summary>能力を追加</summary>
+  <select id="cap"><option value="image_gen">画像生成</option><option value="tts">音声合成</option><option value="video_gen">動画生成</option><option value="embed">埋め込み(検索)</option><option value="custom">カスタムAPI</option></select>
+  <input id="cprov" placeholder="プロバイダ（例：openai / stability / elevenlabs）" />
+  <input id="cmodel" placeholder="モデル（任意・例：gpt-image-1 / tts-1）" />
+  <input id="cendpoint" placeholder="エンドポイントURL（カスタム時・任意）" />
+  <input id="ckey" type="password" placeholder="APIキー" />
+  <button id="capadd" style="background:#2563eb;color:#fff">登録（無効状態で保存）</button>
+</details>
+<table style="margin-top:1rem"><thead><tr><th>能力</th><th>プロバイダ</th><th>状態</th><th>操作</th></tr></thead><tbody>
+  {caps.map((c)=>(
+    <tr data-cid={c.id}>
+      <td>{CAPABILITY_LABEL[c.capability] ?? c.capability}</td>
+      <td>{c.provider ?? ""}{c.model?`（${c.model}）`:""}</td>
+      <td>{c.enabled?"有効":"無効"}</td>
+      <td>
+        {c.enabled?<button class="cdis" style="background:#d97706;color:#fff">無効化</button>:<button class="cen" style="background:#16a34a;color:#fff">有効化</button>}
+        <button class="cdel" style="background:#ef4444;color:#fff">削除</button>
+      </td>
+    </tr>
+  ))}
+  {caps.length===0 && (<tr><td colspan="4" class="muted">任意APIは未登録です。</td></tr>)}
+</tbody></table>
+
+<h2>Workers Paid（CF有料プラン）への切替案内</h2>
+<div class="warn">
+  無料枠では <strong>CPU時間・実行時間（waitUntil）・サブリクエスト数</strong> 等に上限があり、大きなファイルの要約・音声処理・生成でエラーになることがあります（<a href="/diagnostics">診断</a>で確認可）。<br>
+  安定運用には、お使いのCloudflareダッシュボードで <strong>Workers &amp; Pages → Plans → Workers Paid（月$5〜）</strong> に切り替えてください。データやデプロイはそのまま、上限が大幅に緩和されます。手順は当社が個別にご案内します。
+</div>
+
 <script type="module">
   const post=(b)=>fetch("/api/skills",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(b)}).then(r=>r.json());
+  const capPost=(b)=>fetch("/api/capabilities",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(b)}).then(r=>r.json());
+  const ca=document.getElementById("capadd");
+  if(ca) ca.onclick=async()=>{await capPost({_action:"create",capability:document.getElementById("cap").value,provider:document.getElementById("cprov").value,model:document.getElementById("cmodel").value,endpoint:document.getElementById("cendpoint").value,api_key:document.getElementById("ckey").value});location.reload();};
+  document.querySelectorAll("tr[data-cid]").forEach(tr=>{const id=tr.dataset.cid;
+    tr.querySelector(".cen")?.addEventListener("click",async()=>{await capPost({_action:"enable",id,enabled:true});location.reload();});
+    tr.querySelector(".cdis")?.addEventListener("click",async()=>{await capPost({_action:"enable",id,enabled:false});location.reload();});
+    tr.querySelector(".cdel")?.addEventListener("click",async()=>{if(confirm("削除しますか？")){await capPost({_action:"delete",id});location.reload();}});
+  });
   document.getElementById("add").onclick=async()=>{
     await post({_action:"create",name:document.getElementById("sname").value,description:document.getElementById("sdesc").value,mode:document.getElementById("smode").value,skill_md:document.getElementById("smd").value});
     location.reload();

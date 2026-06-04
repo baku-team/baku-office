@@ -3,6 +3,7 @@ import { getApiKey } from "../../../lib/client.ts";
 import { linePush } from "../../../lib/agent.ts";
 import { dueReminders, markReminderDone } from "../../../lib/agent-tools.ts";
 import { processSummaryJobs } from "../../../lib/media-ai.ts";
+import { guardHeavy } from "../../../lib/diag.ts";
 
 export const prerender = false;
 const json = (o: unknown, s = 200) => new Response(JSON.stringify(o), { status: s, headers: { "content-type": "application/json" } });
@@ -12,8 +13,9 @@ const json = (o: unknown, s = 200) => new Response(JSON.stringify(o), { status: 
 export const POST: APIRoute = async ({ request, locals }) => {
   const env = locals.runtime.env;
   if (!env.INTERNAL_KEY || request.headers.get("x-internal-key") !== env.INTERNAL_KEY) return json({ error: "forbidden" }, 403);
-  // 要約ジョブのステップ処理（Geminiキーがある時のみ進む）。
-  const summarized = await processSummaryJobs(env);
+  // 要約ジョブのステップ処理（Geminiキーがある時のみ進む）。CF制限時は診断記録。
+  const g = await guardHeavy(env, "summary jobs", () => processSummaryJobs(env));
+  const summarized = g.ok ? g.value : 0;
 
   const accessToken = await getApiKey(env, "line_token");
   let sent = 0;

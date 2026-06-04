@@ -18,6 +18,8 @@ const notices = check?.notices ?? [];
 
 const { getSession } = await import("../lib/auth.ts");
 const ses = await getSession(env, Astro.request).catch(() => null);
+const { hasRecentLimitError } = await import("../lib/diag.ts");
+const limitErr = await hasRecentLimitError(env).catch(() => false);
 ---
 <!doctype html>
 <html lang="ja">
@@ -49,6 +51,7 @@ const ses = await getSession(env, Astro.request).catch(() => null);
         {ses?.role === "admin" && ses?.ctx === "org" && <a href="/billing">プラン・課金</a>}
         <a href="/files">ファイル</a>
         <a href="/settings/keys">連携設定</a>
+        <a href="/diagnostics">診断</a>
         {ses?.role === "admin" && ses?.ctx === "org" && <a href="/settings/advanced">高度なオプション</a>}
       </nav>
       <span style="margin-left:auto" class="badge">{planLabel}</span>
@@ -58,6 +61,12 @@ const ses = await getSession(env, Astro.request).catch(() => null);
     </header>
     <main>
       <h1>ホーム</h1>
+      {limitErr && (
+        <div class="notice" style="border-left-color:#ef4444;background:#fef2f2">
+          ⚠️ 直近に Cloudflare 無料枠の制限に達した可能性があります。重い処理を安定させるには
+          <a href="/settings/advanced">高度なオプション → Workers Paid</a> をご検討ください（<a href="/diagnostics">診断</a>）。
+        </div>
+      )}
       {notices.map((n) => (<div class="notice" data-sev={n.severity} data-id={n.id}>[{n.severity}] {n.body}</div>))}
       <div id="critModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:50;align-items:center;justify-content:center">
         <div style="background:#fff;max-width:480px;margin:auto;padding:1.5rem;border-radius:12px">
