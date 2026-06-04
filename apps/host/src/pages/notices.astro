@@ -1,0 +1,28 @@
+---
+export const prerender = false;
+const env = Astro.locals.runtime.env;
+const { results } = await env.DB.prepare("SELECT id,severity,body,active,created_at FROM notices ORDER BY created_at DESC LIMIT 100").all<{ id: string; severity: string; body: string; active: number; created_at: number }>();
+const d = (s: number) => new Date(s * 1000).toISOString().slice(0, 16).replace("T", " ");
+---
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" /><title>お知らせ配信 — baku-office ホスト</title>
+<style>body{font-family:system-ui,sans-serif;max-width:780px;margin:2rem auto;padding:0 1rem;color:#1c2530}select,input,textarea{padding:.4rem;border:1px solid #cbd5e1;border-radius:6px}textarea{width:100%}button{padding:.4rem .8rem;border:0;border-radius:6px;cursor:pointer}table{border-collapse:collapse;width:100%;font-size:.9rem;margin-top:1rem}th,td{border:1px solid #e2e8f0;padding:.4rem .6rem}th{background:#f8fafc}.muted{color:#64748b}</style></head>
+<body>
+<h1>お知らせ・通知配信（§13.1）</h1>
+<p><a href="/">← ポータル</a> ／ <a href="/clients">クライアント管理</a></p>
+<p class="muted">クライアントは統合チェック(/api/check)でこれを受け取り表示。critical は確認モーダルで提示。</p>
+<div>
+  <select id="sev"><option value="info">info（一般）</option><option value="important">important（メンテ/障害）</option><option value="critical">critical（規約変更等・要確認）</option></select>
+  <textarea id="body" rows="2" placeholder="お知らせ本文（PIIなし）"></textarea>
+  <button id="pub" style="background:#2563eb;color:#fff">配信</button>
+</div>
+<table><thead><tr><th>日時</th><th>重要度</th><th>本文</th><th>状態</th><th></th></tr></thead><tbody>
+  {results.map((n)=>(<tr data-id={n.id}><td>{d(n.created_at)}</td><td>{n.severity}</td><td>{n.body}</td><td>{n.active?"配信中":"停止"}</td><td>{n.active?(<button class="off" style="background:#ef4444;color:#fff">停止</button>):""}</td></tr>))}
+  {results.length===0 && (<tr><td colspan="5" class="muted">お知らせはありません。</td></tr>)}
+</tbody></table>
+<script type="module">
+  const post=(b)=>fetch("/api/notices",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(b)}).then(r=>r.json());
+  document.getElementById("pub").onclick=async()=>{await post({severity:document.getElementById("sev").value,body:document.getElementById("body").value});location.reload();};
+  document.querySelectorAll(".off").forEach(b=>b.onclick=async()=>{await post({_action:"deactivate",id:b.closest("tr").dataset.id});location.reload();});
+</script>
+</body></html>

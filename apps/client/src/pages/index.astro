@@ -57,7 +57,14 @@ const ses = await getSession(env, Astro.request).catch(() => null);
     </header>
     <main>
       <h1>ホーム</h1>
-      {notices.map((n) => (<div class="notice">[{n.severity}] {n.body}</div>))}
+      {notices.map((n) => (<div class="notice" data-sev={n.severity} data-id={n.id}>[{n.severity}] {n.body}</div>))}
+      <div id="critModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:50;align-items:center;justify-content:center">
+        <div style="background:#fff;max-width:480px;margin:auto;padding:1.5rem;border-radius:12px">
+          <h3 style="margin-top:0">重要なお知らせ</h3>
+          <div id="critBody"></div>
+          <button id="critAck" style="margin-top:1rem;padding:.5rem 1rem;background:#2563eb;color:#fff;border:0;border-radius:8px;cursor:pointer">確認しました</button>
+        </div>
+      </div>
       <div class="grid">
         <div class="card"><div>口座残高（期首合計）</div><div class="num">¥{balance.toLocaleString("ja-JP")}</div></div>
         <div class="card"><div>当月収支</div><div class="num">¥0</div><small>会計コアは Phase 2</small></div>
@@ -71,6 +78,14 @@ const ses = await getSession(env, Astro.request).catch(() => null);
     <script type="module">
       const lo = document.getElementById("logout");
       if (lo) lo.onclick = async (e) => { e.preventDefault(); await fetch("/api/login", { method: "DELETE" }); location.href = "/login"; };
+      // critical 通知は確認モーダルで提示（既読は localStorage）。
+      const crit = [...document.querySelectorAll('.notice[data-sev="critical"]')].filter((n) => !localStorage.getItem("ack:" + n.dataset.id));
+      if (crit.length) {
+        const m = document.getElementById("critModal");
+        document.getElementById("critBody").innerHTML = crit.map((n) => "<p>" + n.textContent + "</p>").join("");
+        m.style.display = "flex";
+        document.getElementById("critAck").onclick = () => { crit.forEach((n) => localStorage.setItem("ack:" + n.dataset.id, "1")); m.style.display = "none"; };
+      }
     </script>
   </body>
 </html>
