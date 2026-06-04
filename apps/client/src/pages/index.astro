@@ -15,6 +15,9 @@ try {
 } catch { /* 未マイグレーション時 */ }
 
 const notices = check?.notices ?? [];
+
+const { getSession } = await import("../lib/auth.ts");
+const ses = await getSession(env, Astro.request).catch(() => null);
 ---
 <!doctype html>
 <html lang="ja">
@@ -40,9 +43,15 @@ const notices = check?.notices ?? [];
       <nav>
         <a href="/">ホーム</a>
         <a href="/accounting">会計</a>
+        {ses?.ctx === "personal" && <a href="/personal">個人</a>}
+        {(ses?.role === "admin" || ses?.role === "accounting" || ses?.role === "clerical") && <a href="/review">共有承認</a>}
+        {ses?.role === "admin" && ses?.ctx === "org" && <a href="/settings/members">人・ロール管理</a>}
         <a href="/settings/keys">連携設定</a>
       </nav>
       <span style="margin-left:auto" class="badge">{planLabel}</span>
+      {ses
+        ? <a href="#" id="logout" style="color:#cbd5e1;font-size:.85rem">{ses.name ?? ses.role}・ログアウト</a>
+        : <a href="/login" style="color:#cbd5e1;font-size:.85rem">ログイン</a>}
     </header>
     <main>
       <h1>ホーム</h1>
@@ -57,5 +66,9 @@ const notices = check?.notices ?? [];
         会計・名簿・ファイル・予定・議事録は順次実装（Phase 2+）。まず連携設定で Gemini/LINE キーを登録できます。
       </p>
     </main>
+    <script type="module">
+      const lo = document.getElementById("logout");
+      if (lo) lo.onclick = async (e) => { e.preventDefault(); await fetch("/api/login", { method: "DELETE" }); location.href = "/login"; };
+    </script>
   </body>
 </html>
