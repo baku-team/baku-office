@@ -1,0 +1,60 @@
+---
+export const prerender = false;
+const env = Astro.locals.runtime.env;
+const { pollHost, cachedEntitlement } = await import("../lib/client.ts");
+
+const check = await pollHost(env, Astro.url.origin);
+const entitlement = check?.entitlement ?? (await cachedEntitlement(env));
+const planLabel = entitlement === "Z" ? "Z（エージェント）" : entitlement === "Y" ? "Y（AI）" : "X（無料）相当";
+
+// 残高サマリー（会計コアは Phase 2。現状は口座 opening_balance 合計のみ）。
+let balance = 0;
+try {
+  const row = await env.DB.prepare("SELECT COALESCE(SUM(opening_balance),0) AS b FROM wallets").first<{ b: number }>();
+  balance = row?.b ?? 0;
+} catch { /* 未マイグレーション時 */ }
+
+const notices = check?.notices ?? [];
+---
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>baku-office</title>
+    <style>
+      body { font-family: system-ui, sans-serif; max-width: 860px; margin: 0 auto; color: #1c2530; }
+      header { background: #0f172a; color: #fff; padding: .8rem 1.25rem; display: flex; gap: 1rem; align-items: center; }
+      header nav a { color: #cbd5e1; text-decoration: none; margin-right: 1rem; font-size: .9rem; }
+      main { padding: 1.5rem 1.25rem; }
+      .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px,1fr)); gap: 1rem; }
+      .card { border: 1px solid #e2e8f0; border-radius: 12px; padding: 1rem 1.25rem; }
+      .num { font-size: 1.6rem; font-weight: 700; }
+      .badge { background: #ecfeff; color: #0e7490; padding: .15rem .6rem; border-radius: 999px; font-size: .8rem; }
+      .notice { border-left: 4px solid #f59e0b; background: #fffbeb; padding: .6rem .9rem; border-radius: 6px; margin: .5rem 0; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <strong>baku-office</strong>
+      <nav>
+        <a href="/">ホーム</a>
+        <a href="/settings/keys">連携設定</a>
+      </nav>
+      <span style="margin-left:auto" class="badge">{planLabel}</span>
+    </header>
+    <main>
+      <h1>ホーム</h1>
+      {notices.map((n) => (<div class="notice">[{n.severity}] {n.body}</div>))}
+      <div class="grid">
+        <div class="card"><div>口座残高（期首合計）</div><div class="num">¥{balance.toLocaleString("ja-JP")}</div></div>
+        <div class="card"><div>当月収支</div><div class="num">¥0</div><small>会計コアは Phase 2</small></div>
+        <div class="card"><div>未処理伝票</div><div class="num">0</div></div>
+        <div class="card"><div>プラン / ライセンス</div><div class="num" style="font-size:1.1rem">{planLabel}</div><small>{check ? "ホスト疎通OK" : "オフライン（キャッシュ表示）"}</small></div>
+      </div>
+      <p style="color:#64748b;font-size:.9rem;margin-top:1.5rem">
+        会計・名簿・ファイル・予定・議事録は順次実装（Phase 2+）。まず連携設定で Gemini/LINE キーを登録できます。
+      </p>
+    </main>
+  </body>
+</html>

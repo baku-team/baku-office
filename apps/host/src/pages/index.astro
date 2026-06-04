@@ -1,0 +1,27 @@
+---
+export const prerender = false;
+const env = Astro.locals.runtime.env;
+const { results } = await env.DB.prepare("SELECT COUNT(*) AS n FROM licenses").all<{ n: number }>().catch(() => ({ results: [{ n: 0 }] }));
+const count = results?.[0]?.n ?? 0;
+---
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>baku-office ホストポータル</title>
+    <style>
+      body { font-family: system-ui, sans-serif; max-width: 760px; margin: 2rem auto; padding: 0 1rem; color: #1c2530; }
+      a.btn { display: inline-block; padding: .5rem 1rem; background: #2563eb; color: #fff; border-radius: 8px; text-decoration: none; }
+      .card { border: 1px solid #dde3ea; border-radius: 12px; padding: 1rem 1.25rem; margin: 1rem 0; }
+    </style>
+  </head>
+  <body>
+    <h1>baku-office ホストポータル</h1>
+    <p>当社（ホスト）の管理ポータル。業務データ・会員PIIは保持しません（設計書§7.3）。</p>
+    <div class="card">
+      <p>登録ライセンス数：<strong>{count}</strong></p>
+      <p><a class="btn" href="/apply">団体を申し込む</a> &nbsp; <a href="/clients">クライアント管理</a></p>
+    </div>
+  </body>
+</html>

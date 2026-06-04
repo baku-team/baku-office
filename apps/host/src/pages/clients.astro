@@ -1,0 +1,54 @@
+---
+export const prerender = false;
+const env = Astro.locals.runtime.env;
+type Row = {
+  license_id: string;
+  org_name: string;
+  plan: string;
+  entitlement: string;
+  status: string;
+  deploy_url: string | null;
+  version: string | null;
+  last_seen: number | null;
+};
+const { results } = await env.DB.prepare(
+  `SELECT l.license_id, c.org_name, l.plan, l.entitlement, l.status, l.deploy_url, l.version, l.last_seen
+   FROM licenses l JOIN customers c ON c.id = l.customer_id ORDER BY l.created_at DESC LIMIT 200`,
+).all<Row>();
+const fmt = (s: number | null) => (s ? new Date(s * 1000).toISOString().slice(0, 16).replace("T", " ") : "—");
+---
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <title>クライアント管理 — baku-office</title>
+    <style>
+      body { font-family: system-ui, sans-serif; max-width: 1000px; margin: 2rem auto; padding: 0 1rem; color: #1c2530; }
+      table { border-collapse: collapse; width: 100%; font-size: .9rem; }
+      th, td { border: 1px solid #e2e8f0; padding: .4rem .6rem; text-align: left; }
+      th { background: #f8fafc; }
+      code { font-size: .8rem; }
+    </style>
+  </head>
+  <body>
+    <h1>クライアント管理</h1>
+    <p><a href="/">← ポータル</a> ／ <a href="/apply">申込</a></p>
+    <table>
+      <thead><tr><th>団体</th><th>プラン</th><th>エンタイトルメント</th><th>状態</th><th>稼働ver</th><th>最終受信</th><th>ライセンスID</th></tr></thead>
+      <tbody>
+        {results.map((r) => (
+          <tr>
+            <td>{r.org_name}</td>
+            <td>{r.plan}</td>
+            <td>{r.entitlement}</td>
+            <td>{r.status}</td>
+            <td>{r.version ?? "—"}</td>
+            <td>{fmt(r.last_seen)}</td>
+            <td><code>{r.license_id}</code></td>
+          </tr>
+        ))}
+        {results.length === 0 && (<tr><td colspan="7">まだ申込がありません。</td></tr>)}
+      </tbody>
+    </table>
+  </body>
+</html>

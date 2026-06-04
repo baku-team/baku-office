@@ -1,0 +1,35 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  // クライアントアプリ（顧客の単一Worker）。Astro静的アセット＋API同居（設計書§3.4）。
+  "name": "baku-office-app",
+  "main": "./dist/_worker.js/index.js",
+  "compatibility_date": "2025-04-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": { "binding": "ASSETS", "directory": "./dist" },
+  "observability": { "enabled": true },
+
+  // 業務データ（会計・名簿・ファイル・人）。設計書§8の全スキーマ。
+  "d1_databases": [
+    { "binding": "DB", "database_name": "baku-office-app-db", "database_id": "cb0a2a2d-d087-4051-8623-155166dfca57" }
+  ],
+  // ライセンストークン・セッション・暗号化APIキー・notices。
+  "kv_namespaces": [
+    { "binding": "LICENSE", "id": "bd3d1d9642514b30ad5d79bdd4baf9ff" },
+    // ファイル本体（標準モード＝R2なし。カード不要）。
+    { "binding": "MEDIA", "id": "e4a71bef0d99446a97df9d771a7d9768" },
+    // Astro adapter のセッション用（未使用だが既定で要求されるため LICENSE と同じ名前空間を流用）。
+    { "binding": "SESSION", "id": "bd3d1d9642514b30ad5d79bdd4baf9ff" }
+  ],
+
+  "vars": {
+    // 当社ホストポータルのURL（ライセンス取得・統合チェックの相手）。本番(別アカウント)はカスタムドメイン。
+    "HOST_BASE_URL": "https://baku-office-portal.fragrant-sun-78f3.workers.dev"
+  },
+  // 同一アカウントのdev/検証用：host への Service Binding（workers.dev直fetchの1042回避）。
+  // 本番(顧客の別アカウント)ではこのバインディングは存在せず、HOST_BASE_URL(カスタムドメイン)へURL fetch。
+  "services": [
+    { "binding": "HOST", "service": "baku-office-portal" }
+  ]
+  // secret（wrangler secret put）：MASTER_KEY / VERIFY_PUBLIC_JWK / GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET
+  // R2（高度モード・任意）：[[r2_buckets]] binding=MEDIA_R2（カード必要・§11）
+}

@@ -1,0 +1,23 @@
+{
+  "name": "@baku-office/client",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro build && wrangler dev",
+    "deploy": "astro build && wrangler deploy",
+    "typecheck": "astro check"
+  },
+  "dependencies": {
+    "@baku-office/shared": "*",
+    "astro": "^5"
+  },
+  "devDependencies": {
+    "@astrojs/cloudflare": "^12",
+    "@astrojs/check": "^0.9.4",
+    "@cloudflare/workers-types": "^4",
+    "typescript": "^5.9.3",
+    "wrangler": "^4"
+  }
+}
