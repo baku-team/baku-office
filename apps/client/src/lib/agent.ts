@@ -3,11 +3,13 @@
 // APIキーは連携設定の暗号KVから復号して使用。
 import { getApiKey } from "./client.ts";
 import * as T from "./agent-tools.ts";
+import { webSearch, makeDocument } from "./media-ai.ts";
 
 const SYSTEM =
   "あなたは団体の会計・庶務を補助するLINEアシスタント『baku-office』です。日本語で簡潔に。" +
   "支出/領収書は record_expense、メモは save_memo、リマインダーは set_reminder（日時はISO 例2026-06-20T10:00）、" +
-  "ナレッジ保存は save_knowledge、検索は search_knowledge、メンバー照会は search_members、領収書一覧は list_expenses、予定確認は list_reminders を使う。" +
+  "ナレッジ保存は save_knowledge、検索は search_knowledge、メンバー照会は search_members、領収書一覧は list_expenses、予定確認は list_reminders。" +
+  "最新情報が要る質問は web_search、資料作成依頼は make_document（type=md/csv/txt）を使う。" +
   "ツールが不要な質問・雑談は通常のテキストで短く答える。";
 
 // Gemini 関数宣言（OpenAPI風スキーマ）。
@@ -21,22 +23,29 @@ const TOOLS = [
   { name: "search_knowledge", description: "組織ナレッジを検索", parameters: { type: "object", properties: { query: { type: "string" } }, required: ["query"] } },
   { name: "search_members", description: "メンバー（名簿）を検索", parameters: { type: "object", properties: { query: { type: "string" } }, required: ["query"] } },
 ];
+// API依存ツール（キーがある時だけ宣言＝モデルに見せる）。
+const GEMINI_TOOLS = [
+  { name: "web_search", description: "最新情報をWeb検索（Google grounding）", parameters: { type: "object", properties: { query: { type: "string" } }, required: ["query"] } },
+];
+const CLAUDE_TOOLS = [
+  { name: "make_document", description: "資料を生成（type=md/csv/txt）してDLリンクを返す", parameters: { type: "object", properties: { type: { type: "string" }, title: { type: "string" }, content: { type: "string" } }, required: ["title", "content"] } },
+];
 
 type Part = { text?: string; functionCall?: { name: string; args: Record<string, unknown> }; functionResponse?: { name: string; response: unknown }; inlineData?: { mimeType: string; data: string } };
 type Content = { role: string; parts: Part[] };
 
-async function gemini(key: string, contents: Content[]): Promise<Content | null> {
+async function gemini(key: string, contents: Content[], decls: unknown[]): Promise<Content | null> {
   const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(key)}`, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ systemInstruction: { parts: [{ text: SYSTEM }] }, contents, tools: [{ functionDeclarations: TOOLS }], generationConfig: { temperature: 0.3, maxOutputTokens: 600 } }),
+    body: JSON.stringify({ systemInstruction: { parts: [{ text: SYSTEM }] }, contents, tools: [{ functionDeclarations: decls }], generationConfig: { temperature: 0.3, maxOutputTokens: 800 } }),
   });
   if (!r.ok) { console.log("[gemini]", r.status, (await r.text()).slice(0, 200)); return null; }
   const data = (await r.json()) as { candidates?: { content?: Content }[] };
   return data.candidates?.[0]?.content ?? null;
 }
 
-async function execTool(env: Env, owner: string, name: string, args: Record<string, unknown>): Promise<string> {
+async function execTool(env: Env, owner: string, baseUrl: string, name: string, args: Record<string, unknown>): Promise<string> {
   switch (name) {
     case "record_expense": return T.recordExpense(env, owner, { amount: Number(args.amount), title: String(args.title), date: args.date ? String(args.date) : undefined });
     case "save_memo": return T.saveMemo(env, owner, { title: String(args.title), body: args.body ? String(args.body) : undefined });
@@ -46,28 +55,33 @@ async function execTool(env: Env, owner: string, name: string, args: Record<stri
     case "save_knowledge": return T.saveKnowledge(env, owner, { title: String(args.title), body: String(args.body) });
     case "search_knowledge": return T.searchKnowledge(env, { query: String(args.query) });
     case "search_members": return T.searchMembers(env, { query: String(args.query ?? "") });
+    case "web_search": return (await webSearch(env, String(args.query))) ?? "web検索は未設定です。";
+    case "make_document": return makeDocument(env, owner, baseUrl, { type: String(args.type ?? "md"), title: String(args.title), content: String(args.content) });
     default: return "未知のツール";
   }
 }
 
 // テキスト発話 → ツールループ。最大4ホップで関数呼び出しを解決して最終テキストを返す。
-export async function runAgent(env: Env, lineUserId: string, text: string, image?: { mimeType: string; dataB64: string }): Promise<string> {
+// API依存ツール（web_search=Gemini／make_document=Claude）は対応キーがある時だけモデルに提示。
+export async function runAgent(env: Env, lineUserId: string, text: string, image?: { mimeType: string; dataB64: string }, baseUrl = ""): Promise<string> {
   const key = await getApiKey(env, "gemini");
   if (!key) return "AI機能が未設定です。管理画面の『連携設定』で Gemini APIキーを登録してください。";
+  const hasClaude = !!(await getApiKey(env, "claude"));
+  const decls = [...TOOLS, ...GEMINI_TOOLS, ...(hasClaude ? CLAUDE_TOOLS : [])];
   const owner = `line:${lineUserId}`;
   const firstParts: Part[] = [{ text: text || "（画像）" }];
   if (image) firstParts.push({ inlineData: { mimeType: image.mimeType, data: image.dataB64 } });
   const contents: Content[] = [{ role: "user", parts: firstParts }];
 
   for (let hop = 0; hop < 4; hop++) {
-    const out = await gemini(key, contents);
+    const out = await gemini(key, contents, decls);
     if (!out) return "（AIの応答に失敗しました）";
     const calls = out.parts.filter((p) => p.functionCall);
     if (!calls.length) return out.parts.map((p) => p.text ?? "").join("").trim() || "（応答が空でした）";
     contents.push(out);
     const respParts: Part[] = [];
     for (const c of calls) {
-      const result = await execTool(env, owner, c.functionCall!.name, c.functionCall!.args ?? {});
+      const result = await execTool(env, owner, baseUrl, c.functionCall!.name, c.functionCall!.args ?? {});
       respParts.push({ functionResponse: { name: c.functionCall!.name, response: { result } } });
     }
     contents.push({ role: "user", parts: respParts });

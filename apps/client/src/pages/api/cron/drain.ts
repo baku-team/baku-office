@@ -2,6 +2,7 @@ import type { APIRoute } from "astro";
 import { getApiKey } from "../../../lib/client.ts";
 import { linePush } from "../../../lib/agent.ts";
 import { dueReminders, markReminderDone } from "../../../lib/agent-tools.ts";
+import { processSummaryJobs } from "../../../lib/media-ai.ts";
 
 export const prerender = false;
 const json = (o: unknown, s = 200) => new Response(JSON.stringify(o), { status: s, headers: { "content-type": "application/json" } });
@@ -11,16 +12,17 @@ const json = (o: unknown, s = 200) => new Response(JSON.stringify(o), { status: 
 export const POST: APIRoute = async ({ request, locals }) => {
   const env = locals.runtime.env;
   if (!env.INTERNAL_KEY || request.headers.get("x-internal-key") !== env.INTERNAL_KEY) return json({ error: "forbidden" }, 403);
+  // 要約ジョブのステップ処理（Geminiキーがある時のみ進む）。
+  const summarized = await processSummaryJobs(env);
+
   const accessToken = await getApiKey(env, "line_token");
-  if (!accessToken) return json({ ok: true, sent: 0, note: "LINE未設定" });
   let sent = 0;
-  for (const r of await dueReminders(env)) {
-    const userId = r.owner.startsWith("line:") ? r.owner.slice(5) : null;
-    if (userId) {
-      await linePush(accessToken, userId, `⏰ リマインド：${r.content}`);
-      sent++;
+  if (accessToken) {
+    for (const r of await dueReminders(env)) {
+      const userId = r.owner.startsWith("line:") ? r.owner.slice(5) : null;
+      if (userId) { await linePush(accessToken, userId, `⏰ リマインド：${r.content}`); sent++; }
+      await markReminderDone(env, r.id);
     }
-    await markReminderDone(env, r.id);
   }
-  return json({ ok: true, sent });
+  return json({ ok: true, sent, summarized });
 };
