@@ -1,0 +1,29 @@
+---
+export const prerender = false;
+const env = Astro.locals.runtime.env;
+const { getSession } = await import("../lib/auth.ts");
+const ses = await getSession(env, Astro.request);
+if (!ses) return Astro.redirect("/login", 302);
+const { results } = await env.DB.prepare("SELECT id,title,body,created_at FROM knowledge WHERE tags='議事録' AND deleted_at IS NULL ORDER BY created_at DESC").all<{ id: string; title: string; body: string | null; created_at: number }>();
+const d = (s: number) => new Date(s * 1000).toISOString().slice(0, 10);
+---
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" /><title>議事録 — baku-office</title>
+<style>body{font-family:system-ui,sans-serif;max-width:760px;margin:0 auto;color:#1c2530}header{background:#0f172a;color:#fff;padding:.8rem 1.25rem}header a{color:#cbd5e1;text-decoration:none;margin-right:1rem;font-size:.9rem}main{padding:1.25rem}input,textarea{width:100%;padding:.4rem;border:1px solid #cbd5e1;border-radius:6px;margin:.2rem 0}button{padding:.35rem .7rem;border:0;border-radius:6px;cursor:pointer}.item{border:1px solid #e2e8f0;border-radius:8px;padding:.6rem .9rem;margin:.5rem 0}.muted{color:#64748b}</style></head>
+<body>
+<header><a href="/">ホーム</a><a href="/files">ファイル</a><a href="/schedule">予定</a><a href="/minutes">議事録</a></header>
+<main>
+<h1>議事録</h1>
+<input id="title" placeholder="タイトル（例：6月定例会）" />
+<textarea id="body" rows="4" placeholder="本文・決定事項"></textarea>
+<button id="add" style="background:#2563eb;color:#fff">保存</button>
+<div id="list">
+  {results.map((r)=>(<div class="item" data-id={r.id}><strong>{r.title}</strong> <span class="muted">{d(r.created_at)}</span><button class="del" style="background:#ef4444;color:#fff;float:right">削除</button><p>{r.body}</p></div>))}
+  {results.length===0 && (<p class="muted">議事録がありません。</p>)}
+</div>
+<script type="module">
+  const post=(b)=>fetch("/api/docs",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({kind:"minutes",...b})}).then(r=>r.json());
+  document.getElementById("add").onclick=async()=>{await post({title:document.getElementById("title").value,body:document.getElementById("body").value});location.reload();};
+  document.querySelectorAll(".item .del").forEach(b=>b.onclick=async()=>{await post({_action:"delete",id:b.closest(".item").dataset.id});location.reload();});
+</script>
+</main></body></html>

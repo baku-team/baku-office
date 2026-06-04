@@ -1,0 +1,49 @@
+---
+export const prerender = false;
+const env = Astro.locals.runtime.env;
+const { getSession } = await import("../../lib/auth.ts");
+const ses = await getSession(env, Astro.request);
+if (!ses) return Astro.redirect("/login", 302);
+const { listFiles, storageMode } = await import("../../lib/storage.ts");
+const files = await listFiles(env);
+const mode = storageMode(env);
+const kb = (n: number) => (n < 1024 ? n + " B" : (n / 1024).toFixed(1) + " KB");
+---
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" /><title>ファイル — baku-office</title>
+<style>body{font-family:system-ui,sans-serif;max-width:820px;margin:0 auto;color:#1c2530}
+header{background:#0f172a;color:#fff;padding:.8rem 1.25rem}header a{color:#cbd5e1;text-decoration:none;margin-right:1rem;font-size:.9rem}
+main{padding:1.25rem}table{border-collapse:collapse;width:100%;font-size:.9rem;margin-top:1rem}th,td{border:1px solid #e2e8f0;padding:.4rem .6rem}th{background:#f8fafc}.muted{color:#64748b}button{padding:.3rem .6rem;border:0;border-radius:6px;cursor:pointer}</style></head>
+<body>
+<header><a href="/">ホーム</a><a href="/files">ファイル</a><a href="/schedule">予定</a><a href="/minutes">議事録</a></header>
+<main>
+<h1>ファイル</h1>
+<p class="muted">ストレージモード：<strong>{mode === "r2" ? "高度（R2）" : "標準（KV・5MBまで・カード不要）"}</strong>（§11）</p>
+<input type="file" id="file" /> <button id="up" style="background:#2563eb;color:#fff">アップロード</button>
+<span id="msg" class="muted"></span>
+<table>
+  <thead><tr><th>名前</th><th>サイズ</th><th>種類</th><th>操作</th></tr></thead>
+  <tbody>
+    {files.map((f)=>(
+      <tr data-id={f.id}>
+        <td>{f.name}</td><td>{kb(f.size)}</td><td>{f.mime ?? ""}</td>
+        <td><a href={`/files/${f.id}`}>DL</a> <button class="del" style="background:#ef4444;color:#fff">削除</button></td>
+      </tr>
+    ))}
+    {files.length===0 && (<tr><td colspan="4" class="muted">ファイルがありません。</td></tr>)}
+  </tbody>
+</table>
+<script type="module">
+  const msg=document.getElementById("msg");
+  document.getElementById("up").onclick=async()=>{
+    const f=document.getElementById("file").files[0]; if(!f){msg.textContent="ファイルを選択";return;}
+    const fd=new FormData(); fd.append("file",f);
+    const r=await fetch("/api/files",{method:"POST",body:fd}); const j=await r.json();
+    msg.textContent=j.ok?("保存（"+j.mode+"）"):("エラー:"+(j.error||"")); if(j.ok)location.reload();
+  };
+  document.querySelectorAll("tr[data-id] .del").forEach(b=>b.onclick=async()=>{
+    if(!confirm("ゴミ箱へ移動しますか？"))return;
+    await fetch("/api/files",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({_action:"delete",id:b.closest("tr").dataset.id})});location.reload();
+  });
+</script>
+</main></body></html>
