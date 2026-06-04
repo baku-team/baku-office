@@ -3,7 +3,7 @@
 //   配布リポジトリ用の release/ を組み立てる（dist + wrangler.jsonc + migrations + README）。
 //   ※ 真の難読化（変数名mangle等）を強化する場合はここに難読化ツールを挟む。
 import { execSync } from "node:child_process";
-import { cpSync, rmSync, mkdirSync, copyFileSync, existsSync } from "node:fs";
+import { cpSync, rmSync, mkdirSync, copyFileSync, existsSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
@@ -14,8 +14,12 @@ console.log("1) Astro 本番ビルド（minify）…");
 execSync("npx astro build", { cwd: root, stdio: "inherit" });
 
 console.log("2) release/ を組み立て…");
-rmSync(out, { recursive: true, force: true });
-mkdirSync(out, { recursive: true });
+// .git は残す（配布リポへの再push用）。それ以外を掃除。
+if (existsSync(out)) {
+  for (const f of readdirSync(out)) if (f !== ".git") rmSync(join(out, f), { recursive: true, force: true });
+} else {
+  mkdirSync(out, { recursive: true });
+}
 // ビルド成果物（_worker.js + 静的アセット）をそのまま配布物のルートへ。
 cpSync(join(root, "dist"), out, { recursive: true });
 // D1 マイグレーション（Deploy工程で自動適用）。
