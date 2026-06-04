@@ -1,0 +1,794 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>クラウドAIエージェント・プラットフォーム 事業説明資料</title>
+<style>
+  :root{
+    --navy:#14365c; --navy-d:#0e2742; --gold:#b8893b; --gold-l:#d8b878;
+    --ink:#1f2933; --sub:#5b6770; --sub2:#6b7785; --line:#dde3ea;
+    --bg-soft:#f4f6f9; --bg-card:#ffffff; --ok:#1f7a4d; --warn:#b4541a;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    font-family:"Hiragino Sans","Hiragino Kaku Gothic ProN","Yu Gothic",
+                "Noto Sans JP",Meiryo,sans-serif;
+    color:var(--ink); font-size:10.5pt; line-height:1.7;
+    background:#e9edf2; -webkit-print-color-adjust:exact; print-color-adjust:exact;
+  }
+  .page{
+    width:210mm; min-height:297mm; padding:18mm 16mm 20mm; margin:0 auto 8mm;
+    background:#fff; position:relative; page-break-after:always; overflow:hidden;
+  }
+  .page:last-child{page-break-after:auto;}
+
+  /* ---------- Cover ---------- */
+  .cover{
+    background:linear-gradient(150deg,var(--navy) 0%,var(--navy-d) 100%);
+    color:#fff; display:flex; flex-direction:column; justify-content:space-between;
+    padding:26mm 20mm;
+  }
+  .cover .eyebrow{letter-spacing:.28em; font-size:9pt; color:var(--gold-l); font-weight:700;}
+  .cover h1{font-size:30pt; line-height:1.32; margin:14mm 0 6mm; font-weight:800;}
+  .cover h1 span{color:var(--gold-l);}
+  .cover .lead{font-size:11pt; color:#cdd8e6; max-width:150mm; line-height:1.85;}
+  .cover .meta{font-size:9.5pt; color:#aab8cc; border-top:1px solid rgba(255,255,255,.2); padding-top:6mm;}
+  .cover .chips{margin:8mm 0 0;}
+  .cover .chips span{
+    display:inline-block; border:1px solid rgba(216,184,120,.55); color:var(--gold-l);
+    border-radius:20px; padding:3px 12px; font-size:8.5pt; margin:0 6px 6px 0;
+  }
+
+  /* ---------- Typography ---------- */
+  .sec-no{color:var(--gold); font-weight:800; font-size:10pt; letter-spacing:.1em;}
+  h2.sec{
+    font-size:18pt; color:var(--navy); margin:2mm 0 5mm; padding-bottom:3mm;
+    border-bottom:2px solid var(--navy); font-weight:800; line-height:1.3;
+  }
+  h3{font-size:12pt; color:var(--navy); margin:7mm 0 2.5mm; font-weight:700;}
+  p{margin:0 0 3mm;}
+  .muted{color:var(--sub2);}
+  .small{font-size:9pt;}
+  .lead-p{font-size:11pt; color:#374350; line-height:1.85;}
+
+  /* ---------- Cards / grids ---------- */
+  .grid{display:flex; flex-wrap:wrap; gap:5mm;}
+  .col2>*{flex:1 1 calc(50% - 2.5mm);}
+  .col3>*{flex:1 1 calc(33.333% - 3.34mm);}
+  .card{
+    background:var(--bg-card); border:1px solid var(--line); border-radius:8px;
+    padding:5mm 5mm; page-break-inside:avoid;
+  }
+  .card.soft{background:var(--bg-soft);}
+  .card h4{margin:0 0 2mm; color:var(--navy); font-size:11pt; font-weight:700;}
+  .card .ico{font-size:15pt; margin-bottom:1mm;}
+  .card p{font-size:9.5pt; margin:0; color:#3a4654;}
+
+  .kpi{display:flex; gap:5mm; flex-wrap:wrap;}
+  .kpi .k{flex:1 1 0; background:var(--navy); color:#fff; border-radius:8px; padding:5mm; text-align:center;}
+  .kpi .k .n{font-size:22pt; font-weight:800; color:var(--gold-l); line-height:1.1;}
+  .kpi .k .l{font-size:8.5pt; color:#cdd8e6; margin-top:1mm;}
+
+  /* ---------- Tables ---------- */
+  table{width:100%; border-collapse:collapse; margin:3mm 0 4mm; font-size:9.3pt; page-break-inside:avoid;}
+  th,td{border:1px solid var(--line); padding:5px 8px; text-align:left; vertical-align:top;}
+  thead th{background:var(--navy); color:#fff; font-weight:700; font-size:9pt;}
+  tbody tr:nth-child(even){background:var(--bg-soft);}
+  td .em{color:var(--navy); font-weight:700;}
+  .price{color:var(--gold); font-weight:800;}
+
+  /* ---------- Diagram ---------- */
+  .flow{display:flex; align-items:stretch; gap:0; flex-wrap:wrap; margin:4mm 0;}
+  .node{
+    background:#fff; border:1.5px solid var(--navy); color:var(--navy);
+    border-radius:8px; padding:4mm 4mm; text-align:center; flex:1 1 0; min-width:30mm;
+  }
+  .node .t{font-weight:700; font-size:9.5pt;}
+  .node .d{font-size:8pt; color:var(--sub2); margin-top:1mm;}
+  .node.alt{background:var(--navy); color:#fff;}
+  .node.alt .d{color:#cdd8e6;}
+  .arrow{display:flex; align-items:center; color:var(--gold); font-weight:800; font-size:14pt; padding:0 3mm;}
+  .stack .layer{
+    border:1.5px solid var(--line); border-left:5px solid var(--gold); border-radius:6px;
+    padding:3.5mm 4mm; margin-bottom:3mm; background:#fff; page-break-inside:avoid;
+  }
+  .stack .layer b{color:var(--navy);}
+  .planebox{border:1.5px dashed var(--navy); border-radius:10px; padding:4mm; margin:3mm 0;}
+  .planebox .ttl{font-size:9pt; font-weight:800; color:var(--navy); letter-spacing:.05em; margin-bottom:2mm;}
+  .shards{display:flex; gap:3mm; flex-wrap:wrap;}
+  .shard{flex:1 1 0; min-width:28mm; background:var(--bg-soft); border:1px solid var(--line); border-radius:6px; padding:3mm; text-align:center; font-size:8.5pt;}
+  .shard b{color:var(--navy); display:block; font-size:9pt;}
+  .shard.ded{border-color:var(--gold); background:#fbf6ed;}
+
+  /* ---------- callouts / lists ---------- */
+  ul.clean{margin:1mm 0 3mm; padding-left:5mm;}
+  ul.clean li{margin:0 0 1.5mm;}
+  .callout{
+    background:#eef3f9; border-left:4px solid var(--navy); border-radius:0 6px 6px 0;
+    padding:3.5mm 5mm; margin:3mm 0; font-size:9.5pt;
+  }
+  .callout.gold{background:#fbf6ed; border-color:var(--gold);}
+  .tag{display:inline-block; background:var(--navy); color:#fff; border-radius:4px; font-size:8pt; padding:1px 7px; margin-right:3px;}
+  .tag.g{background:var(--gold);}
+  .tag.o{background:var(--ok);}
+
+  .footer{position:absolute; bottom:10mm; left:16mm; right:16mm; display:flex; justify-content:space-between;
+          font-size:8pt; color:var(--sub2); border-top:1px solid var(--line); padding-top:2mm;}
+  .footer .pg::after{counter-increment:pg; content:counter(pg);}
+  body{counter-reset:pg;}
+
+  /* ---------- chat / scenes ---------- */
+  .scene{border:1px solid var(--line); border-radius:8px; padding:4mm; background:#fff; page-break-inside:avoid;}
+  .scene h4{margin:0 0 2mm; color:var(--navy); font-size:11pt;}
+  .scene .cap{font-size:8.5pt; color:var(--sub2); margin-top:2mm;}
+  .scene .note{font-size:8pt; margin-top:1.5mm;}
+  .chat{display:flex; flex-direction:column; gap:2mm;}
+  .bub{max-width:88%; padding:2.5mm 3.5mm; border-radius:10px; font-size:8.8pt; line-height:1.5;}
+  .bub.u{align-self:flex-end; background:var(--navy); color:#fff; border-bottom-right-radius:2px;}
+  .bub.a{align-self:flex-start; background:#eef1f5; color:#27313c; border-bottom-left-radius:2px;}
+  .bub .who{display:block; font-size:7pt; opacity:.65; margin-bottom:.4mm;}
+
+  /* ---------- onboarding wizard mock ---------- */
+  .stepper{display:flex; gap:0; margin:3mm 0 5mm;}
+  .stepper .st{flex:1; text-align:center; font-size:8pt; color:var(--sub2);}
+  .stepper .st .n{display:inline-block; width:7mm; height:7mm; line-height:7mm; border-radius:50%; background:var(--navy); color:#fff; font-weight:800; font-size:9pt;}
+  .stepper .st .l{display:block; margin-top:1mm;}
+  .win{border:1px solid var(--line); border-radius:8px; overflow:hidden; background:#fff; page-break-inside:avoid;}
+  .win .bar{background:#eef1f5; padding:2mm 3mm; font-size:8.3pt; color:var(--sub2); border-bottom:1px solid var(--line);}
+  .win .bar b{color:var(--navy);}
+  .win .body{padding:3.5mm;}
+  .field{border:1px solid var(--line); border-radius:5px; padding:1.8mm 2.5mm; font-size:8.3pt; color:var(--sub2); background:#fafbfc; margin:1.5mm 0; display:flex; justify-content:space-between; align-items:center;}
+  .field .ok{color:var(--ok); font-weight:700; font-size:7.8pt;}
+  .btnm{display:inline-block; background:var(--navy); color:#fff; border-radius:5px; padding:1.5mm 4mm; font-size:8.3pt; font-weight:700;}
+  .chk{font-size:8.5pt; margin:1mm 0; color:#2a3a34;}
+  .chk .c{color:var(--ok); font-weight:800;}
+
+  @page{ size:A4; margin:0; }
+  @media print{
+    body{background:#fff;}
+    .page{margin:0 auto; box-shadow:none;}
+  }
+</style>
+</head>
+<body>
+
+<!-- ============ COVER ============ -->
+<section class="page cover">
+  <div>
+    <div class="eyebrow">SERVICE OVERVIEW ・ 事業説明資料</div>
+    <h1>LINE / Discord 連動<br><span>クラウドAIエージェント</span><br>プラットフォーム</h1>
+    <div class="lead">
+      企業ごとの公式チャネルから話しかけるだけで、Claude を中核とした賢いAIエージェントが
+      24時間クラウド上で稼働。データベース・ストレージ運用の自動化を支援する、
+      マルチテナント型サブスクリプション・サービス。
+    </div>
+    <div class="chips">
+      <span>Claude API ＋ Cloudflare</span><span>マルチテナント SaaS</span>
+      <span>1,000社スケール対応</span><span>サブスク提供</span><span>ベンダーロックイン回避</span>
+    </div>
+  </div>
+  <div class="meta">
+    2026年6月　／　社内資料（社外秘）
+  </div>
+</section>
+
+<!-- ============ 1. SUMMARY ============ -->
+<section class="page">
+  <div class="sec-no">01</div>
+  <h2 class="sec">エグゼクティブサマリー</h2>
+
+  <p class="lead-p">
+    本サービスは、<b>「賢いAIエージェント」を企業向けにすぐ導入できるクラウド基盤</b>です。
+    利用者は LINE（または Discord）から指示するだけ。エージェントが社内データの検索・記録・
+    定型作業の自動化・リマインダーまでを担い、運用管理は当社が一元的に行います。
+  </p>
+
+  <div class="kpi" style="margin:6mm 0;">
+    <div class="k"><div class="n">24<span style="font-size:12pt;">h</span></div><div class="l">クラウド常時稼働</div></div>
+    <div class="k"><div class="n">1,000<span style="font-size:12pt;">社+</span></div><div class="l">スケール設計</div></div>
+    <div class="k"><div class="n">3</div><div class="l">セキュリティ段階プラン</div></div>
+    <div class="k"><div class="n">0<span style="font-size:12pt;">円〜</span></div><div class="l">無料枠からの運用</div></div>
+  </div>
+
+  <h3>特長</h3>
+  <div class="grid col2">
+    <div class="card soft"><div class="ico">🧠</div><h4>賢さ優先のAI</h4>
+      <p>Claude を主役に据え、簡易処理は安価なモデルへ自動委譲。コストと品質を両立。</p></div>
+    <div class="card soft"><div class="ico">🔒</div><h4>企業ごとに隔離</h4>
+      <p>データは会社単位で分離。暗号化・専用環境・バックアップをプランで選択。</p></div>
+    <div class="card soft"><div class="ico">⚙️</div><h4>提供者が一元管理</h4>
+      <p>すべての運用を CLI から実行。コード・設定は当社が非公開で完全管理。</p></div>
+    <div class="card soft"><div class="ico">🔁</div><h4>ロックイン回避</h4>
+      <p>DB・ストレージは標準API準拠。特定クラウドに縛られない移植性を確保。</p></div>
+  </div>
+
+  <div class="callout gold">
+    <b>ビジネスモデル：</b>サブスクリプション契約（契約期間中のみ利用可能）。
+    セキュリティ・バックアップ・個別管理の範囲をプランで段階提供し、AI利用は使用量上限内で従量。
+  </div>
+
+  <div class="footer"><span>クラウドAIエージェント・プラットフォーム 事業説明資料</span><span>P.<span class="pg"></span></span></div>
+</section>
+
+<!-- ============ 2. 差別化 ============ -->
+<section class="page">
+  <div class="sec-no">02</div>
+  <h2 class="sec">差別化ポイント ― なぜ選ばれるか</h2>
+
+  <p class="lead-p">機能の寄せ集めではなく、<b>「組織の記憶」「高粗利で長尾を取れる構造」「企業間連携」</b>という
+  模倣しにくい強みを軸に差別化します。</p>
+
+  <div class="grid col2">
+    <div class="card" style="border-color:var(--gold);"><div class="ico">🧠</div><h4>辞めても消えない「団体の頭脳」</h4>
+      <p>多くのエージェントは個人・セッション単位で記憶が消える。本サービスは<b>団体スコープに知識・意向を蓄積し人事異動を越えて継承</b>。引き継ぎ・属人化の課題に直撃。</p></div>
+    <div class="card"><div class="ico">📈</div><h4>長尾を高粗利で取れる構造</h4>
+      <p>GitOps/CLIの自動運用で1社あたり運用コストが極小＋<b>高粗利</b>。人手運用の競合が取りにくい中小・団体の長尾を低コストで面取り。</p></div>
+    <div class="card"><div class="ico">📱</div><h4>LINE/Discordネイティブ・24h</h4>
+      <p>アプリ不要・教育不要。日本のLINE基盤に最適化。端末オフでも稼働し、話すだけで自分用ツールを作れる。</p></div>
+    <div class="card"><div class="ico">⚖️</div><h4>賢さ × コスト規律</h4>
+      <p>最上位モデル（Claude）の品質を、委譲・モデル3段・上限・BYOKで<b>採算を崩さず</b>提供。</p></div>
+    <div class="card"><div class="ico">🔐</div><h4>データを預からない安心</h4>
+      <p>データは顧客アカウントに保持＝<b>データ主権</b>。当社は承認とロジック配信のみで本文を扱わず、漏えい責任を抱えない構造。</p></div>
+    <div class="card" style="border-color:var(--gold);"><div class="ico">🕸</div><h4>企業間連携＝ネットワーク効果</h4>
+      <p>A2Aで参加団体が増えるほど連携価値が増し、<b>模倣困難なモート</b>に育つ。</p></div>
+  </div>
+
+  <h3>差別化を「はかる」戦略</h3>
+  <table>
+    <thead><tr><th style="width:30%;">打ち手</th><th>狙い</th></tr></thead>
+    <tbody>
+      <tr><td class="em">看板を「組織の記憶」に</td><td>機能列挙でなく「人が替わっても引き継ぐ団体の頭脳」で一点突破</td></tr>
+      <tr><td class="em">垂直テンプレ展開</td><td>団体プロファイル＋人格＋初期ナレッジで業種別テンプレ（PTA・自治会・士業・店舗）を即戦力化</td></tr>
+      <tr><td class="em">ネットワーク効果を育成</td><td>同業・取引先のA2A連携を増やし乗り換えコストを上げる</td></tr>
+      <tr><td class="em">データ主権を訴求</td><td>暗号化・分離・移植可能を「囲い込まない安心」として信頼軸に</td></tr>
+    </tbody>
+  </table>
+
+  <div class="footer"><span>クラウドAIエージェント・プラットフォーム 事業説明資料</span><span>P.<span class="pg"></span></span></div>
+</section>
+
+<!-- ============ 3. 課題と価値 ============ -->
+<section class="page">
+  <div class="sec-no">03</div>
+  <h2 class="sec">解決する課題と提供価値</h2>
+
+  <div class="grid col2" style="margin-bottom:5mm;">
+    <div class="card">
+      <h4>こんな課題に</h4>
+      <ul class="clean">
+        <li>社内の情報共有・問い合わせ対応に手間がかかる</li>
+        <li>定型作業（記録・集計・リマインド）が属人的</li>
+        <li>AI導入したいが、開発・運用・コスト管理が負担</li>
+        <li>機密データの取り扱い・事業継続が不安</li>
+      </ul>
+    </div>
+    <div class="card" style="border-color:var(--gold);">
+      <h4 style="color:var(--gold);">本サービスが提供する価値</h4>
+      <ul class="clean">
+        <li>LINEで話すだけの、教育不要なAIアシスタント</li>
+        <li>よく使う作業を「自分用ツール」化して自動化</li>
+        <li>導入・運用・スケールは当社が代行</li>
+        <li>企業隔離・暗号化・バックアップで安心</li>
+      </ul>
+    </div>
+  </div>
+
+  <h3>ユースケース例</h3>
+  <table>
+    <thead><tr><th style="width:28%;">シーン</th><th>エージェントができること</th></tr></thead>
+    <tbody>
+      <tr><td class="em">情報検索</td><td>社内ナレッジ・過去記録を会話で検索し、要点を返答</td></tr>
+      <tr><td class="em">記録・登録</td><td>領収書・議事メモ等を「仮登録 → 本人確認 → 確定」で安全に追加</td></tr>
+      <tr><td class="em">タスク自動化</td><td>よく行う一連の作業をマクロ化。自分専用ツールとして登録</td></tr>
+      <tr><td class="em">リマインド／日報</td><td>毎日決まった時刻に残タスクや日報をプッシュ通知（任意設定）</td></tr>
+      <tr><td class="em">長時間処理</td><td>1分超の生成・処理は「実行中タスク」に登録し、完了後に確認</td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout">
+    エージェントの権限は<b>「読む・足す」中心</b>。編集・削除・承認といった重要操作は
+    人の確認を必ず挟み、AIが勝手に確定しない設計です。
+  </div>
+
+  <div class="footer"><span>クラウドAIエージェント・プラットフォーム 事業説明資料</span><span>P.<span class="pg"></span></span></div>
+</section>
+
+<!-- ============ 3. サービス全体像 ============ -->
+<section class="page">
+  <div class="sec-no">04</div>
+  <h2 class="sec">サービス全体像</h2>
+
+  <p>利用者の入口（LINE/Discord）から、クラウド上のエージェント、AIエンジンまでを一気通貫で提供します。</p>
+
+  <div class="flow">
+    <div class="node"><div class="t">利用者</div><div class="d">LINE / Discord</div></div>
+    <div class="arrow">→</div>
+    <div class="node alt"><div class="t">エージェント基盤</div><div class="d">Cloudflare Workers</div></div>
+    <div class="arrow">→</div>
+    <div class="node"><div class="t">AIエンジン</div><div class="d">Claude API ＋ Workers AI</div></div>
+  </div>
+  <div class="flow" style="margin-top:0;">
+    <div class="node" style="flex:0 0 34%;"><div class="t">データ</div><div class="d">顧客アカウント内に保持（当社は預からない）</div></div>
+    <div class="arrow">↺</div>
+    <div class="node" style="flex:1;"><div class="t">結果を返信／通知</div><div class="d">対話は無料応答、通知は任意プッシュ</div></div>
+  </div>
+
+  <h3>運用形態（ベース）</h3>
+  <div class="flow">
+    <div class="node"><div class="t">顧客所有アカウント</div><div class="d">エージェント実行＋Anthropic/LINE直接＋顧客データ</div></div>
+    <div class="arrow">⇄</div>
+    <div class="node alt"><div class="t">当社コントロールプレーン</div><div class="d">承認＋ロジック配信のみ（本文は通らない）</div></div>
+  </div>
+
+  <div class="grid col3" style="margin-top:4mm;">
+    <div class="card soft"><h4>入口は選べる</h4><p>LINEが基本。プッシュ多用・コスト重視なら無料のDiscordへ切替可能。</p></div>
+    <div class="card soft"><h4>本文を通さない</h4><p>Anthropic/LINEは顧客が直接やり取り。当社は承認とロジック配信のみ。</p></div>
+    <div class="card soft"><h4>データは顧客保有</h4><p>DB・ストレージは顧客アカウント内。当社は保有・中継しない。</p></div>
+  </div>
+
+  <div class="footer"><span>クラウドAIエージェント・プラットフォーム 事業説明資料</span><span>P.<span class="pg"></span></span></div>
+</section>
+
+<!-- ============ 4. AIエージェント ============ -->
+<section class="page">
+  <div class="sec-no">05</div>
+  <h2 class="sec">AIエージェントの賢さ</h2>
+
+  <p><b>Claude を頭脳（主）</b>に据え、安く済む処理だけを Cloudflare Workers AI に委譲。
+  賢さを最優先しつつ、コストを抑えます。難易度に応じてモデルを自動で切り替えます。</p>
+
+  <h3>モデルの3段自動切替</h3>
+  <table>
+    <thead><tr><th style="width:18%;">層</th><th style="width:24%;">モデル</th><th>使いどころ</th></tr></thead>
+    <tbody>
+      <tr><td class="em">簡易</td><td>Claude Haiku</td><td>定型Q&amp;A・分類・短い応答・進捗確認</td></tr>
+      <tr style="background:#eef3f9;"><td class="em">既定</td><td><b>Claude Sonnet</b></td><td>通常の対話・ツール選択・要約後の推論（大半）</td></tr>
+      <tr><td class="em">難問</td><td>Claude Opus</td><td>複数作業の連鎖・曖昧な依頼・高度推論</td></tr>
+    </tbody>
+  </table>
+
+  <h3>主な機能</h3>
+  <div class="grid col3">
+    <div class="card"><h4>🛠 自分用ツール</h4>
+      <p>よく行う作業をマクロ化・外部API連携。破壊的操作なし・本人確認つきの安全設計。</p></div>
+    <div class="card"><h4>⏰ スケジュール・24h稼働</h4>
+      <p>リマインダーや定期実行をクラウドで自動化。端末がオフでも稼働・完了。</p></div>
+    <div class="card"><h4>💬 マルチチャネル</h4>
+      <p>LINE / Discord 等を差し替え可能。利用者・企業単位で入口を選択。</p></div>
+    <div class="card"><h4>📊 コスト可視化</h4>
+      <p>利用者別にAI使用量を記録。上限接近で警告、超過で停止、追加課金で増枠。</p></div>
+    <div class="card" style="border-color:var(--gold);"><h4>🧠 組織記憶（引き継ぎ）</h4>
+      <p>資料・会話・決定を団体ごとに蓄積。<b>人が替わっても</b>知識・意向を継承。</p></div>
+    <div class="card" style="border-color:var(--gold);"><h4>🎭 団体別の人格</h4>
+      <p>名前・トーン・口調を団体ごとに調整。安全制約は固定で不変。</p></div>
+    <div class="card"><h4>📄 文書・画像の取り込み</h4>
+      <p>PDF・Word・Excel・PowerPoint・領収書等を送るだけで内容を取り込み。OCRで分類・日付・金額を抽出し「6月の領収書まとめて」など期間×分類で横断検索。</p></div>
+    <div class="card"><h4>🎤 音声の議事録化</h4>
+      <p>会議音声を送ると文字起こし（話者分離）し、要点・決定事項を議事録として整形・保存。</p></div>
+    <div class="card"><h4>📑 資料・スライド生成</h4>
+      <p>依頼に応じて PowerPoint・Word・Excel・PDF を生成しダウンロードリンクで提供。</p></div>
+    <div class="card"><h4>👥 人材ディレクトリ</h4>
+      <p>メンバーの経歴・スキル・人脈を登録し横断検索。「これができる人は？」「◯◯の人脈を持つ人は？」に回答。</p></div>
+    <div class="card" style="border-color:var(--gold);"><h4>🔐 プライバシー選択（機微モード）</h4>
+      <p>利用者が処理方針を選択。<b>安さ優先</b>＝無料エンジン（学習あり）／<b>機密・精度優先</b>＝学習に使われないエンジン。機微な内容は送信前に確認する安全設計。</p></div>
+  </div>
+
+  <div class="callout gold">
+    <b>賢さとコストの両立：</b>定型応答・大量テキストの要約・OCR・文字起こしなど「高くつく機械的処理」は
+    無料枠エンジン（例：Gemini 無料枠）へ委譲し、難しい判断のみ Claude が担当。
+    クレジットカード不要の無料スタックのみでも全機能が動作する構成（上位は BYOK で Claude を併用）。
+  </div>
+
+  <div class="footer"><span>クラウドAIエージェント・プラットフォーム 事業説明資料</span><span>P.<span class="pg"></span></span></div>
+</section>
+
+<!-- ============ 5. 使用例 ============ -->
+<section class="page">
+  <div class="sec-no">06</div>
+  <h2 class="sec">使用例 ― 使い方のイメージ</h2>
+  <p>LINE（またはDiscord）で話しかけるだけ。代表的な4つの使い方を会話例で示します。</p>
+
+  <div class="grid col2">
+    <div class="scene">
+      <h4>① 日常の質問</h4>
+      <div class="chat">
+        <div class="bub u"><span class="who">利用者</span>先月の会議の決定事項を教えて</div>
+        <div class="bub a"><span class="who">エージェント</span>先月の議事録の要点です：<br>・予算案を承認　・次回は7/10<br>（詳細はこちら）</div>
+      </div>
+      <div class="cap">社内情報を会話で検索・要約。</div>
+      <div class="note"><span class="tag o">無料</span> 対話はLINEのReplyで完結</div>
+    </div>
+
+    <div class="scene">
+      <h4>② 自分用ツールを作る</h4>
+      <div class="chat">
+        <div class="bub u"><span class="who">利用者</span>毎朝、未対応の問い合わせを一覧にするツールを作って</div>
+        <div class="bub a"><span class="who">エージェント</span>「朝の未対応リスト」を作成します。この内容でよろしいですか？［作成する］</div>
+        <div class="bub u"><span class="who">利用者</span>OK</div>
+      </div>
+      <div class="cap">よく行う作業をマクロ化＝マイツール。</div>
+      <div class="note"><span class="tag">安全</span> 破壊的操作なし・本人確認つき</div>
+    </div>
+
+    <div class="scene">
+      <h4>③ リマインダー・日報</h4>
+      <div class="chat">
+        <div class="bub u"><span class="who">利用者</span>毎日18時に今日の残タスクを送って</div>
+        <div class="bub a"><span class="who">エージェント</span>了解しました。毎日18:00に通知します📌</div>
+        <div class="bub a"><span class="who">18:00 自動</span>【本日の残タスク】3件：…</div>
+      </div>
+      <div class="cap">定刻に自動でプッシュ通知（任意設定）。</div>
+      <div class="note"><span class="tag g">Push</span> 能動通知（無料枠/Discordで最適化）</div>
+    </div>
+
+    <div class="scene">
+      <h4>④ 夜間の重い処理（端末オフでも稼働）</h4>
+      <div class="chat">
+        <div class="bub u"><span class="who">利用者 23:40</span>全店舗の今月の売上を集計してレポートにして</div>
+        <div class="bub a"><span class="who">エージェント</span>⏳ 実行中です。数分かかります。完了後メニュー【実行中タスク】からご確認ください</div>
+        <div class="bub u"><span class="who">翌 8:10 メニュー</span>実行中タスク</div>
+        <div class="bub a"><span class="who">エージェント</span>✅「売上レポート」完了しました：…</div>
+      </div>
+      <div class="cap">スマホ/PCがオフでもクラウドが完遂。戻ってから確認。</div>
+      <div class="note"><span class="tag o">無料</span> 端末オフでも稼働＋無料Pullで受取</div>
+    </div>
+  </div>
+
+  <div class="callout gold" style="margin-top:5mm;">
+    共通して、エージェントは<b>クラウド上で24時間稼働</b>。利用者の端末はあくまで入口/出口で、
+    一度投げたタスクは端末がオフでも自動で実行・完了します。
+  </div>
+
+  <div class="footer"><span>クラウドAIエージェント・プラットフォーム 事業説明資料</span><span>P.<span class="pg"></span></span></div>
+</section>
+
+<!-- ============ 7. 導入の操作イメージ ============ -->
+<section class="page">
+  <div class="sec-no">07</div>
+  <h2 class="sec">導入の操作イメージ</h2>
+
+  <p class="lead-p"><b>Cloudflareアカウントだけ作って当社を招待</b>すれば、あとは<b>自動セットアップ</b>。
+  残りは<b>キーをコピペするだけ</b>で稼働します。Workers AI 製のウィザードが手順を会話で案内します。</p>
+
+  <div class="callout">
+    <b>※ 各アカウントの作成はお客様ご自身で行っていただきます</b>：<b>Cloudflare ／ Claude API ／ LINE（または Discord）</b>のアカウント作成は、各社規約により<b>お客様ご自身でのサインアップが必要</b>です（当社による代理作成はできません）。当社は<b>作成手順の案内・入力の検証・自動配線</b>を担当し、お客様の操作は最小限（コピペ中心）にします。
+  </div>
+
+  <div class="stepper">
+    <div class="st"><span class="n">1</span><span class="l">CF作成＋当社を招待</span></div>
+    <div class="st"><span class="n">2</span><span class="l">自動セットアップ</span></div>
+    <div class="st"><span class="n">3</span><span class="l">キーをコピペ</span></div>
+    <div class="st"><span class="n">4</span><span class="l">稼働開始</span></div>
+  </div>
+
+  <div class="grid col3">
+    <div class="win">
+      <div class="bar"><b>① 当社を招待</b>（唯一の手作業）</div>
+      <div class="body">
+        <p class="small muted" style="margin:0 0 2mm;">Cloudflare → Members → Invite</p>
+        <div class="field">setup@（当社）<span class="ok">Admin</span></div>
+        <div style="text-align:center; margin-top:2mm;"><span class="btnm">招待を送信</span></div>
+        <p class="small muted" style="margin:2.5mm 0 0;">課金不要・無料枠で開始</p>
+      </div>
+    </div>
+
+    <div class="win">
+      <div class="bar"><b>② 自動セットアップ</b>（当社が実行）</div>
+      <div class="body">
+        <div class="chk"><span class="c">✓</span> エージェントWorker 配備</div>
+        <div class="chk"><span class="c">✓</span> Workers AI 準備</div>
+        <div class="chk"><span class="c">✓</span> DB / ストレージ作成</div>
+        <div class="chk"><span class="c">✓</span> 定期実行・鍵設定</div>
+        <div class="chk"><span class="c">✓</span> 疎通確認</div>
+        <p class="small muted" style="margin:2.5mm 0 0;">以降、CFは触らなくてOK</p>
+      </div>
+    </div>
+
+    <div class="win">
+      <div class="bar"><b>③ キーをコピペ</b>（自動で検証）</div>
+      <div class="body">
+        <div class="field">Claude APIキー <span class="ok">✓ 検証OK</span></div>
+        <div class="field">LINE / Discord 情報 <span class="ok">✓ 検証OK</span></div>
+        <p class="small muted" style="margin:2mm 0 0;">貼り付け→自動で検証＆配線。鍵は<b>あなたの環境</b>に保存（当社は預からない）。</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="callout gold" style="margin-top:5mm;">
+    🎉 <b>稼働開始</b>：LINE（またはDiscord）で話しかければ、専用のAIエージェントが応答します。
+    顧客の手作業は<b>「CF作成＋当社を招待＋キーのコピペ」だけ</b>。アカウントの代理作成はせず（規約準拠）、案内・検証・配線を当社が担います。
+  </div>
+
+  <div class="footer"><span>クラウドAIエージェント・プラットフォーム 事業説明資料</span><span>P.<span class="pg"></span></span></div>
+</section>
+
+<!-- ============ 8. アーキテクチャ ============ -->
+<section class="page">
+  <div class="sec-no">08</div>
+  <h2 class="sec">システムアーキテクチャ</h2>
+
+  <p>当社は<b>承認（ライセンス）とロジック配信のみ</b>。<b>顧客データ（本文）は当社を一切通りません</b>。
+  Anthropic/LINE は<b>顧客が直接</b>やり取りし、当社はキーも本文も持ちません。多リージョンで全社停止を回避します。</p>
+
+  <div class="planebox" style="border-color:var(--gold);">
+    <div class="ttl" style="color:var(--gold);">当社コントロールプレーン（多リージョン・アクティブ-アクティブ）</div>
+    <div class="grid col3">
+      <div class="shard" style="background:#fbf6ed;"><b>承認サーバ</b>ライセンスを発行/停止</div>
+      <div class="shard" style="background:#fbf6ed;"><b>ロジック配信</b>設定をライセンスゲートで配信（本文不経由）</div>
+      <div class="shard" style="background:#fbf6ed;"><b>管理CLI・監査</b>依頼時に共同作業</div>
+    </div>
+  </div>
+  <div style="text-align:center; color:var(--gold); font-weight:800;">⇅ ①ライセンス/設定 要求 ②署名リース＋設定（本文なし）</div>
+  <div class="planebox">
+    <div class="ttl">顧客所有アカウント（データ・処理・連携はすべて顧客側）</div>
+    <div class="shards">
+      <div class="shard"><b>エージェントWorker</b>受領した設定を<br>ローカル実行</div>
+      <div class="shard"><b>DB / ストレージ</b>顧客のデータ<br>当社は保有しない</div>
+      <div class="shard"><b>Anthropic・LINE</b>顧客が<b>直接</b>呼ぶ<br>本文は当社不経由</div>
+      <div class="shard ded"><b>予算オプション</b>当社ホスト型<br>小規模・当社保有</div>
+    </div>
+  </div>
+
+  <div class="grid col3" style="margin-top:4mm;">
+    <div class="card soft"><h4>本文を通さない</h4><p>データも処理も顧客側。当社は承認とロジック配信のみで、本文を保有・中継しない。</p></div>
+    <div class="card soft"><h4>機能のみ停止</h4><p>未払い・契約無効はエージェント機能のみ停止。アカウント・データは止めず人質にしない。</p></div>
+    <div class="card soft"><h4>多リージョンで無停止</h4><p>1拠点停止でも他拠点が即時継続。CF全体障害は契約免責＋ローカルバックアップ推奨。</p></div>
+  </div>
+
+  <div class="footer"><span>クラウドAIエージェント・プラットフォーム 事業説明資料</span><span>P.<span class="pg"></span></span></div>
+</section>
+
+<!-- ============ 6. セキュリティ ============ -->
+<section class="page">
+  <div class="sec-no">09</div>
+  <h2 class="sec">セキュリティと信頼性</h2>
+
+  <p>「起きる前提」で多層防御。既定状態で被害が広がらない設計です。</p>
+
+  <div class="grid col2">
+    <div class="card" style="border-color:var(--gold);"><h4>🔐 データを預からない</h4>
+      <p>データは顧客アカウントに保持し当社は保存しない。暗号化（本人以外復元不可）・PIIマスキング・保存リージョンは任意選択。</p></div>
+    <div class="card"><h4>🛡 不正アクセス対策</h4>
+      <p>横断アクセス不可を構造で担保。常設の管理者権限を持たず、緊急時のみ時限・スコープ付きの
+      アクセスキーを発行し全件監査。</p></div>
+    <div class="card" style="border-color:var(--gold);"><h4>🔏 改ざんできないライセンス</h4>
+      <p>契約状態（有効期限・人格・機能）は提供者が電子署名して配信。顧客側は<b>公開鍵で検証のみ</b>を行い、
+      署名鍵は提供者（将来はKMS）だけが保持。顧客環境に鍵が無いため、設定の偽造・改ざんが成立しません。
+      <b>有効な承認が無い環境は起動しません</b>（既定で停止＝fail-closed）。</p></div>
+    <div class="card"><h4>🚫 不正利用・違反対策</h4>
+      <p>リソース上限・アップロード検査・モデレーションで暴走と違反コンテンツを抑止。
+      機密専用環境は内容検閲なし＋専用バックアップで両立。</p></div>
+    <div class="card"><h4>👁 常時監視</h4>
+      <p>常時の自動ガード＋AI巡回＋異常時の高精度判定の三段で、不正・異常を検知し自動対処。</p></div>
+    <div class="card"><h4>💾 バックアップ（顧客保有・自己管理）</h4>
+      <p>データは顧客アカウント内に保持されるため、バックアップは顧客側の管理（自己責任）。
+      当社はデータを預からない方針と整合。顧客が自分のデータを退避できる<b>バックアップ用ツールは今後提供予定</b>。</p></div>
+    <div class="card"><h4>🔁 ベンダーロックイン回避</h4>
+      <p>ストレージは標準S3互換、DBは標準SQL＋アダプタ層。特定クラウドへの依存を最小化。</p></div>
+  </div>
+
+  <div class="callout">
+    <b>サービス継続リスクへの備え：</b>顧客アカウント運用では、規約執行・障害・漏えいの影響は<b>1社で完結</b>（他社へ波及しない）。
+    迅速な対応・別環境バックアップ・データ顧客保有で、被害を最小化します。
+  </div>
+
+  <h3>役割と法的ポジション</h3>
+  <table>
+    <thead><tr><th style="width:32%;">論点</th><th>当社の立場・対応</th></tr></thead>
+    <tbody>
+      <tr><td class="em">データの操作・管理・保有</td><td><b>顧客</b>が実施（自社アカウント内）。当社は<b>システムの提供・保守・導入支援</b>に徹する</td></tr>
+      <tr><td class="em">個人情報の越境移転</td><td>Anthropic/LINEは<b>顧客が直接</b>やり取り＝<b>本文は当社を通らない</b>。越境は顧客契約で整合、当社はライセンス提供＋支援の立場</td></tr>
+      <tr><td class="em">サービス停止（未払い等）</td><td><b>エージェント機能のみ停止</b>。アカウント・データは止めず<b>人質にしない</b>（優越的地位の濫用を回避）</td></tr>
+      <tr><td class="em">AIの回答</td><td><b>参考情報・補助アドバイスに限定</b>。断定的な専門助言・代理は行わない（非弁・業法回避）</td></tr>
+      <tr><td class="em">コンテンツ責任</td><td>顧客（自社アカウント）。当社は通知対応・保守の立場</td></tr>
+    </tbody>
+  </table>
+  <p class="small muted">※上記は当社の現方針。最終確定は顧問弁護士の確認後とします。</p>
+
+  <div class="footer"><span>クラウドAIエージェント・プラットフォーム 事業説明資料</span><span>P.<span class="pg"></span></span></div>
+</section>
+
+<!-- ============ 7. 料金・プラン ============ -->
+<section class="page">
+  <div class="sec-no">10</div>
+  <h2 class="sec">料金・プラン</h2>
+
+  <p><b>2つの提供形態</b>：<b>顧客アカウント型</b>（データは顧客保有・インフラ/AIは顧客契約）＝<b>初期構築費＋月額管理費</b>。
+  <b>当社ホスト型</b>（小規模向け・当社が保有/内包）＝下記の月額サブスク。セキュリティ・バックアップ・個別管理の範囲をプランで段階提供します。</p>
+
+  <table>
+    <thead><tr><th style="width:13%;">プラン</th><th style="width:16%;">月額(税別)</th><th>個別管理（隔離）</th><th>暗号化</th><th>バックアップ</th><th>自分用ツール</th></tr></thead>
+    <tbody>
+      <tr><td class="em">Basic</td><td class="price">¥9,800</td><td>共有（論理分離）</td><td>―</td><td>簡易</td><td>マクロ・リマインダー</td></tr>
+      <tr style="background:#eef3f9;"><td class="em">Secure</td><td class="price">¥29,800</td><td>企業別DB分離</td><td>あり</td><td>クラウド日次</td><td>＋外部API連携</td></tr>
+      <tr><td class="em">Dedicated</td><td class="price">¥120,000〜</td><td>専用アカウント</td><td>あり</td><td>クラウド＋ローカル</td><td>＋優先サポート</td></tr>
+    </tbody>
+  </table>
+  <p class="small muted">※上表の月額は<b>当社ホスト型</b>。<b>顧客アカウント型</b>は「初期構築費＋月額管理費（＋任意のアカウント作成支援費）」で別途見積。インフラ/AI/LINEは顧客契約のため当社原価はほぼゼロ＝粗利ほぼ純利。</p>
+
+  <h3>AI利用コストの管理</h3>
+  <div class="grid col3">
+    <div class="card soft"><h4>利用量の可視化</h4><p>利用者別にAI使用量・コストを記録。月次でいつでも確認。</p></div>
+    <div class="card soft"><h4>上限と警告</h4><p>上限の80/90%で警告、100%で稼働停止。サブスク料金内に収める。</p></div>
+    <div class="card soft"><h4>一時増枠</h4><p>追加課金で上限枠を一時的に拡大。繁忙期にも対応。</p></div>
+  </div>
+
+  <h3>チャネル費用の考え方（LINE）</h3>
+  <table>
+    <thead><tr><th>動作</th><th>区分</th><th>費用</th></tr></thead>
+    <tbody>
+      <tr><td>利用者への返信（対話）</td><td>応答メッセージ</td><td class="price">無料・無制限</td></tr>
+      <tr><td>能動的なプッシュ通知</td><td>配信メッセージ</td><td>無料枠超で課金</td></tr>
+    </tbody>
+  </table>
+  <div class="callout gold">
+    対話はLINEで<b>無料</b>。コストが出るのは能動プッシュのみのため、確認はメニューからの「呼び出し（無料応答）」に寄せて最適化。
+    <b>プッシュを多用したい・コストを抑えたい場合は無料のDiscordを推奨</b>します。
+    <span class="small muted">※LINE公式アカウント料金：コミュニケーション¥0／ライト¥5,000／スタンダード¥15,000（税別・OA単位）。2026/10/1に追加料金改定予定。</span>
+  </div>
+
+  <div class="footer"><span>クラウドAIエージェント・プラットフォーム 事業説明資料</span><span>P.<span class="pg"></span></span></div>
+</section>
+
+<!-- ============ 8. 採算・粗利 ============ -->
+<section class="page">
+  <div class="sec-no">11</div>
+  <h2 class="sec">採算設計・粗利益率</h2>
+
+  <p class="lead-p"><b>顧客アカウント型</b>はインフラ・AI・LINEを顧客が契約するため<b>当社原価はほぼゼロ＝粗利ほぼ純利</b>（報酬＝初期構築費＋月額管理費＋任意のアカウント作成支援費）。
+  <b>当社ホスト型</b>はAI実費を内包し、<b>AI原価を料金の5%以内</b>に収めて<b>粗利益率95%以上</b>を確保します（下表）。</p>
+
+  <div class="kpi" style="margin:5mm 0;">
+    <div class="k"><div class="n">≒100%</div><div class="l">顧客アカウント型（原価≒0）</div></div>
+    <div class="k"><div class="n">95%+</div><div class="l">当社ホスト型（AI込み）</div></div>
+    <div class="k"><div class="n">BYOK</div><div class="l">大口は実費を顧客負担化</div></div>
+  </div>
+
+  <table>
+    <thead><tr><th>プラン</th><th>月額(税別)</th><th>内包AI枠(原価)</th><th>推定原価(AI＋基盤)</th><th>粗利益率</th></tr></thead>
+    <tbody>
+      <tr><td class="em">Basic</td><td class="price">¥9,800</td><td>〜¥430</td><td>約¥470</td><td><b>約95.2%</b></td></tr>
+      <tr style="background:#eef3f9;"><td class="em">Secure</td><td class="price">¥29,800</td><td>〜¥1,350</td><td>約¥1,470</td><td><b>約95.1%</b></td></tr>
+      <tr><td class="em">Dedicated</td><td class="price">¥120,000〜</td><td>〜¥4,800</td><td>約¥5,800</td><td><b>約95.2%</b></td></tr>
+    </tbody>
+  </table>
+  <p class="small muted">※内包AI枠＝月間AI使用上限（原価ベース）。Sonnet既定・プロンプトキャッシュ・Workers AI委譲を前提とした概算。¥150/$・Claude標準単価で試算。実利用は上限未満が多く、実効粗利はさらに高い見込み。</p>
+
+  <h3>粗利益率を守る仕組み</h3>
+  <div class="grid col2">
+    <div class="card soft"><h4>① ハード上限</h4><p>AI原価がプラン内に収まるよう呼び出し前に上限判定。超過は停止／追加課金で吸収。</p></div>
+    <div class="card soft"><h4>② BYOK（自社キー）</h4><p>大口利用は顧客のAPIキーで実費を顧客負担化。当社原価から外れ、粗利を維持・向上。</p></div>
+    <div class="card soft"><h4>③ AI単価の圧縮</h4><p>モデル3段切替＋安価エンジン委譲＋プロンプトキャッシュで1件あたり原価を低減。</p></div>
+    <div class="card soft"><h4>④ 共有インフラ</h4><p>100社/アカウントの共有で、1社あたりの基盤原価は実質誤差。</p></div>
+  </div>
+
+  <div class="callout gold">
+    <b>AI課金の住み分け：</b><b>標準プラン＝AI込み</b>（実費の約20倍を内包＝粗利95%）／
+    <b>大口＝BYOK</b>（顧客が Anthropic と直接契約し、AI実費を実費直払い）。
+    大口は内包枠だと割高・上限に当たりやすいため、BYOKが顧客・当社双方に合理的（当社はAI原価が外れ粗利が上振れ）。
+  </div>
+  <div class="callout">
+    <b>留意：</b>決済手数料（カード約3.6%）は粗利とは別の取引コスト。上位プランは年額・銀行振込で軽減可能。
+    Claude値上げ・円安は単価表とプラン改定で吸収します。
+  </div>
+
+  <div class="footer"><span>クラウドAIエージェント・プラットフォーム 事業説明資料</span><span>P.<span class="pg"></span></span></div>
+</section>
+
+<!-- ============ 10. エージェント間連携 ============ -->
+<section class="page">
+  <div class="sec-no">12</div>
+  <h2 class="sec">エージェント間連携（オプション）</h2>
+
+  <p class="lead-p">各社のエージェント同士が<b>相互同意のうえで安全に連携</b>。企業をまたいだ調整・取引を自動化する、
+  <b>B2Bエージェントネットワーク</b>機能です（Discord前提・上位プラン）。</p>
+
+  <div class="flow">
+    <div class="node"><div class="t">会社A エージェント</div></div>
+    <div class="arrow">→</div>
+    <div class="node alt"><div class="t">連携ブローカー</div><div class="d">同意・認証・監査・制御</div></div>
+    <div class="arrow">→</div>
+    <div class="node"><div class="t">会社B エージェント</div></div>
+  </div>
+  <p class="small muted">※エージェントは相手のデータに直接アクセスせず、同意済みの「決められた操作」だけを構造化メッセージで授受。テナント分離は維持されます。</p>
+
+  <h3>想定使用方法</h3>
+  <div class="grid col2">
+    <div class="card soft"><div class="ico">📅</div><h4>企業間の日程調整</h4>
+      <p>A社の依頼にB社エージェントが空き状況を返答し、双方の予定を自動ですり合わせ。</p></div>
+    <div class="card soft"><div class="ico">🧾</div><h4>見積・発注のやり取り</h4>
+      <p>発注側が仕入先エージェントに見積を依頼し、定型フォーマットで自動応答・発注。</p></div>
+    <div class="card soft"><div class="ico">📄</div><h4>同意付き書類交換</h4>
+      <p>請求書・仕様書など、合意済みの文書だけを安全に受け渡し。</p></div>
+    <div class="card soft"><div class="ico">🤝</div><h4>団体・グループ間連携</h4>
+      <p>関連団体やグループ会社間で、情報共有・依頼・調整を横断的に自動化。</p></div>
+  </div>
+
+  <h3>安全に成立させる仕組み</h3>
+  <table>
+    <thead><tr><th style="width:26%;">制御</th><th>内容</th></tr></thead>
+    <tbody>
+      <tr><td class="em">相互同意</td><td>両社のオプトインが前提。共有してよい情報・操作を事前に限定</td></tr>
+      <tr><td class="em">操作の限定</td><td>許可した操作（見積依頼・空き照会・文書送付等）のみ。DB/ストレージへの直接アクセス不可</td></tr>
+      <tr><td class="em">分離維持・認証</td><td>相手の発言を「指示」として実行しない。エージェントID署名で相互認証</td></tr>
+      <tr><td class="em">暴走防止・監査</td><td>往復回数・頻度の上限とループ検知。全やり取りを記録</td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout gold">
+    <b>位置づけ：</b>他社にない<b>差別化機能</b>。機密保持と直結するため、Discord前提・相互同意制の
+    <b>上位プラン専用オプション</b>として慎重に提供します。
+  </div>
+
+  <div class="footer"><span>クラウドAIエージェント・プラットフォーム 事業説明資料</span><span>P.<span class="pg"></span></span></div>
+</section>
+
+<!-- ============ 12. 事業の発展性 ============ -->
+<section class="page">
+  <div class="sec-no">13</div>
+  <h2 class="sec">事業の発展性 ― データ非保有が生む利点</h2>
+
+  <p class="lead-p"><b>データを預からない設計</b>は、運用の安全だけでなく、<b>事業の譲渡しやすさ</b>と
+  <b>国内・物理での預かり方</b>という発展性も生みます。</p>
+
+  <h3>① ホスト機能の譲渡可能性（承継・売却）</h3>
+  <div class="grid col2">
+    <div class="card soft"><h4>資産は法人に集約</h4><p>承認・ロジック配信・ライセンス・契約・ドメインを法人に集約し、株式/事業譲渡で一括移転。</p></div>
+    <div class="card soft"><h4>管理者の変更が容易</h4><p>Cloudflareは管理者(Super Admin)の追加→旧所有者削除で移転。ドメインも移管可。</p></div>
+    <div class="card soft"><h4>顧客データは対象外</h4><p>データは顧客アカウントに残り売却対象外。買主はデータ責任を負わず評価が上がる。</p></div>
+    <div class="card soft"><h4>稼働の継続を保証</h4><p>ライセンス署名鍵の引渡し/ローテーション手順を整備し、買主が運用を継続。</p></div>
+  </div>
+
+  <h3>② 国内ハウジング（場所貸し・上位オプション）</h3>
+  <div class="callout gold">
+    顧客所有のサーバーを<b>当社事務所に設置（ハウジング）</b>し暗号化バックアップを保管。当社は<b>場所・電源・物理セキュリティを提供</b>するのみで、
+    <b>データの保有・閲覧はしない</b>（顧客が鍵を保有・当社は論理アクセスなし）。国内保管・物理管理を求める機密案件向け。
+  </div>
+  <table>
+    <thead><tr><th style="width:28%;">観点</th><th>内容</th></tr></thead>
+    <tbody>
+      <tr><td class="em">技術</td><td>顧客所有ハード＋暗号化（顧客鍵）。封印ラック・入退室監査。pull型で中身を読めない</td></tr>
+      <tr><td class="em">法的位置づけ</td><td>「場所貸し＋設備運用」＝データの取扱いに当たらない可能性。国内データ所在も満たす（要顧問弁護士確認）</td></tr>
+      <tr><td class="em">責任</td><td>物理セキュリティ・保険・寄託としての善管注意。大規模不向き＝上位/機密向け</td></tr>
+    </tbody>
+  </table>
+
+  <div class="footer"><span>クラウドAIエージェント・プラットフォーム 事業説明資料</span><span>P.<span class="pg"></span></span></div>
+</section>
+
+<!-- ============ 13. スケール & ロードマップ ============ -->
+<section class="page">
+  <div class="sec-no">14</div>
+  <h2 class="sec">スケーラビリティと導入ロードマップ</h2>
+
+  <h3>1,000社超を見据えた設計</h3>
+  <div class="grid col3" style="margin-bottom:5mm;">
+    <div class="card soft"><h4>社数非依存の運用</h4><p>各社は自社アカウントで稼働。当社は承認＋配信のみで軽量＝社数が増えても運用は膨らまない。</p></div>
+    <div class="card soft"><h4>変動費は顧客側</h4><p>インフラ・AI・LINEは顧客契約。当社の承認/配信インフラは規模が出ても誤差。</p></div>
+    <div class="card soft"><h4>自動運用</h4><p>承認・課金停止・監視は自動。導入時を除き人手はほぼ不要。</p></div>
+  </div>
+
+  <h3>実行ロードマップ（4フェーズ・順序が重要）</h3>
+  <div class="stack">
+    <div class="layer"><span class="tag">1</span> <b>セキュリティ3ゲート（最初に）</b> ― 署名鍵のCF外化＋全口座FIDO2＋鍵操作の分離・時間差ゲート（今日の機材・低コスト／小規模ほど集中度が高いので先に）</div>
+    <div class="layer"><span class="tag">2</span> <b>PoC＋最小ループ＋パイロット</b> ― 「config だけで挙動が変わる／ライセンス無効で機能停止・データ無停止」を実測＋1〜2団体で原価・工数を実測</div>
+    <div class="layer"><span class="tag">3</span> <b>法務の確定（動くものができてから）</b> ― 契約条項・個人/越境論点・CF早期照会・開示文書（PoC結果に基づく）</div>
+    <div class="layer"><span class="tag g">4</span> <b>有料転換＋外部レビュー＋復旧訓練</b> ― 0→1・第三者の目・リストア1回実走 →「検証済み・運用中・法務クリア」</div>
+  </div>
+
+  <div class="callout">
+    <b>順序がポイント</b>：致命傷（鍵/管理者の集中）は<b>小さいうちが最大</b>なので先に予防。次に技術の前提をPoCで実測し、<b>動くものに対して法務を確定</b>、最後に有料転換と外部検証で「設計済み→検証済み・運用中・法務クリア」へ。
+  </div>
+
+  <div style="margin-top:14mm; text-align:center; color:var(--navy);">
+    <div style="font-size:13pt; font-weight:800;">次のステップ</div>
+    <div class="small muted" style="margin-top:2mm;">セキュリティ3ゲート　→　PoC＋パイロット　→　法務確定　→　有料転換・外部レビュー・復旧訓練</div>
+  </div>
+
+  <div class="footer"><span>クラウドAIエージェント・プラットフォーム 事業説明資料</span><span>P.<span class="pg"></span></span></div>
+</section>
+
+</body>
+</html>

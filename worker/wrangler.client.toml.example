@@ -1,0 +1,37 @@
+# 【クライアント側】顧客Worker：LINE/会話/データ。検証のみ（VERIFY_PUBLIC_JWK）・署名鍵は持たない。
+# デプロイ： npx wrangler deploy -c wrangler.client.toml
+name = "baku-office"
+main = "src/index.ts"
+compatibility_date = "2024-09-23"
+
+# リマインダー巡回（毎分）。期限が来た通知をPushする＋大PDF分割要約を1ステップ進める。
+[triggers]
+crons = ["* * * * *"]
+
+[vars]
+BRAIN_MODEL = "claude-sonnet-4-6"
+# このWorker自身の公開URL（/media 配信・/oauth/callback・自己連鎖Cron に使用）。
+# setup.sh が初回デプロイ後に自動で埋める（https://<name>.<subdomain>.workers.dev）。
+PUBLIC_BASE_URL = "__PUBLIC_BASE_URL__"
+
+# 会話履歴の要約・署名リース・署名config・モード等
+[[kv_namespaces]]
+binding = "HISTORY"
+id = "__KV_HISTORY_ID__"
+
+# 画像・書類本体（カード不要の無料既定＝KV）。25MB超は Google Drive 連携へ。
+[[kv_namespaces]]
+binding = "MEDIA"
+id = "__KV_MEDIA_ID__"
+
+# メモ・タスク・リマインダー・会話履歴・要約ジョブ等の構造化データ
+[[d1_databases]]
+binding = "DB"
+database_name = "baku-office-db"
+database_id = "__D1_ID__"
+
+# （任意・Paid向け）大容量/高速ストレージ。R2を使う場合だけ有効化（カード登録が必要）。
+# バインディングがあればコードは MEDIA(KV) より MEDIA_R2 を優先する。
+# [[r2_buckets]]
+# binding = "MEDIA_R2"
+# bucket_name = "baku-office-media"

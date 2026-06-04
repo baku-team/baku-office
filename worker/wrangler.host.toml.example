@@ -1,0 +1,26 @@
+# 【ホスト側 / CP】署名・配信専用Worker。クライアントとは別Workerとしてデプロイする。
+# 役割：/admin で lease/config に署名し、CLIENT_BASE_URL のクライアントへ /provision でpush配信。
+# 顧客データ(KV/D1/MEDIA)は持たない＝バインディングなし。LINE Webhookも受けない（cronなし）。
+name = "baku-office-host"
+main = "src/index.ts"
+compatibility_date = "2024-09-23"
+
+[vars]
+# 別アカウント等でService Bindingが使えない時の配信先URL（カスタムドメイン推奨）。同一アカウントでは未使用でよい。
+CLIENT_BASE_URL = "__CLIENT_BASE_URL__"
+
+# 既定(self)クライアントへの配信路：Service Binding（workers.dev同士の直fetchはCFが遮断するため必須）。
+# 多数顧客（別アカウント等）は台帳のURLへ配信するので、self運用しないなら省略可。
+[[services]]
+binding = "CLIENT"
+service = "baku-office"
+
+# 多テナント台帳（tenant→配信先URL/provision鍵）。多数顧客を捌くなら必須。
+[[kv_namespaces]]
+binding = "TENANTS"
+id = "__TENANTS_KV_ID__"
+
+# secret（toml には書かない。wrangler secret put で登録）:
+#   SIGNING_JWK    … Ed25519秘密鍵（本番はKMSへ。素のSecretは暫定）
+#   ADMIN_KEY      … /admin 認証
+#   PROVISION_KEY  … /provision 配信の共有シークレット（クライアントと同値）

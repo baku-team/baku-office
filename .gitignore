@@ -1,0 +1,20 @@
+# 依存・ビルドキャッシュ
+worker/node_modules/
+worker/.wrangler/
+
+# OS / エディタ
+.DS_Store
+*.bak
+
+# 稼働中の wrangler 設定（アカウント固有のKV/D1 ID等を含む。テンプレは *.example が正）
+worker/wrangler.client.toml
+worker/wrangler.host.toml
+
+# 鍵・秘密（万一の混入防止。secretは wrangler secret / KMS 管理）
+*.jwk
+.env
+.env.*
+*.pem
+.signing.jwk
+.verify_public.jwk
+.provision_key
