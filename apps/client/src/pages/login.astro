@@ -1,5 +1,6 @@
 ---
 export const prerender = false;
+import App from "../layouts/App.astro";
 const env = Astro.locals.runtime.env;
 const { providerEnabled } = await import("../lib/oauth.ts");
 const google = providerEnabled(env, "google");
@@ -8,38 +9,26 @@ const discord = providerEnabled(env, "discord");
 const e = Astro.url.searchParams.get("e");
 const emsg: Record<string, string> = { state: "セッションが切れました。再度お試しください。", oauth: "認証に失敗しました。", notorg: "この組織のGoogleアカウントではありません。", pending: "登録は管理者の承認待ちです。" };
 ---
-<!doctype html>
-<html lang="ja"><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" /><title>ログイン — baku-office</title>
-<style>body{font-family:system-ui,sans-serif;max-width:480px;margin:3rem auto;padding:0 1rem;color:#1c2530}
-.card{border:1px solid #e2e8f0;border-radius:12px;padding:1.25rem;margin:1rem 0}
-input{width:100%;padding:.5rem;border:1px solid #cbd5e1;border-radius:8px;margin:.25rem 0}
-button,a.btn{display:inline-block;padding:.6rem 1.2rem;background:#2563eb;color:#fff;border:0;border-radius:8px;cursor:pointer;margin-top:.5rem;text-decoration:none}
-.g{background:#fff;color:#1c2530;border:1px solid #cbd5e1}.line{background:#06c755}.dc{background:#5865f2}
-.muted{color:#64748b;font-size:.85rem}</style></head>
-<body>
-<h1>ログイン</h1>
-{e && <p style="color:#b91c1c">{emsg[e] ?? "エラー"}</p>}
-<div class="card">
-  <h3>組織（管理者）</h3>
-  {google
-    ? <a class="btn g" href="/api/auth/google/start">Googleでログイン</a>
-    : <><p class="muted">本番は組織のGoogleアカウントで認証（§6.2）。dev：</p><button id="org">組織管理者としてログイン（dev）</button></>}
-</div>
-<div class="card">
-  <h3>個人（メンバー）</h3>
-  {(line || discord)
-    ? <p>{line && <a class="btn line" href="/api/auth/line/start">LINEでログイン</a>} {discord && <a class="btn dc" href="/api/auth/discord/start">Discordでログイン</a>}</p>
-    : <>
-        <p class="muted">本番はLINEログイン等（§6.2）。dev：ID/パスワード。</p>
-        <input id="lid" placeholder="ログインID" /><input id="lpw" type="password" placeholder="パスワード" />
-        <button id="local">個人ログイン</button>
-      </>}
-  <p class="muted">招待コードをお持ちの方は <a href="/join">こちらから参加</a></p>
-</div>
-<p id="msg" style="color:#b91c1c"></p>
-<script type="module">
-  const msg=document.getElementById("msg"); const go=()=>location.href="/";
-  const org=document.getElementById("org"); if(org) org.onclick=async()=>{const r=await fetch("/api/login",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({mode:"org"})});(await r.json()).ok?go():(msg.textContent="失敗");};
-  const lc=document.getElementById("local"); if(lc) lc.onclick=async()=>{const r=await fetch("/api/login",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({mode:"local",loginId:document.getElementById("lid").value,password:document.getElementById("lpw").value})});const j=await r.json();j.ok?go():(msg.textContent=j.error||"失敗");};
-</script>
-</body></html>
+<App title="ログイン" auth={false}>
+  <h1 style="margin-top:1rem">ログイン</h1>
+  {e && <div class="banner banner-danger">{emsg[e] ?? "エラー"}</div>}
+  <div class="card">
+    <h2 style="margin-top:0;border:0">組織（管理者）</h2>
+    {google
+      ? <a class="btn btn-primary" href="/api/auth/google/start">Googleでログイン</a>
+      : <><p class="muted">本番は組織のGoogleアカウントで認証（§6.2）。dev：</p><button class="btn btn-primary" id="org">組織管理者としてログイン（dev）</button></>}
+  </div>
+  <div class="card" style="margin-top:1rem">
+    <h2 style="margin-top:0;border:0">個人（メンバー）</h2>
+    {(line || discord)
+      ? <p>{line && <a class="btn" style="background:#06c755;color:#fff" href="/api/auth/line/start">LINEでログイン</a>} {discord && <a class="btn" style="background:#5865f2;color:#fff" href="/api/auth/discord/start">Discordでログイン</a>}</p>
+      : <><p class="muted">本番はLINEログイン等（§6.2）。dev：ID/パスワード。</p><div class="field"><input id="lid" placeholder="ログインID" /></div><div class="field"><input id="lpw" type="password" placeholder="パスワード" /></div><button class="btn btn-primary" id="local">個人ログイン</button></>}
+    <p class="muted">招待コードをお持ちの方は <a href="/join">こちらから参加</a></p>
+  </div>
+  <script slot="scripts" is:inline>
+    const org=document.getElementById("org");
+    if(org)org.addEventListener("click",async(e)=>{const r=await window.bo.api("/api/login",{mode:"org"},{btn:e.currentTarget,successMsg:"ログインしました"});if(r.ok)location.href="/";});
+    const lc=document.getElementById("local");
+    if(lc)lc.addEventListener("click",async(e)=>{const r=await window.bo.api("/api/login",{mode:"local",loginId:document.getElementById("lid").value,password:document.getElementById("lpw").value},{btn:e.currentTarget,successMsg:"ログインしました"});if(r.ok)location.href="/";});
+  </script>
+</App>

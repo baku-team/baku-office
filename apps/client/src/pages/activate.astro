@@ -1,50 +1,28 @@
 ---
 export const prerender = false;
+import App from "../layouts/App.astro";
 const env = Astro.locals.runtime.env;
 const url = Astro.url;
 const origin = url.origin;
 const host = env.HOST_BASE_URL.replace(/\/$/, "");
-
 const licenseId = url.searchParams.get("license_id");
 const code = url.searchParams.get("code");
-
 let message = "";
-
-// 1) license_id だけ来た → ホストのアクティベーション開始へ（callbackは自分の/activate）。
 if (licenseId && !code) {
   return Astro.redirect(`${host}/api/activate?license_id=${encodeURIComponent(licenseId)}&callback=${encodeURIComponent(origin + "/activate")}`, 302);
 }
-
-// 2) code が来た → ホストの /api/token と交換 → トークン保存 → ホームへ。
 if (code) {
   const { hostFetch, saveToken } = await import("../lib/client.ts");
-  const r = await hostFetch(env, "/api/token", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ code, deployUrl: origin }),
-  });
+  const r = await hostFetch(env, "/api/token", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ code, deployUrl: origin }) });
   const j = (await r.json().catch(() => ({}))) as { ok?: boolean; token?: string; error?: string };
-  if (j.ok && j.token) {
-    await saveToken(env, j.token);
-    return Astro.redirect("/", 302);
-  }
+  if (j.ok && j.token) { await saveToken(env, j.token); return Astro.redirect("/", 302); }
   message = "アクティベーションに失敗しました：" + (j.error ?? "不明なエラー");
 }
 ---
-<!doctype html>
-<html lang="ja">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>アクティベーション — baku-office</title>
-    <style>body{font-family:system-ui,sans-serif;max-width:640px;margin:3rem auto;padding:0 1rem;color:#1c2530}</style>
-  </head>
-  <body>
-    <h1>baku-office をアクティベート</h1>
-    {message ? <p style="color:#b91c1c">{message}</p> : (
-      <p>この団体のアプリはまだライセンスを取得していません。当社から案内された
-      <strong>アクティベーションURL（?license_id=…付き）</strong>を開いてください。</p>
-    )}
-    <p style="color:#64748b;font-size:.9rem">（Phase1：Googleログインは省略。本番は申込時のGoogleアカウントで認証します＝設計書§4）</p>
-  </body>
-</html>
+<App title="アクティベーション" auth={false}>
+  <h1 style="margin-top:1rem">baku-office をアクティベート</h1>
+  {message
+    ? <div class="banner banner-danger">{message}</div>
+    : <p>この団体のアプリはまだライセンスを取得していません。当社から案内された<strong>アクティベーションURL（?license_id=…付き）</strong>を開いてください。</p>}
+  <p class="muted">（Phase1：Googleログインは省略。本番は申込時のGoogleアカウントで認証＝§4）</p>
+</App>

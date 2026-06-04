@@ -1,30 +1,22 @@
 ---
 export const prerender = false;
+import App from "../layouts/App.astro";
 const code = Astro.url.searchParams.get("code") ?? "";
 ---
-<!doctype html>
-<html lang="ja"><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" /><title>参加 — baku-office</title>
-<style>body{font-family:system-ui,sans-serif;max-width:480px;margin:3rem auto;padding:0 1rem;color:#1c2530}
-input{width:100%;padding:.5rem;border:1px solid #cbd5e1;border-radius:8px;margin:.3rem 0}
-button{padding:.6rem 1.2rem;background:#2563eb;color:#fff;border:0;border-radius:8px;cursor:pointer;margin-top:.5rem}
-.muted{color:#64748b;font-size:.85rem}</style></head>
-<body>
-<h1>組織に参加</h1>
-<p class="muted">招待コードで参加します。登録後は<strong>管理者の承認</strong>でご利用開始（§6.3）。</p>
-<input id="code" placeholder="招待コード" value={code} />
-<input id="name" placeholder="氏名・役職（例：山田太郎 / 会計）" />
-<input id="lid" placeholder="ログインID（半角）" />
-<input id="pw" type="password" placeholder="パスワード" />
-<button id="join">参加申請する</button>
-<p id="msg"></p>
-<script type="module">
-  const msg=document.getElementById("msg");
-  document.getElementById("join").onclick=async()=>{
-    const body={code:document.getElementById("code").value,name:document.getElementById("name").value,loginId:document.getElementById("lid").value,password:document.getElementById("pw").value};
-    const r=await fetch("/api/join",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(body)});
-    const j=await r.json();
-    msg.textContent=j.ok?"✅ 申請しました。管理者の承認をお待ちください。":("エラー："+(j.error||""));
-    msg.style.color=j.ok?"#15803d":"#b91c1c";
-  };
-</script>
-</body></html>
+<App title="参加" auth={false}>
+  <h1 style="margin-top:1rem">組織に参加</h1>
+  <p class="muted">招待コードで参加します。登録後は<strong>管理者の承認</strong>で利用開始（§6.3）。</p>
+  <div class="card">
+    <div class="field"><label>招待コード</label><input id="code" value={code} /></div>
+    <div class="field"><label>氏名・役職</label><input id="name" placeholder="例：山田太郎 / 会計" /></div>
+    <div class="field"><label>ログインID</label><input id="lid" placeholder="半角" /></div>
+    <div class="field"><label>パスワード</label><input id="pw" type="password" /></div>
+    <button class="btn btn-primary" id="join">参加申請する</button>
+  </div>
+  <script slot="scripts" is:inline>
+    document.getElementById("join").addEventListener("click",async(e)=>{
+      const r=await window.bo.api("/api/join",{code:document.getElementById("code").value,name:document.getElementById("name").value,loginId:document.getElementById("lid").value,password:document.getElementById("pw").value},{btn:e.currentTarget,successMsg:"申請しました。管理者の承認をお待ちください。"});
+      if(r.ok)setTimeout(()=>location.href="/login",1500);
+    });
+  </script>
+</App>

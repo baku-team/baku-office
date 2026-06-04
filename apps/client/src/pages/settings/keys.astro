@@ -1,5 +1,6 @@
 ---
 export const prerender = false;
+import App from "../../layouts/App.astro";
 const env = Astro.locals.runtime.env;
 const { hasApiKey } = await import("../../lib/client.ts");
 const status = {
@@ -10,56 +11,31 @@ const status = {
 };
 const mark = (b: boolean) => (b ? "✓ 設定済み" : "未設定");
 ---
-<!doctype html>
-<html lang="ja">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>連携設定 — baku-office</title>
-    <style>
-      body { font-family: system-ui, sans-serif; max-width: 680px; margin: 0 auto; color: #1c2530; }
-      header { background: #0f172a; color: #fff; padding: .8rem 1.25rem; }
-      header a { color: #cbd5e1; text-decoration: none; margin-right: 1rem; font-size: .9rem; }
-      main { padding: 1.5rem 1.25rem; }
-      label { display: block; margin: 1rem 0 .25rem; font-weight: 600; }
-      input { width: 100%; padding: .5rem; border: 1px solid #cbd5e1; border-radius: 8px; }
-      .st { font-size: .85rem; color: #475569; }
-      button { margin-top: 1.2rem; padding: .6rem 1.2rem; background: #2563eb; color: #fff; border: 0; border-radius: 8px; cursor: pointer; }
-      .out { margin-top: 1rem; padding: .8rem; background: #f1f5f9; border-radius: 8px; white-space: pre-wrap; }
-    </style>
-  </head>
-  <body>
-    <header><a href="/">← ホーム</a><strong>連携設定</strong></header>
-    <main>
-      <h1>連携設定（APIキー）</h1>
-      <p class="st">保存時に各サービスへテスト呼び出しで検証し、MASTER_KEY で暗号化して保存します（CFダッシュボード不要・§10.3）。空欄は変更なし。</p>
-      <p class="st">📲 <strong>LINEエージェント（Zプラン）</strong>：LINE Developers の Messaging API Webhook URL に <code>{Astro.url.origin}/api/line/webhook</code> を設定してください。</p>
-      <form id="f">
-        <label>Gemini APIキー <span class="st">（{mark(status.gemini)}）</span></label>
-        <input name="gemini" type="password" placeholder="AIza..." autocomplete="off" />
-        <label>LINE チャネルシークレット <span class="st">（{mark(status.line_secret)}）</span></label>
-        <input name="line_secret" type="password" autocomplete="off" />
-        <label>LINE チャネルアクセストークン <span class="st">（{mark(status.line_token)}）</span></label>
-        <input name="line_token" type="password" autocomplete="off" />
-        <label>Claude APIキー（上位・任意） <span class="st">（{mark(status.claude)}）</span></label>
-        <input name="claude" type="password" placeholder="sk-ant-..." autocomplete="off" />
-        <button type="submit">検証して保存</button>
-      </form>
-      <div class="out" id="out" hidden></div>
+<App title="連携設定" active="/settings/keys">
+  <h1>連携設定（APIキー）</h1>
+  <p class="muted">保存時に各サービスへテスト呼び出しで検証し、暗号化して保存します（CFダッシュボード不要・§10.3）。空欄は変更なし。</p>
+  <div class="banner banner-info">📲 LINEエージェント（Zプラン）：LINE Developers の Messaging API Webhook URL に <code>{Astro.url.origin}/api/line/webhook</code> を設定してください。</div>
 
-      <script type="module">
-        const f = document.getElementById("f");
-        const out = document.getElementById("out");
-        f.addEventListener("submit", async (e) => {
-          e.preventDefault();
-          out.hidden = false; out.textContent = "検証中…";
-          const data = Object.fromEntries([...new FormData(f)].filter(([, v]) => v !== ""));
-          const r = await fetch("/api/keys", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(data) });
-          const j = await r.json();
-          const lines = Object.entries(j.result ?? {}).map(([k, v]) => `${k}: ${v.ok ? "✓ 有効・保存" : "✗ 無効（" + (v.detail ?? "") + "）"}`);
-          out.textContent = lines.length ? lines.join("\n") : "変更はありません。";
-        });
-      </script>
-    </main>
-  </body>
-</html>
+  <div class="card">
+    <div class="field"><label>Gemini APIキー <span class="muted">（{mark(status.gemini)}）</span></label><input name="gemini" type="password" placeholder="AIza..." autocomplete="off" /></div>
+    <div class="field"><label>LINE チャネルシークレット <span class="muted">（{mark(status.line_secret)}）</span></label><input name="line_secret" type="password" autocomplete="off" /></div>
+    <div class="field"><label>LINE チャネルアクセストークン <span class="muted">（{mark(status.line_token)}）</span></label><input name="line_token" type="password" autocomplete="off" /></div>
+    <div class="field"><label>Claude APIキー（上位・任意） <span class="muted">（{mark(status.claude)}）</span></label><input name="claude" type="password" placeholder="sk-ant-..." autocomplete="off" /></div>
+    <button class="btn btn-primary" id="save">検証して保存</button>
+  </div>
+
+  <script slot="scripts" is:inline>
+    document.getElementById("save").addEventListener("click", async (e) => {
+      const data = {};
+      document.querySelectorAll("input[name]").forEach((i) => { if (i.value) data[i.name] = i.value; });
+      if (!Object.keys(data).length) { window.bo.toast("変更はありません", "info"); return; }
+      const { ok, data: j } = await window.bo.api("/api/keys", data, { btn: e.currentTarget, successMsg: null });
+      if (!ok) return;
+      const res = j.result || {};
+      const lines = Object.entries(res).map(([k, v]) => `${k}: ${v.ok ? "✓有効" : "✗無効"}`);
+      const anyFail = Object.values(res).some((v) => !v.ok);
+      window.bo.toast(lines.join(" / ") || "保存しました", anyFail ? "err" : "ok");
+      if (!anyFail) setTimeout(() => location.reload(), 900);
+    });
+  </script>
+</App>

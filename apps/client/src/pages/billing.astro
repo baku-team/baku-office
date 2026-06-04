@@ -1,51 +1,39 @@
 ---
 export const prerender = false;
+import App from "../layouts/App.astro";
 const env = Astro.locals.runtime.env;
 const { getSession } = await import("../lib/auth.ts");
 const ses = await getSession(env, Astro.request);
 if (!ses || ses.role !== "admin" || ses.ctx !== "org") return Astro.redirect("/login", 302);
-
 const { pollHost, cachedEntitlement, getLicenseId, hostFetch } = await import("../lib/client.ts");
 const check = await pollHost(env, Astro.url.origin);
 const entitlement = check?.entitlement ?? (await cachedEntitlement(env));
 const licenseId = await getLicenseId(env);
 const hostBase = env.HOST_BASE_URL.replace(/\/$/, "");
-
-// Stripe接続状態（未接続＝デモモード）。
 let stripe = false;
-try {
-  stripe = ((await (await hostFetch(env, "/api/billing/status")).json()) as { stripe?: boolean }).stripe ?? false;
-} catch { /* offline */ }
-
+try { stripe = ((await (await hostFetch(env, "/api/billing/status")).json()) as { stripe?: boolean }).stripe ?? false; } catch { /* offline */ }
 const label = (e: string) => (e === "Z" ? "Z（エージェント）" : e === "Y" ? "Y（AI）" : "X（無料）");
 ---
-<!doctype html>
-<html lang="ja"><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" /><title>プラン・課金 — baku-office</title>
-<style>body{font-family:system-ui,sans-serif;max-width:680px;margin:0 auto;color:#1c2530}header{background:#0f172a;color:#fff;padding:.8rem 1.25rem}header a{color:#cbd5e1;text-decoration:none;margin-right:1rem;font-size:.9rem}main{padding:1.25rem}.card{border:1px solid #e2e8f0;border-radius:12px;padding:1rem 1.25rem;margin:1rem 0}button{padding:.6rem 1.2rem;background:#2563eb;color:#fff;border:0;border-radius:8px;cursor:pointer;margin-right:.5rem}button.demo{background:#d97706}.muted{color:#64748b;font-size:.9rem}.cur{background:#ecfeff;color:#0e7490;padding:.15rem .6rem;border-radius:999px}.banner{background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;padding:.6rem .9rem;margin:.5rem 0}</style></head>
-<body>
-<header><a href="/">ホーム</a><a href="/billing">プラン・課金</a></header>
-<main>
-<h1>プラン・課金</h1>
-{!stripe && <div class="banner">🧪 <strong>デモモード</strong>：Stripe未接続のため、下の「支払った（デモ）」で入金を擬似的に確認しエンタイトルメントを昇格します（本番はStripe決済）。</div>}
-<div class="card">現在のプラン：<span class="cur">{label(entitlement)}</span>
-  <p class="muted">入金が確認・継続している間のみ有料機能が有効（プロビジョナル §2.3）。無料(X)は常に利用可。データはロックも削除もしません。</p>
-</div>
-<div class="card">
-  <h3>アップグレード</h3>
-  <p class="muted">{stripe ? "カードは即時、銀行振込・コンビニは入金確認後に反映（§2.4）。" : "デモ：ボタンで即時に昇格します。"}</p>
-  <button class="up" data-plan="Y" class:list={[{ demo: !stripe }]} disabled={entitlement==="Y"||entitlement==="Z"}>{stripe ? "Y（AI）にする" : "【デモ】Y に支払った"}</button>
-  <button class="up" data-plan="Z" class:list={[{ demo: !stripe }]} disabled={entitlement==="Z"}>{stripe ? "Z（エージェント）にする" : "【デモ】Z に支払った"}</button>
-  <p id="msg" class="muted"></p>
-</div>
-<script type="module" define:vars={{ licenseId, hostBase, stripe }}>
-  const msg=document.getElementById("msg");
-  document.querySelectorAll(".up").forEach(b=>b.onclick=async()=>{
-    const plan=b.dataset.plan; msg.textContent=stripe?"決済へ移動中…":"処理中…";
-    const r=await fetch("/api/billing/start",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({plan})});
-    const j=await r.json();
-    if(!j.ok){msg.textContent="エラー："+(j.error||"");return;}
-    if(j.mode==="stripe"){location.href=j.url;return;}
-    location.href=`${hostBase}/api/billing/dev-confirm?license_id=${encodeURIComponent(licenseId)}&plan=${plan}&return=${encodeURIComponent(location.origin+"/billing")}`;
-  });
-</script>
-</main></body></html>
+<App title="プラン・課金" active="/billing">
+  <h1>プラン・課金</h1>
+  {!stripe && (<div class="banner banner-warn">🧪 <strong>デモモード</strong>：Stripe未接続のため、下の「支払った（デモ）」で入金を擬似確認しエンタイトルメントを昇格します（本番はStripe決済）。</div>)}
+  <div class="card">現在のプラン：<span class="pill">{label(entitlement)}</span>
+    <p class="muted">入金が確認・継続している間のみ有料機能が有効（§2.3）。無料(X)は常に利用可。データはロック・削除しません。</p>
+  </div>
+  <div class="card" style="margin-top:1rem">
+    <h2 style="margin-top:0;border:0">アップグレード</h2>
+    <p class="muted">{stripe ? "カードは即時、銀行振込・コンビニは入金確認後に反映（§2.4）。" : "デモ：ボタンで即時に昇格します。"}</p>
+    <button class={`btn ${stripe?"btn-primary":"btn-warn"} up`} data-plan="Y" disabled={entitlement==="Y"||entitlement==="Z"}>{stripe ? "Y（AI）にする" : "【デモ】Y に支払った"}</button>
+    <button class={`btn ${stripe?"btn-primary":"btn-warn"} up`} data-plan="Z" disabled={entitlement==="Z"}>{stripe ? "Z（エージェント）にする" : "【デモ】Z に支払った"}</button>
+  </div>
+  <script slot="scripts" is:inline define:vars={{ licenseId, hostBase, stripe }}>
+    document.querySelectorAll(".up").forEach(b=>b.addEventListener("click",async(e)=>{
+      const plan=e.currentTarget.dataset.plan;
+      const r=await window.bo.api("/api/billing/start",{plan},{btn:e.currentTarget,successMsg:null});
+      if(!r.ok)return;
+      if(r.data.mode==="stripe"){window.bo.toast("決済へ移動します");location.href=r.data.url;return;}
+      window.bo.toast("入金確認（デモ）へ移動します");
+      location.href=`${hostBase}/api/billing/dev-confirm?license_id=${encodeURIComponent(licenseId)}&plan=${plan}&return=${encodeURIComponent(location.origin+"/billing")}`;
+    }));
+  </script>
+</App>

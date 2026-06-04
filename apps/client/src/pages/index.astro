@@ -1,101 +1,46 @@
 ---
 export const prerender = false;
+import App from "../layouts/App.astro";
 const env = Astro.locals.runtime.env;
 const { pollHost, cachedEntitlement } = await import("../lib/client.ts");
-
 const check = await pollHost(env, Astro.url.origin);
 const entitlement = check?.entitlement ?? (await cachedEntitlement(env));
 const planLabel = entitlement === "Z" ? "Z（エージェント）" : entitlement === "Y" ? "Y（AI）" : "X（無料）相当";
-
-// 残高サマリー（会計コアは Phase 2。現状は口座 opening_balance 合計のみ）。
 let balance = 0;
-try {
-  const row = await env.DB.prepare("SELECT COALESCE(SUM(opening_balance),0) AS b FROM wallets").first<{ b: number }>();
-  balance = row?.b ?? 0;
-} catch { /* 未マイグレーション時 */ }
-
+try { balance = (await env.DB.prepare("SELECT COALESCE(SUM(opening_balance),0) AS b FROM wallets").first<{ b: number }>())?.b ?? 0; } catch { /* 未マイグレ */ }
 const notices = check?.notices ?? [];
-
-const { getSession } = await import("../lib/auth.ts");
-const ses = await getSession(env, Astro.request).catch(() => null);
-const { hasRecentLimitError } = await import("../lib/diag.ts");
-const limitErr = await hasRecentLimitError(env).catch(() => false);
+const yen = (n: number) => "¥" + n.toLocaleString("ja-JP");
 ---
-<!doctype html>
-<html lang="ja">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>baku-office</title>
-    <style>
-      body { font-family: system-ui, sans-serif; max-width: 860px; margin: 0 auto; color: #1c2530; }
-      header { background: #0f172a; color: #fff; padding: .8rem 1.25rem; display: flex; gap: 1rem; align-items: center; }
-      header nav a { color: #cbd5e1; text-decoration: none; margin-right: 1rem; font-size: .9rem; }
-      main { padding: 1.5rem 1.25rem; }
-      .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px,1fr)); gap: 1rem; }
-      .card { border: 1px solid #e2e8f0; border-radius: 12px; padding: 1rem 1.25rem; }
-      .num { font-size: 1.6rem; font-weight: 700; }
-      .badge { background: #ecfeff; color: #0e7490; padding: .15rem .6rem; border-radius: 999px; font-size: .8rem; }
-      .notice { border-left: 4px solid #f59e0b; background: #fffbeb; padding: .6rem .9rem; border-radius: 6px; margin: .5rem 0; }
-    </style>
-  </head>
-  <body>
-    <header>
-      <strong>baku-office</strong>
-      <nav>
-        <a href="/">ホーム</a>
-        <a href="/accounting">会計</a>
-        {ses?.ctx === "personal" && <a href="/personal">個人</a>}
-        {(ses?.role === "admin" || ses?.role === "accounting" || ses?.role === "clerical") && <a href="/review">共有承認</a>}
-        {ses?.role === "admin" && ses?.ctx === "org" && <a href="/settings/members">人・ロール管理</a>}
-        {ses?.role === "admin" && ses?.ctx === "org" && <a href="/billing">プラン・課金</a>}
-        <a href="/files">ファイル</a>
-        <a href="/settings/keys">連携設定</a>
-        <a href="/diagnostics">診断</a>
-        {ses?.role === "admin" && ses?.ctx === "org" && <a href="/settings/advanced">高度なオプション</a>}
-      </nav>
-      <span style="margin-left:auto" class="badge">{planLabel}</span>
-      {ses
-        ? <a href="#" id="logout" style="color:#cbd5e1;font-size:.85rem">{ses.name ?? ses.role}・ログアウト</a>
-        : <a href="/login" style="color:#cbd5e1;font-size:.85rem">ログイン</a>}
-    </header>
-    <main>
-      <h1>ホーム</h1>
-      {limitErr && (
-        <div class="notice" style="border-left-color:#ef4444;background:#fef2f2">
-          ⚠️ 直近に Cloudflare 無料枠の制限に達した可能性があります。重い処理を安定させるには
-          <a href="/settings/advanced">高度なオプション → Workers Paid</a> をご検討ください（<a href="/diagnostics">診断</a>）。
-        </div>
-      )}
-      {notices.map((n) => (<div class="notice" data-sev={n.severity} data-id={n.id}>[{n.severity}] {n.body}</div>))}
-      <div id="critModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:50;align-items:center;justify-content:center">
-        <div style="background:#fff;max-width:480px;margin:auto;padding:1.5rem;border-radius:12px">
-          <h3 style="margin-top:0">重要なお知らせ</h3>
-          <div id="critBody"></div>
-          <button id="critAck" style="margin-top:1rem;padding:.5rem 1rem;background:#2563eb;color:#fff;border:0;border-radius:8px;cursor:pointer">確認しました</button>
-        </div>
-      </div>
-      <div class="grid">
-        <div class="card"><div>口座残高（期首合計）</div><div class="num">¥{balance.toLocaleString("ja-JP")}</div></div>
-        <div class="card"><div>当月収支</div><div class="num">¥0</div><small>会計コアは Phase 2</small></div>
-        <div class="card"><div>未処理伝票</div><div class="num">0</div></div>
-        <div class="card"><div>プラン / ライセンス</div><div class="num" style="font-size:1.1rem">{planLabel}</div><small>{check ? "ホスト疎通OK" : "オフライン（キャッシュ表示）"}</small></div>
-      </div>
-      <p style="color:#64748b;font-size:.9rem;margin-top:1.5rem">
-        会計・名簿・ファイル・予定・議事録は順次実装（Phase 2+）。まず連携設定で Gemini/LINE キーを登録できます。
-      </p>
-    </main>
-    <script type="module">
-      const lo = document.getElementById("logout");
-      if (lo) lo.onclick = async (e) => { e.preventDefault(); await fetch("/api/login", { method: "DELETE" }); location.href = "/login"; };
-      // critical 通知は確認モーダルで提示（既読は localStorage）。
-      const crit = [...document.querySelectorAll('.notice[data-sev="critical"]')].filter((n) => !localStorage.getItem("ack:" + n.dataset.id));
-      if (crit.length) {
-        const m = document.getElementById("critModal");
-        document.getElementById("critBody").innerHTML = crit.map((n) => "<p>" + n.textContent + "</p>").join("");
-        m.style.display = "flex";
-        document.getElementById("critAck").onclick = () => { crit.forEach((n) => localStorage.setItem("ack:" + n.dataset.id, "1")); m.style.display = "none"; };
-      }
-    </script>
-  </body>
-</html>
+<App title="ホーム" active="/">
+  <h1>ホーム</h1>
+  <p class="muted">プラン：<span class="pill">{planLabel}</span> ／ {check ? "ホスト疎通OK" : "オフライン（キャッシュ表示）"}</p>
+
+  {notices.map((n) => (<div class={`banner ${n.severity === "critical" ? "banner-danger" : n.severity === "important" ? "banner-warn" : "banner-info"}`} data-sev={n.severity} data-id={n.id}>{n.body}</div>))}
+
+  <div class="grid">
+    <div class="card"><div class="label">口座残高（期首合計）</div><div class="num">{yen(balance)}</div></div>
+    <div class="card"><div class="label">当月収支</div><div class="num">¥0</div><div class="muted">会計で登録</div></div>
+    <div class="card"><div class="label">未処理伝票</div><div class="num">0</div></div>
+    <div class="card"><div class="label">プラン / ライセンス</div><div class="num" style="font-size:1.1rem">{planLabel}</div></div>
+  </div>
+
+  <h2>できること</h2>
+  <div class="grid">
+    <a class="card" href="/accounting" style="text-decoration:none;color:inherit"><strong>会計</strong><div class="muted">入出金・出納帳・収支・CSV</div></a>
+    <a class="card" href="/files" style="text-decoration:none;color:inherit"><strong>ファイル</strong><div class="muted">アップロード・共有</div></a>
+    <a class="card" href="/minutes" style="text-decoration:none;color:inherit"><strong>議事録</strong><div class="muted">作成・一覧</div></a>
+    <a class="card" href="/settings/keys" style="text-decoration:none;color:inherit"><strong>連携設定</strong><div class="muted">Gemini/LINE/Claude</div></a>
+  </div>
+
+  <div class="modal" id="critModal"><div class="box"><h2 style="margin-top:0;border:0">重要なお知らせ</h2><div id="critBody"></div><button class="btn btn-primary" id="critAck" style="margin-top:1rem">確認しました</button></div></div>
+
+  <script slot="scripts" is:inline>
+    const crit = [...document.querySelectorAll('.banner[data-sev="critical"]')].filter((n) => !localStorage.getItem("ack:" + n.dataset.id));
+    if (crit.length) {
+      const m = document.getElementById("critModal");
+      document.getElementById("critBody").innerHTML = crit.map((n) => "<p>" + n.textContent + "</p>").join("");
+      m.classList.add("open");
+      document.getElementById("critAck").onclick = () => { crit.forEach((n) => localStorage.setItem("ack:" + n.dataset.id, "1")); m.classList.remove("open"); window.bo.toast("確認しました"); };
+    }
+  </script>
+</App>

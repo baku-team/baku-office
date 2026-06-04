@@ -1,5 +1,6 @@
 ---
 export const prerender = false;
+import App from "../../layouts/App.astro";
 const env = Astro.locals.runtime.env;
 const { getSession } = await import("../../lib/auth.ts");
 const ses = await getSession(env, Astro.request);
@@ -8,49 +9,34 @@ const { listUsers } = await import("../../lib/users.ts");
 const users = await listUsers(env);
 const roles = ["admin", "accounting", "clerical", "other", "member"];
 ---
-<!doctype html>
-<html lang="ja"><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" /><title>人・ロール管理 — baku-office</title>
-<style>body{font-family:system-ui,sans-serif;max-width:880px;margin:0 auto;color:#1c2530}
-header{background:#0f172a;color:#fff;padding:.8rem 1.25rem}header a{color:#cbd5e1;text-decoration:none;margin-right:1rem;font-size:.9rem}
-main{padding:1.25rem}table{border-collapse:collapse;width:100%;font-size:.9rem}th,td{border:1px solid #e2e8f0;padding:.4rem .6rem}th{background:#f8fafc}
-button{padding:.35rem .7rem;border:0;border-radius:6px;cursor:pointer}.muted{color:#64748b;font-size:.85rem}
-select{padding:.3rem;border:1px solid #cbd5e1;border-radius:6px}</style></head>
-<body>
-<header><a href="/">ホーム</a><a href="/settings/members">人・ロール管理</a><a href="/review">共有承認</a><strong style="float:right">{ses.name}</strong></header>
-<main>
-<h1>人・ロール管理</h1>
-<p><button id="inviteBtn" style="background:#2563eb;color:#fff">招待コードを発行</button>
-  <select id="inviteRole">{roles.map((r)=>(<option value={r}>{r}</option>))}</select>
-  <span id="inviteOut" class="muted"></span></p>
-<table>
-  <thead><tr><th>氏名・役職</th><th>ロール</th><th>状態</th><th>操作</th></tr></thead>
-  <tbody>
-    {users.map((u)=>(
-      <tr data-id={u.id}>
-        <td>{u.name || "(未設定)"}</td>
-        <td>
-          <select class="role" disabled={u.id==="org"}>{roles.map((r)=>(<option value={r} selected={r===u.role}>{r}</option>))}</select>
-        </td>
-        <td>{u.status}</td>
-        <td>
-          {u.status==="pending" && (<><button class="act" data-a="approve" style="background:#16a34a;color:#fff">承認</button> <button class="act" data-a="reject" style="background:#ef4444;color:#fff">却下</button></>)}
-          {u.status==="active" && (<button class="act" data-a="reject" style="background:#ef4444;color:#fff">無効化</button>)}
-        </td>
-      </tr>
-    ))}
+<App title="人・ロール管理" active="/settings/members">
+  <h1>人・ロール管理</h1>
+  <div class="card">
+    <div class="row">
+      <select id="inviteRole">{roles.map((r)=>(<option value={r}>{r}</option>))}</select>
+      <button class="btn btn-primary" id="inviteBtn" style="flex:0 0 auto">招待コードを発行</button>
+    </div>
+    <p class="muted" id="inviteOut"></p>
+  </div>
+  <div class="table-wrap" style="margin-top:1rem"><table><thead><tr><th>氏名・役職</th><th>ロール</th><th>状態</th><th>操作</th></tr></thead><tbody>
+    {users.map((u)=>(<tr data-id={u.id}>
+      <td>{u.name || "(未設定)"}</td>
+      <td><select class="role btn-sm" disabled={u.id==="org"}>{roles.map((r)=>(<option value={r} selected={r===u.role}>{r}</option>))}</select></td>
+      <td>{u.status}</td>
+      <td>
+        {u.status==="pending" && (<><button class="btn btn-sm btn-ok act" data-a="approve">承認</button> <button class="btn btn-sm btn-danger act" data-a="reject">却下</button></>)}
+        {u.status==="active" && (<button class="btn btn-sm btn-danger act" data-a="reject">無効化</button>)}
+      </td></tr>))}
     {users.length===0 && (<tr><td colspan="4" class="muted">メンバーがいません。招待コードを発行してください。</td></tr>)}
-  </tbody>
-</table>
-<script type="module">
-  const post=(b)=>fetch("/api/members",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(b)}).then(r=>r.json());
-  document.getElementById("inviteBtn").onclick=async()=>{
-    const j=await post({_action:"invite",role:document.getElementById("inviteRole").value});
-    document.getElementById("inviteOut").textContent=j.ok?("コード："+j.code+"（1週間・1回・/join?code="+j.code+"）"):"失敗";
-  };
-  document.querySelectorAll("tr[data-id]").forEach(tr=>{
-    const id=tr.dataset.id;
-    tr.querySelectorAll(".act").forEach(b=>b.onclick=async()=>{await post({_action:b.dataset.a,id});location.reload();});
-    const sel=tr.querySelector(".role"); if(sel&&!sel.disabled) sel.onchange=async()=>{await post({_action:"role",id,role:sel.value});};
-  });
-</script>
-</main></body></html>
+  </tbody></table></div>
+  <script slot="scripts" is:inline>
+    document.getElementById("inviteBtn").addEventListener("click",async(e)=>{
+      const r=await window.bo.api("/api/members",{_action:"invite",role:document.getElementById("inviteRole").value},{btn:e.currentTarget,successMsg:null});
+      if(r.ok){document.getElementById("inviteOut").textContent="コード："+r.data.code+"（1週間・1回・/join?code="+r.data.code+"）";window.bo.toast("招待コードを発行しました");}
+    });
+    document.querySelectorAll("tr[data-id]").forEach(tr=>{const id=tr.dataset.id;
+      tr.querySelectorAll(".act").forEach(b=>b.addEventListener("click",async(e)=>{const r=await window.bo.api("/api/members",{_action:e.target.dataset.a,id},{btn:e.target,successMsg:"更新しました"});if(r.ok)setTimeout(()=>location.reload(),500);}));
+      const sel=tr.querySelector(".role");if(sel&&!sel.disabled)sel.addEventListener("change",async()=>{await window.bo.api("/api/members",{_action:"role",id,role:sel.value},{successMsg:"ロールを変更しました"});});
+    });
+  </script>
+</App>

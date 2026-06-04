@@ -5,7 +5,7 @@ import { getApiKey } from "./client.ts";
 import * as T from "./agent-tools.ts";
 import { webSearch, makeDocument } from "./media-ai.ts";
 import { listSkills, runSkill } from "./skills.ts";
-import { listCapabilities, invokeCapability, capabilitySummary } from "./capabilities.ts";
+import { listCapabilities, invokeCapability, capabilitySummary, videoStatusText } from "./capabilities.ts";
 
 const SYSTEM =
   "あなたは団体の会計・庶務を補助するLINEアシスタント『baku-office』です。日本語で簡潔に。" +
@@ -42,6 +42,7 @@ const CAP_TOOLS: Record<string, unknown> = {
   tts: { name: "synthesize_speech", description: "テキストを音声合成してDLリンクを返す", parameters: { type: "object", properties: { text: { type: "string" } }, required: ["text"] } },
   video_gen: { name: "generate_video", description: "動画を生成（非同期）", parameters: { type: "object", properties: { prompt: { type: "string" } }, required: ["prompt"] } },
 };
+const VIDEO_STATUS_TOOL = { name: "video_status", description: "依頼した動画生成の状況を確認（完成ならDLリンク）", parameters: { type: "object", properties: {} } };
 
 type Part = { text?: string; functionCall?: { name: string; args: Record<string, unknown> }; functionResponse?: { name: string; response: unknown }; inlineData?: { mimeType: string; data: string } };
 type Content = { role: string; parts: Part[] };
@@ -73,6 +74,7 @@ async function execTool(env: Env, owner: string, baseUrl: string, name: string, 
     case "generate_image": return invokeCapability(env, owner, baseUrl, "image_gen", String(args.prompt));
     case "synthesize_speech": return invokeCapability(env, owner, baseUrl, "tts", String(args.text));
     case "generate_video": return invokeCapability(env, owner, baseUrl, "video_gen", String(args.prompt));
+    case "video_status": return videoStatusText(env, owner, baseUrl);
     default: return "未知のツール";
   }
 }
@@ -86,6 +88,7 @@ export async function runAgent(env: Env, lineUserId: string, text: string, image
   const enabledSkills = hasClaude ? await listSkills(env, true) : [];
   const caps = await listCapabilities(env, true);
   const capDecls = caps.map((c) => CAP_TOOLS[c.capability]).filter(Boolean);
+  if (caps.some((c) => c.capability === "video_gen")) capDecls.push(VIDEO_STATUS_TOOL);
   const decls = [...TOOLS, ...GEMINI_TOOLS, ...(hasClaude ? CLAUDE_TOOLS : []), ...(enabledSkills.length ? [skillTool(enabledSkills.map((s) => s.name))] : []), ...capDecls];
   const owner = `line:${lineUserId}`;
   // 自己認識：有効な追加能力をシステム文脈へ（AI/エージェントが参照できるように）。

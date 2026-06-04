@@ -68,9 +68,65 @@ export async function invokeCapability(env: Env, owner: string, baseUrl: string,
       const saved = await saveFile(env, new File([await r.arrayBuffer()], "speech.mp3", { type: "audio/mpeg" }), owner);
       return `音声を生成しました：${baseUrl}/files/${saved.id}`;
     }
-    // video_gen：多くは非同期ジョブのためv1は受付のみ案内。
-    return "動画生成は受け付けましたが、非同期処理のため結果反映は次段で対応します。";
+    // video_gen：非同期。作成→ジョブ登録→推定時間後にポーリング（drain）で取得。
+    {
+      const url = cap.endpoint;
+      if (!url) return "動画生成のエンドポイント（作成API）が未設定です（高度なオプション）。";
+      const r = await fetch(url, { method: "POST", headers: { authorization: `Bearer ${key}`, "content-type": "application/json" }, body: JSON.stringify({ model: cap.model || undefined, prompt: input }) });
+      if (!r.ok) return `動画生成APIエラー：${r.status}`;
+      const d = (await r.json()) as { id?: string; task_id?: string; status_url?: string; eta_seconds?: number };
+      const jobId = d.id || d.task_id || "";
+      const statusUrl = d.status_url || (jobId ? `${url.replace(/\/$/, "")}/${jobId}` : "");
+      const eta = nowSec() + (d.eta_seconds || 60);
+      await env.DB.prepare("INSERT INTO video_jobs (id,owner,cap_id,job_id,status_url,prompt,status,eta,created_at,updated_at) VALUES (?,?,?,?,?,?,'pending',?,?,?)")
+        .bind(randomId(), owner, cap.id, jobId, statusUrl, input, eta, nowSec(), nowSec()).run();
+      return `🎬 動画生成を開始しました（目安 約${d.eta_seconds || 60}秒）。完成したらファイル一覧へ保存し、LINEにURLをお知らせします。「動画できた？」で確認もできます。`;
+    }
   } catch (e) {
     return `${CAPABILITY_LABEL[capability]}の実行に失敗：${(e as Error).message}`;
   }
+}
+
+// 動画ジョブのポーリング（drainから定期実行）。推定時間到来分のステータスを確認し、完成→DL保存＋LINE通知。
+export async function pollVideoJobs(env: Env, accessToken?: string, limit = 5): Promise<{ done: number; pending: number }> {
+  const now = nowSec();
+  const { results } = await env.DB.prepare("SELECT id,owner,cap_id,status_url,eta FROM video_jobs WHERE status='pending' AND eta<=? ORDER BY eta LIMIT ?").bind(now, limit).all<{ id: string; owner: string; cap_id: string; status_url: string | null; eta: number }>();
+  let done = 0, pending = 0;
+  for (const job of results) {
+    if (!job.status_url) { await env.DB.prepare("UPDATE video_jobs SET status='error',updated_at=? WHERE id=?").bind(now, job.id).run(); continue; }
+    const key = await capKey(env, job.cap_id);
+    try {
+      const r = await fetch(job.status_url, { headers: key ? { authorization: `Bearer ${key}` } : {} });
+      if (!r.ok) { pending++; await env.DB.prepare("UPDATE video_jobs SET eta=?,updated_at=? WHERE id=?").bind(now + 30, now, job.id).run(); continue; }
+      const d = (await r.json()) as { status?: string; state?: string; url?: string; output?: string | { url?: string } };
+      const st = (d.status || d.state || "").toLowerCase();
+      const outUrl = d.url || (typeof d.output === "string" ? d.output : d.output?.url);
+      if ((st === "succeeded" || st === "completed" || st === "done") && outUrl) {
+        const buf = await (await fetch(outUrl)).arrayBuffer();
+        const saved = await saveFile(env, new File([buf], "video.mp4", { type: "video/mp4" }), job.owner);
+        await env.DB.prepare("UPDATE video_jobs SET status='done',file_id=?,updated_at=? WHERE id=?").bind(saved.id, now, job.id).run();
+        done++;
+        // LINE通知（owner が line: かつ token あれば）。
+        if (accessToken && job.owner.startsWith("line:")) {
+          await fetch("https://api.line.me/v2/bot/message/push", { method: "POST", headers: { authorization: `Bearer ${accessToken}`, "content-type": "application/json" }, body: JSON.stringify({ to: job.owner.slice(5), messages: [{ type: "text", text: `🎬 動画が完成しました。ファイル一覧またはこちら：/files/${saved.id}` }] }) });
+        }
+      } else if (st === "failed" || st === "error") {
+        await env.DB.prepare("UPDATE video_jobs SET status='error',updated_at=? WHERE id=?").bind(now, job.id).run();
+      } else {
+        pending++;
+        await env.DB.prepare("UPDATE video_jobs SET eta=?,updated_at=? WHERE id=?").bind(now + 30, now, job.id).run();
+      }
+    } catch {
+      pending++;
+      await env.DB.prepare("UPDATE video_jobs SET eta=?,updated_at=? WHERE id=?").bind(now + 30, now, job.id).run();
+    }
+  }
+  return { done, pending };
+}
+
+// 「動画できた？」用：直近の動画ジョブ状況テキスト。
+export async function videoStatusText(env: Env, owner: string, baseUrl: string): Promise<string> {
+  const { results } = await env.DB.prepare("SELECT status,file_id FROM video_jobs WHERE owner=? ORDER BY created_at DESC LIMIT 5").bind(owner).all<{ status: string; file_id: string | null }>();
+  if (!results.length) return "動画生成の依頼はありません。";
+  return results.map((j) => (j.status === "done" && j.file_id ? `✅ 完成：${baseUrl}/files/${j.file_id}` : j.status === "error" ? "❌ 失敗" : "⏳ 生成中…")).join("\n");
 }

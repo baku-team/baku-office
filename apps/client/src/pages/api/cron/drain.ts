@@ -3,6 +3,7 @@ import { getApiKey } from "../../../lib/client.ts";
 import { linePush } from "../../../lib/agent.ts";
 import { dueReminders, markReminderDone } from "../../../lib/agent-tools.ts";
 import { processSummaryJobs } from "../../../lib/media-ai.ts";
+import { pollVideoJobs } from "../../../lib/capabilities.ts";
 import { guardHeavy } from "../../../lib/diag.ts";
 
 export const prerender = false;
@@ -18,6 +19,9 @@ export const POST: APIRoute = async ({ request, locals }) => {
   const summarized = g.ok ? g.value : 0;
 
   const accessToken = await getApiKey(env, "line_token");
+  // 動画ジョブのポーリング（完成→DL保存＋LINE通知）。
+  const vr = await guardHeavy(env, "video jobs", () => pollVideoJobs(env, accessToken ?? undefined));
+  const video = vr.ok ? vr.value : { done: 0, pending: 0 };
   let sent = 0;
   if (accessToken) {
     for (const r of await dueReminders(env)) {
@@ -26,5 +30,5 @@ export const POST: APIRoute = async ({ request, locals }) => {
       await markReminderDone(env, r.id);
     }
   }
-  return json({ ok: true, sent, summarized });
+  return json({ ok: true, sent, summarized, video });
 };

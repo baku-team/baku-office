@@ -1,49 +1,31 @@
 ---
 export const prerender = false;
+import App from "../layouts/App.astro";
 const env = Astro.locals.runtime.env;
 const { getSession } = await import("../lib/auth.ts");
 const ses = await getSession(env, Astro.request);
 if (!ses || ses.ctx !== "personal") return Astro.redirect("/login", 302);
 const { listMyItems } = await import("../lib/users.ts");
 const items = await listMyItems(env, ses.uid);
+const yen = (n: number | null) => (n != null ? "¥" + n.toLocaleString("ja-JP") : "");
 ---
-<!doctype html>
-<html lang="ja"><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" /><title>個人 — baku-office</title>
-<style>body{font-family:system-ui,sans-serif;max-width:760px;margin:0 auto;color:#1c2530}
-header{background:#0f172a;color:#fff;padding:.8rem 1.25rem}header a{color:#cbd5e1;text-decoration:none;margin-right:1rem;font-size:.9rem}
-main{padding:1.25rem}input,select{padding:.4rem;border:1px solid #cbd5e1;border-radius:6px;margin:.2rem 0}
-button{padding:.35rem .7rem;border:0;border-radius:6px;cursor:pointer}table{border-collapse:collapse;width:100%;font-size:.9rem;margin-top:1rem}th,td{border:1px solid #e2e8f0;padding:.4rem .6rem}th{background:#f8fafc}.muted{color:#64748b}</style></head>
-<body>
-<header><a href="/">ホーム</a><a href="/personal">個人</a><strong style="float:right">{ses.name ?? "メンバー"}</strong></header>
-<main>
-<h1>個人の作業領域</h1>
-<p class="muted">領収書・メモ・タスク・予定を個人で記録し、必要なものを組織へ共有申請できます（§6/9）。</p>
-<div>
-  <select id="type"><option value="receipt">領収書</option><option value="memo">メモ</option><option value="task">タスク</option><option value="schedule">予定</option></select>
-  <input id="title" placeholder="概要（例：文具購入）" />
-  <input id="amount" type="number" placeholder="金額（領収書）" style="width:120px" />
-  <input id="date" type="date" />
-  <button id="add" style="background:#2563eb;color:#fff">追加</button>
-</div>
-<table>
-  <thead><tr><th>種別</th><th>概要</th><th>金額</th><th>共有状態</th><th>操作</th></tr></thead>
-  <tbody>
-    {items.map((it)=>(
-      <tr data-id={it.id}>
-        <td>{it.type}</td><td>{it.title}</td><td>{it.amount!=null?("¥"+it.amount.toLocaleString("ja-JP")):""}</td>
-        <td>{it.share_scope==="org"?("組織共有："+it.review_status):"個人"}</td>
-        <td>{it.share_scope!=="org" && (<button class="share" style="background:#0ea5e9;color:#fff">組織へ共有</button>)}</td>
-      </tr>
-    ))}
+<App title="個人" active="/personal">
+  <h1>個人の作業領域</h1>
+  <p class="muted">領収書・メモ・タスク・予定を記録し、必要なものを組織へ共有申請できます（§6/9）。</p>
+  <div class="card">
+    <div class="row">
+      <select id="type"><option value="receipt">領収書</option><option value="memo">メモ</option><option value="task">タスク</option><option value="schedule">予定</option></select>
+      <input id="title" placeholder="概要" />
+      <input id="amount" type="number" placeholder="金額" />
+      <button class="btn btn-primary" id="add" style="flex:0 0 auto">追加</button>
+    </div>
+  </div>
+  <div class="table-wrap" style="margin-top:1rem"><table><thead><tr><th>種別</th><th>概要</th><th>金額</th><th>共有</th><th></th></tr></thead><tbody>
+    {items.map((it)=>(<tr data-id={it.id}><td>{it.type}</td><td>{it.title}</td><td>{yen(it.amount)}</td><td>{it.share_scope==="org"?("組織："+it.review_status):"個人"}</td><td>{it.share_scope!=="org" && (<button class="btn btn-sm btn-primary share">組織へ共有</button>)}</td></tr>))}
     {items.length===0 && (<tr><td colspan="5" class="muted">まだありません。</td></tr>)}
-  </tbody>
-</table>
-<script type="module">
-  const post=(b)=>fetch("/api/personal",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(b)}).then(r=>r.json());
-  document.getElementById("add").onclick=async()=>{
-    await post({_action:"create",type:document.getElementById("type").value,title:document.getElementById("title").value,amount:document.getElementById("amount").value||undefined,date:document.getElementById("date").value||undefined});
-    location.reload();
-  };
-  document.querySelectorAll("tr[data-id]").forEach(tr=>{const s=tr.querySelector(".share");if(s)s.onclick=async()=>{await post({_action:"share",id:tr.dataset.id});location.reload();};});
-</script>
-</main></body></html>
+  </tbody></table></div>
+  <script slot="scripts" is:inline>
+    document.getElementById("add").addEventListener("click",async(e)=>{const r=await window.bo.api("/api/personal",{_action:"create",type:document.getElementById("type").value,title:document.getElementById("title").value,amount:document.getElementById("amount").value||undefined},{btn:e.currentTarget,successMsg:"追加しました"});if(r.ok)setTimeout(()=>location.reload(),500);});
+    document.querySelectorAll("tr[data-id] .share").forEach(b=>b.addEventListener("click",async(e)=>{const r=await window.bo.api("/api/personal",{_action:"share",id:e.target.closest("tr").dataset.id},{btn:e.target,successMsg:"共有申請しました"});if(r.ok)setTimeout(()=>location.reload(),500);}));
+  </script>
+</App>

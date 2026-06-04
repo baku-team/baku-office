@@ -1,105 +1,71 @@
 ---
 export const prerender = false;
+import App from "../../layouts/App.astro";
 const env = Astro.locals.runtime.env;
 const { getSession } = await import("../../lib/auth.ts");
 const ses = await getSession(env, Astro.request);
 if (!ses || ses.role !== "admin" || ses.ctx !== "org") return Astro.redirect("/login", 302);
 const { listSkills } = await import("../../lib/skills.ts");
-const { storageMode } = await import("../../lib/storage.ts");
 const { listCapabilities, CAPABILITY_LABEL } = await import("../../lib/capabilities.ts");
+const { storageMode, maxUploadMb } = await import("../../lib/storage.ts");
 const skills = await listSkills(env);
 const caps = await listCapabilities(env);
 const mode = storageMode(env);
+const curMax = await maxUploadMb(env);
 ---
-<!doctype html>
-<html lang="ja"><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" /><title>高度なオプション — baku-office</title>
-<style>body{font-family:system-ui,sans-serif;max-width:820px;margin:0 auto;color:#1c2530}header{background:#0f172a;color:#fff;padding:.8rem 1.25rem}header a{color:#cbd5e1;text-decoration:none;margin-right:1rem;font-size:.9rem}main{padding:1.25rem}h2{border-bottom:2px solid #e2e8f0;padding-bottom:.3rem;margin-top:1.8rem}input,textarea,select{width:100%;padding:.45rem;border:1px solid #cbd5e1;border-radius:6px;margin:.2rem 0}button{padding:.4rem .8rem;border:0;border-radius:6px;cursor:pointer}table{border-collapse:collapse;width:100%;font-size:.9rem}th,td{border:1px solid #e2e8f0;padding:.4rem .6rem}th{background:#f8fafc}.muted{color:#64748b;font-size:.88rem}.warn{background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;padding:.6rem .9rem;margin:.5rem 0}.pill{font-size:.75rem;padding:.1rem .5rem;border-radius:999px;background:#eef2ff;color:#3730a3}</style></head>
-<body>
-<header><a href="/">ホーム</a><a href="/settings/keys">連携設定</a><a href="/settings/advanced">高度なオプション</a></header>
-<main>
-<h1>高度なオプション</h1>
-<div class="warn">⚠️ ここでは<strong>従量課金につながる機能</strong>を扱います。利用には対応APIキー（Claude等）の登録と、各サービスの課金が必要です。</div>
+<App title="高度なオプション" active="/settings/advanced">
+  <h1>高度なオプション</h1>
+  <div class="banner banner-warn">⚠️ ここでは<strong>従量課金につながる機能</strong>を扱います。利用には対応APIキーの登録と各サービスの課金が必要です。</div>
 
-<h2>ストレージ（R2・高度モード）</h2>
-<p class="muted">現在：<strong>{mode === "r2" ? "高度モード（R2・大容量/高速）" : "標準モード（KV・5MBまで・カード不要）"}</strong>。R2はカード登録が前提（§11）。有効化すると `wrangler.jsonc` の `MEDIA_R2` を有効にして再デプロイ後、自動で高度モードになります。</p>
+  <h2>ストレージ上限（標準モード・KV）</h2>
+  <div class="card">
+    <p class="muted">現在：<strong>{mode === "r2" ? "高度モード（R2・上限なし）" : `標準モード（KV）・1ファイル上限 ${curMax}MB`}</strong>。KVの値上限は <strong>25MiB</strong> までで、既定は安全側の5MB。下で1〜25MBに変更できます（R2有効時はこの上限は無視）。</p>
+    <div class="row"><input id="maxmb" type="number" min="1" max="25" value={curMax} style="flex:0 0 120px" /><button class="btn btn-primary" id="saveMax" style="flex:0 0 auto">上限を保存</button></div>
+  </div>
 
-<h2>Agent Skills（コード実行・従量課金）</h2>
-<p class="muted">SKILL.md を登録して独自の業務スキルを追加します（請求書生成・議事録フォーマット等）。スキルは<strong>データとして保存</strong>され、固定ランタイムがロードして Claude 経由で実行（Worker内でevalは行いません）。<br>
-モード：<strong>instruction</strong>＝通常のLLM費／<strong>code</strong>＝Anthropic code execution（コンテナ実行＝追加の従量課金）。<strong>管理者がレビューして有効化</strong>したものだけが動きます。LINEエージェントから「〇〇スキルで…」で呼べます（要 Z＋Claudeキー）。</p>
-<details><summary>スキルを追加</summary>
-  <input id="sname" placeholder="スキル名（呼び出し名・例：請求書生成）" />
-  <input id="sdesc" placeholder="説明（任意）" />
-  <select id="smode"><option value="instruction">instruction（通常費）</option><option value="code">code（コード実行・従量課金）</option></select>
-  <textarea id="smd" rows="6" placeholder="SKILL.md（手順・テンプレート・出力形式）"></textarea>
-  <button id="add" style="background:#2563eb;color:#fff">登録（無効状態で保存）</button>
-</details>
-<table style="margin-top:1rem"><thead><tr><th>名前</th><th>モード</th><th>状態</th><th>操作</th></tr></thead><tbody>
-  {skills.map((s)=>(
-    <tr data-id={s.id}>
-      <td>{s.name}<div class="muted">{s.description ?? ""}</div></td>
-      <td><span class="pill">{s.mode}</span></td>
-      <td>{s.enabled ? "有効" : "無効"}</td>
-      <td>
-        {s.enabled
-          ? <button class="dis" style="background:#d97706;color:#fff">無効化</button>
-          : <button class="en" style="background:#16a34a;color:#fff">有効化</button>}
-        <button class="del" style="background:#ef4444;color:#fff">削除</button>
-      </td>
-    </tr>
-  ))}
-  {skills.length===0 && (<tr><td colspan="4" class="muted">スキルは未登録です。</td></tr>)}
-</tbody></table>
+  <h2>任意API（画像生成・音声合成・動画生成など）</h2>
+  <p class="muted">外部AIサービスをBYOKで追加。APIキーは暗号化保存。<strong>有効化したものはAI/エージェントが参照・実行</strong>します（LINEから「画像を作って」等）。利用料は団体負担。管理者がレビューして有効化。</p>
+  <details><summary>能力を追加</summary>
+    <div class="field"><select id="cap"><option value="image_gen">画像生成</option><option value="tts">音声合成</option><option value="video_gen">動画生成</option><option value="embed">埋め込み(検索)</option><option value="custom">カスタムAPI</option></select></div>
+    <div class="field"><input id="cprov" placeholder="プロバイダ（openai / stability / elevenlabs 等）" /></div>
+    <div class="row"><input id="cmodel" placeholder="モデル（任意）" /><input id="cendpoint" placeholder="エンドポイントURL（カスタム時）" /></div>
+    <div class="field"><input id="ckey" type="password" placeholder="APIキー" /></div>
+    <button class="btn btn-primary" id="capadd">登録（無効状態で保存）</button>
+  </details>
+  <div class="table-wrap" style="margin-top:.5rem"><table><thead><tr><th>能力</th><th>プロバイダ</th><th>状態</th><th>操作</th></tr></thead><tbody>
+    {caps.map((c)=>(<tr data-cid={c.id}><td>{CAPABILITY_LABEL[c.capability]??c.capability}</td><td>{c.provider??""}{c.model?`（${c.model}）`:""}</td><td>{c.enabled?"有効":"無効"}</td><td>{c.enabled?<button class="btn btn-sm btn-warn cdis">無効化</button>:<button class="btn btn-sm btn-ok cen">有効化</button>} <button class="btn btn-sm btn-danger cdel">削除</button></td></tr>))}
+    {caps.length===0 && (<tr><td colspan="4" class="muted">任意APIは未登録です。</td></tr>)}
+  </tbody></table></div>
 
-<h2>任意API（画像生成・音声合成・動画生成など）</h2>
-<p class="muted">外部AIサービスをBYOKで追加します。APIキーは暗号化保存（§10.3）。<strong>有効化したものはAI/エージェントが参照・実行</strong>できます（LINEから「画像を作って」等）。各サービスの利用料は団体負担（従量課金）。<strong>管理者がレビューして有効化</strong>。</p>
-<details><summary>能力を追加</summary>
-  <select id="cap"><option value="image_gen">画像生成</option><option value="tts">音声合成</option><option value="video_gen">動画生成</option><option value="embed">埋め込み(検索)</option><option value="custom">カスタムAPI</option></select>
-  <input id="cprov" placeholder="プロバイダ（例：openai / stability / elevenlabs）" />
-  <input id="cmodel" placeholder="モデル（任意・例：gpt-image-1 / tts-1）" />
-  <input id="cendpoint" placeholder="エンドポイントURL（カスタム時・任意）" />
-  <input id="ckey" type="password" placeholder="APIキー" />
-  <button id="capadd" style="background:#2563eb;color:#fff">登録（無効状態で保存）</button>
-</details>
-<table style="margin-top:1rem"><thead><tr><th>能力</th><th>プロバイダ</th><th>状態</th><th>操作</th></tr></thead><tbody>
-  {caps.map((c)=>(
-    <tr data-cid={c.id}>
-      <td>{CAPABILITY_LABEL[c.capability] ?? c.capability}</td>
-      <td>{c.provider ?? ""}{c.model?`（${c.model}）`:""}</td>
-      <td>{c.enabled?"有効":"無効"}</td>
-      <td>
-        {c.enabled?<button class="cdis" style="background:#d97706;color:#fff">無効化</button>:<button class="cen" style="background:#16a34a;color:#fff">有効化</button>}
-        <button class="cdel" style="background:#ef4444;color:#fff">削除</button>
-      </td>
-    </tr>
-  ))}
-  {caps.length===0 && (<tr><td colspan="4" class="muted">任意APIは未登録です。</td></tr>)}
-</tbody></table>
+  <h2>Agent Skills（コード実行・従量課金）</h2>
+  <p class="muted">SKILL.md を登録して独自業務スキルを追加（Worker内でevalしません）。mode=instruction（通常費）／code（Anthropic code execution＝従量課金）。管理者がレビューして有効化。LINEから「〇〇スキルで…」で実行（要 Z＋Claude）。</p>
+  <details><summary>スキルを追加</summary>
+    <div class="field"><input id="sname" placeholder="スキル名（呼び出し名）" /></div>
+    <div class="row"><input id="sdesc" placeholder="説明（任意）" /><select id="smode" style="flex:0 0 200px"><option value="instruction">instruction（通常費）</option><option value="code">code（従量課金）</option></select></div>
+    <div class="field"><textarea id="smd" rows="5" placeholder="SKILL.md（手順・テンプレート）"></textarea></div>
+    <button class="btn btn-primary" id="skadd">登録（無効状態で保存）</button>
+  </details>
+  <div class="table-wrap" style="margin-top:.5rem"><table><thead><tr><th>名前</th><th>モード</th><th>状態</th><th>操作</th></tr></thead><tbody>
+    {skills.map((s)=>(<tr data-sid={s.id}><td>{s.name}<div class="muted">{s.description??""}</div></td><td><span class="pill">{s.mode}</span></td><td>{s.enabled?"有効":"無効"}</td><td>{s.enabled?<button class="btn btn-sm btn-warn sdis">無効化</button>:<button class="btn btn-sm btn-ok sen">有効化</button>} <button class="btn btn-sm btn-danger sdel">削除</button></td></tr>))}
+    {skills.length===0 && (<tr><td colspan="4" class="muted">スキルは未登録です。</td></tr>)}
+  </tbody></table></div>
 
-<h2>Workers Paid（CF有料プラン）への切替案内</h2>
-<div class="warn">
-  無料枠では <strong>CPU時間・実行時間（waitUntil）・サブリクエスト数</strong> 等に上限があり、大きなファイルの要約・音声処理・生成でエラーになることがあります（<a href="/diagnostics">診断</a>で確認可）。<br>
-  安定運用には、お使いのCloudflareダッシュボードで <strong>Workers &amp; Pages → Plans → Workers Paid（月$5〜）</strong> に切り替えてください。データやデプロイはそのまま、上限が大幅に緩和されます。手順は当社が個別にご案内します。
-</div>
+  <h2>Workers Paid（CF有料プラン）への切替案内</h2>
+  <div class="banner banner-info">無料枠では CPU時間・実行時間(waitUntil)・サブリクエスト数 等に上限があり、大きなファイル処理や生成でエラーになることがあります（<a href="/diagnostics">診断</a>）。安定運用には Cloudflareダッシュボードで <strong>Workers &amp; Pages → Plans → Workers Paid（月$5〜）</strong> に切り替えてください。データ・デプロイはそのまま、上限が大幅緩和されます。</div>
 
-<script type="module">
-  const post=(b)=>fetch("/api/skills",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(b)}).then(r=>r.json());
-  const capPost=(b)=>fetch("/api/capabilities",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(b)}).then(r=>r.json());
-  const ca=document.getElementById("capadd");
-  if(ca) ca.onclick=async()=>{await capPost({_action:"create",capability:document.getElementById("cap").value,provider:document.getElementById("cprov").value,model:document.getElementById("cmodel").value,endpoint:document.getElementById("cendpoint").value,api_key:document.getElementById("ckey").value});location.reload();};
-  document.querySelectorAll("tr[data-cid]").forEach(tr=>{const id=tr.dataset.cid;
-    tr.querySelector(".cen")?.addEventListener("click",async()=>{await capPost({_action:"enable",id,enabled:true});location.reload();});
-    tr.querySelector(".cdis")?.addEventListener("click",async()=>{await capPost({_action:"enable",id,enabled:false});location.reload();});
-    tr.querySelector(".cdel")?.addEventListener("click",async()=>{if(confirm("削除しますか？")){await capPost({_action:"delete",id});location.reload();}});
-  });
-  document.getElementById("add").onclick=async()=>{
-    await post({_action:"create",name:document.getElementById("sname").value,description:document.getElementById("sdesc").value,mode:document.getElementById("smode").value,skill_md:document.getElementById("smd").value});
-    location.reload();
-  };
-  document.querySelectorAll("tr[data-id]").forEach(tr=>{
-    const id=tr.dataset.id;
-    tr.querySelector(".en")?.addEventListener("click",async()=>{await post({_action:"enable",id,enabled:true});location.reload();});
-    tr.querySelector(".dis")?.addEventListener("click",async()=>{await post({_action:"enable",id,enabled:false});location.reload();});
-    tr.querySelector(".del")?.addEventListener("click",async()=>{if(confirm("削除しますか？")){await post({_action:"delete",id});location.reload();}});
-  });
-</script>
-</main></body></html>
+  <script slot="scripts" is:inline>
+    const cap=(b,btn)=>window.bo.api("/api/capabilities",b,{btn});
+    const sk=(b,btn)=>window.bo.api("/api/skills",b,{btn});
+    document.getElementById("saveMax").addEventListener("click",async(e)=>{const v=document.getElementById("maxmb").value;const r=await window.bo.api("/api/settings",{_action:"max_upload",mb:Number(v)},{btn:e.currentTarget,successMsg:"上限を保存しました"});if(r.ok)setTimeout(()=>location.reload(),600);});
+    document.getElementById("capadd").addEventListener("click",async(e)=>{const r=await cap({_action:"create",capability:document.getElementById("cap").value,provider:document.getElementById("cprov").value,model:document.getElementById("cmodel").value,endpoint:document.getElementById("cendpoint").value,api_key:document.getElementById("ckey").value},e.currentTarget);if(r.ok){window.bo.toast("登録しました（無効状態）");setTimeout(()=>location.reload(),600);}});
+    document.querySelectorAll("tr[data-cid]").forEach(tr=>{const id=tr.dataset.cid;
+      tr.querySelector(".cen")?.addEventListener("click",async(e)=>{const r=await cap({_action:"enable",id,enabled:true},e.target);if(r.ok)setTimeout(()=>location.reload(),500);});
+      tr.querySelector(".cdis")?.addEventListener("click",async(e)=>{const r=await cap({_action:"enable",id,enabled:false},e.target);if(r.ok)setTimeout(()=>location.reload(),500);});
+      tr.querySelector(".cdel")?.addEventListener("click",async(e)=>{if(confirm("削除しますか？")){const r=await cap({_action:"delete",id},e.target);if(r.ok)setTimeout(()=>location.reload(),500);}});});
+    document.getElementById("skadd").addEventListener("click",async(e)=>{const r=await sk({_action:"create",name:document.getElementById("sname").value,description:document.getElementById("sdesc").value,mode:document.getElementById("smode").value,skill_md:document.getElementById("smd").value},e.currentTarget);if(r.ok){window.bo.toast("登録しました（無効状態）");setTimeout(()=>location.reload(),600);}});
+    document.querySelectorAll("tr[data-sid]").forEach(tr=>{const id=tr.dataset.sid;
+      tr.querySelector(".sen")?.addEventListener("click",async(e)=>{const r=await sk({_action:"enable",id,enabled:true},e.target);if(r.ok)setTimeout(()=>location.reload(),500);});
+      tr.querySelector(".sdis")?.addEventListener("click",async(e)=>{const r=await sk({_action:"enable",id,enabled:false},e.target);if(r.ok)setTimeout(()=>location.reload(),500);});
+      tr.querySelector(".sdel")?.addEventListener("click",async(e)=>{if(confirm("削除しますか？")){const r=await sk({_action:"delete",id},e.target);if(r.ok)setTimeout(()=>location.reload(),500);}});});
+  </script>
+</App>

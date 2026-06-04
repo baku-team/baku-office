@@ -2,10 +2,24 @@
 import { randomId } from "@baku-office/shared";
 import { nowSec } from "./accounting.ts";
 
-const KV_FALLBACK_LIMIT = 5 * 1024 * 1024; // 標準モード既定5MB（高度オプションで25MiBまで・§11）
+// KV値の物理上限は25MiB。既定は安全側5MB、高度なオプションで1〜25MBに変更可（§11）。
+const KV_HARD_MAX_MB = 25;
+const KV_DEFAULT_MB = 5;
 
 export function storageMode(env: Env): "r2" | "kv" {
   return env.MEDIA_R2 ? "r2" : "kv";
+}
+
+// 標準モードの1ファイル上限(MB)。LICENSE KV の設定値（無ければ既定5、最大25）。
+export async function maxUploadMb(env: Env): Promise<number> {
+  const v = Number(await env.LICENSE.get("max_upload_mb"));
+  if (!Number.isFinite(v) || v <= 0) return KV_DEFAULT_MB;
+  return Math.min(KV_HARD_MAX_MB, Math.max(1, Math.round(v)));
+}
+export async function setMaxUploadMb(env: Env, mb: number): Promise<number> {
+  const clamped = Math.min(KV_HARD_MAX_MB, Math.max(1, Math.round(mb)));
+  await env.LICENSE.put("max_upload_mb", String(clamped));
+  return clamped;
 }
 
 export type FileRow = { id: string; name: string; size: number; mime: string | null; ref: string; created_at: number };
@@ -21,7 +35,8 @@ export async function saveFile(env: Env, file: File, createdBy: string): Promise
     await env.MEDIA_R2.put(key, buf, { httpMetadata: { contentType: file.type || "application/octet-stream" } });
     ref = `r2:${key}`;
   } else {
-    if (buf.byteLength > KV_FALLBACK_LIMIT) throw new Error("標準モードは1ファイル5MBまで（高度オプションでR2有効化）");
+    const limit = (await maxUploadMb(env)) * 1024 * 1024;
+    if (buf.byteLength > limit) throw new Error(`標準モードは1ファイル ${limit / 1024 / 1024}MB まで（高度なオプションで上限変更 or R2有効化）`);
     const key = `f/${id}`;
     await env.MEDIA.put(key, buf, { metadata: { contentType: file.type || "application/octet-stream" } });
     ref = `kv:${key}`;

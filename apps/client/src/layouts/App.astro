@@ -1,0 +1,102 @@
+---
+import "../styles/app.css";
+const env = Astro.locals.runtime.env;
+interface Props { title: string; active?: string; auth?: boolean }
+const { title, active = "", auth = true } = Astro.props as Props;
+
+const { getSession } = await import("../lib/auth.ts");
+const ses = await getSession(env, Astro.request).catch(() => null);
+let limitErr = false;
+try { limitErr = await (await import("../lib/diag.ts")).hasRecentLimitError(env); } catch { /* noop */ }
+
+// ロールに応じたナビ（DRY）。
+type Item = { href: string; label: string; show: boolean };
+const isAdminOrg = ses?.role === "admin" && ses?.ctx === "org";
+const canReview = ses?.role === "admin" || ses?.role === "accounting" || ses?.role === "clerical";
+const items: Item[] = [
+  { href: "/", label: "ホーム", show: true },
+  { href: "/accounting", label: "会計", show: true },
+  { href: "/files", label: "ファイル", show: true },
+  { href: "/schedule", label: "予定", show: true },
+  { href: "/minutes", label: "議事録", show: true },
+  { href: "/personal", label: "個人", show: ses?.ctx === "personal" },
+  { href: "/review", label: "共有承認", show: !!canReview },
+  { href: "/settings/members", label: "人・ロール", show: isAdminOrg },
+  { href: "/billing", label: "プラン・課金", show: isAdminOrg },
+  { href: "/settings/keys", label: "連携設定", show: true },
+  { href: "/diagnostics", label: "診断", show: true },
+  { href: "/settings/advanced", label: "高度なオプション", show: isAdminOrg },
+];
+---
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="light" />
+    <title>{title} — baku-office</title>
+  </head>
+  <body>
+    {auth && (
+      <header class="appbar">
+        <div class="appbar-inner">
+          <a class="brand" href="/">baku-office</a>
+          <nav class="nav">
+            {items.filter((i) => i.show).map((i) => (
+              <a href={i.href} aria-current={active === i.href ? "page" : undefined}>{i.label}</a>
+            ))}
+          </nav>
+          <span class="user">
+            {ses ? <>{ses.name ?? ses.role}・<a href="#" id="bo-logout">ログアウト</a></> : <a href="/login">ログイン</a>}
+          </span>
+        </div>
+      </header>
+    )}
+    <main class="wrap">
+      {limitErr && (
+        <div class="banner banner-danger">
+          ⚠️ 直近に Cloudflare 無料枠の制限に達した可能性があります。重い処理を安定させるには
+          <a href="/settings/advanced">高度なオプション → Workers Paid</a> をご検討ください（<a href="/diagnostics">診断</a>）。
+        </div>
+      )}
+      <slot />
+    </main>
+    <div id="toasts" aria-live="polite"></div>
+
+    <script>
+      // 共通フィードバック：トースト＋fetchラッパ。全操作で必ず成否を可視化する。
+      const wrap = document.getElementById("toasts");
+      function toast(msg, kind = "ok") {
+        const el = document.createElement("div");
+        el.className = "toast " + (kind === "err" ? "err" : kind === "info" ? "info" : "ok");
+        el.textContent = msg;
+        wrap?.appendChild(el);
+        requestAnimationFrame(() => el.classList.add("show"));
+        setTimeout(() => { el.classList.remove("show"); setTimeout(() => el.remove(), 250); }, kind === "err" ? 5000 : 2800);
+      }
+      // ボタン押下中の視覚状態。
+      function busy(btn, on) {
+        if (!btn) return;
+        if (on) { btn.disabled = true; btn.dataset.label = btn.innerHTML; btn.innerHTML = '<span class="spin"></span>処理中…'; }
+        else { btn.disabled = false; if (btn.dataset.label) btn.innerHTML = btn.dataset.label; }
+      }
+      // JSON API 呼び出し＋自動トースト。成功/失敗を必ず表示。
+      async function api(url, body, opts = {}) {
+        const btn = opts.btn; busy(btn, true);
+        try {
+          const r = await fetch(url, { method: opts.method || "POST", headers: { "content-type": "application/json" }, body: body !== undefined ? JSON.stringify(body) : undefined });
+          let j = {}; try { j = await r.json(); } catch { /* non-json */ }
+          if (!r.ok || j.error) { toast(opts.errMsg || ("エラー：" + (j.error || r.status)), "err"); return { ok: false, data: j }; }
+          if (opts.successMsg !== null) toast(opts.successMsg || "完了しました", "ok");
+          return { ok: true, data: j };
+        } catch (e) {
+          toast("通信に失敗しました：" + (e?.message || ""), "err"); return { ok: false, error: e };
+        } finally { busy(btn, false); }
+      }
+      window.bo = { toast, busy, api };
+      const lo = document.getElementById("bo-logout");
+      if (lo) lo.addEventListener("click", async (e) => { e.preventDefault(); await fetch("/api/login", { method: "DELETE" }); location.href = "/login"; });
+    </script>
+    <slot name="scripts" />
+  </body>
+</html>

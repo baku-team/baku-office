@@ -1,5 +1,6 @@
 ---
 export const prerender = false;
+import App from "../layouts/App.astro";
 const env = Astro.locals.runtime.env;
 const { getSession, canAccess } = await import("../lib/auth.ts");
 const ses = await getSession(env, Astro.request);
@@ -7,39 +8,22 @@ if (!ses) return Astro.redirect("/login", 302);
 const allowed = canAccess(ses.role, "review_accounting") || canAccess(ses.role, "review_documents");
 const { reviewQueue } = await import("../lib/users.ts");
 const queue = allowed ? await reviewQueue(env) : [];
+const yen = (n: number | null) => (n != null ? "¥" + n.toLocaleString("ja-JP") : "");
 ---
-<!doctype html>
-<html lang="ja"><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" /><title>共有承認 — baku-office</title>
-<style>body{font-family:system-ui,sans-serif;max-width:880px;margin:0 auto;color:#1c2530}
-header{background:#0f172a;color:#fff;padding:.8rem 1.25rem}header a{color:#cbd5e1;text-decoration:none;margin-right:1rem;font-size:.9rem}
-main{padding:1.25rem}table{border-collapse:collapse;width:100%;font-size:.9rem}th,td{border:1px solid #e2e8f0;padding:.4rem .6rem}th{background:#f8fafc}
-button{padding:.35rem .7rem;border:0;border-radius:6px;cursor:pointer}.muted{color:#64748b}</style></head>
-<body>
-<header><a href="/">ホーム</a><a href="/review">共有承認</a><strong style="float:right">{ses.name ?? ses.role}</strong></header>
-<main>
-<h1>共有承認キュー</h1>
-{!allowed && (<p class="muted">承認権限（会計／庶務／管理者）がありません。</p>)}
-{allowed && (
-  <table>
-    <thead><tr><th>種別</th><th>概要</th><th>金額</th><th>日付</th><th>操作</th></tr></thead>
-    <tbody>
-      {queue.map((q)=>(
-        <tr data-id={q.id}>
-          <td>{q.type}</td><td>{q.title}</td><td>{q.amount!=null?("¥"+q.amount.toLocaleString("ja-JP")):""}</td><td>{q.date ?? ""}</td>
-          <td><button class="ap" style="background:#16a34a;color:#fff">承認</button> <button class="rj" style="background:#ef4444;color:#fff">却下</button></td>
-        </tr>
-      ))}
+<App title="共有承認" active="/review">
+  <h1>共有承認キュー</h1>
+  {!allowed && (<div class="banner banner-info">承認権限（会計／庶務／管理者）がありません。</div>)}
+  {allowed && (
+    <div class="table-wrap"><table><thead><tr><th>種別</th><th>概要</th><th>金額</th><th>日付</th><th></th></tr></thead><tbody>
+      {queue.map((q)=>(<tr data-id={q.id}><td>{q.type}</td><td>{q.title}</td><td>{yen(q.amount)}</td><td>{q.date??""}</td><td><button class="btn btn-sm btn-ok ap">承認</button> <button class="btn btn-sm btn-danger rj">却下</button></td></tr>))}
       {queue.length===0 && (<tr><td colspan="5" class="muted">承認待ちはありません。</td></tr>)}
-    </tbody>
-  </table>
-)}
-<p class="muted" style="margin-top:1rem">領収書の承認は会計取引のドラフトを自動生成します（§9）。会計の出納帳/収支に反映されます。</p>
-<script type="module">
-  const post=(b)=>fetch("/api/review",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(b)}).then(r=>r.json());
-  document.querySelectorAll("tr[data-id]").forEach(tr=>{
-    const id=tr.dataset.id;
-    tr.querySelector(".ap").onclick=async()=>{await post({_action:"approve",id});location.reload();};
-    tr.querySelector(".rj").onclick=async()=>{const reason=prompt("却下理由")||"";await post({_action:"reject",id,reason});location.reload();};
-  });
-</script>
-</main></body></html>
+    </tbody></table></div>
+  )}
+  <p class="muted" style="margin-top:1rem">領収書の承認は会計取引のドラフトを自動生成します（§9）。</p>
+  <script slot="scripts" is:inline>
+    document.querySelectorAll("tr[data-id]").forEach(tr=>{const id=tr.dataset.id;
+      tr.querySelector(".ap")?.addEventListener("click",async(e)=>{const r=await window.bo.api("/api/review",{_action:"approve",id},{btn:e.target,successMsg:"承認しました"});if(r.ok)setTimeout(()=>location.reload(),600);});
+      tr.querySelector(".rj")?.addEventListener("click",async(e)=>{const reason=prompt("却下理由")||"";const r=await window.bo.api("/api/review",{_action:"reject",id,reason},{btn:e.target,successMsg:"却下しました"});if(r.ok)setTimeout(()=>location.reload(),600);});
+    });
+  </script>
+</App>
