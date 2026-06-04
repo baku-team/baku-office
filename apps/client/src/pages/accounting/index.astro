@@ -1,0 +1,148 @@
+---
+export const prerender = false;
+const env = Astro.locals.runtime.env;
+const acc = await import("../../lib/accounting.ts");
+await acc.ensureSeed(env);
+
+const period = await acc.currentPeriod(env);
+const wallets = await acc.listWallets(env);
+const categories = await acc.listCategories(env);
+
+const url = Astro.url;
+const selWallet = url.searchParams.get("wallet") ?? wallets[0]?.id ?? "";
+
+const is = period ? await acc.incomeStatement(env, period.id) : null;
+const book = period && selWallet ? await acc.cashbook(env, period.id, selWallet) : null;
+const ba = period ? await acc.budgetActual(env, period.id) : [];
+const yen = (n: number) => "¥" + n.toLocaleString("ja-JP");
+---
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>会計 — baku-office</title>
+    <style>
+      body{font-family:system-ui,sans-serif;max-width:960px;margin:0 auto;color:#1c2530}
+      header{background:#0f172a;color:#fff;padding:.8rem 1.25rem}
+      header a{color:#cbd5e1;text-decoration:none;margin-right:1rem;font-size:.9rem}
+      main{padding:1.25rem}
+      h2{border-bottom:2px solid #e2e8f0;padding-bottom:.3rem;margin-top:2rem}
+      form.reg{display:grid;grid-template-columns:repeat(6,1fr);gap:.5rem;align-items:end}
+      form.reg label{font-size:.78rem;color:#475569;display:block}
+      input,select{width:100%;padding:.4rem;border:1px solid #cbd5e1;border-radius:6px}
+      button{padding:.5rem .9rem;background:#2563eb;color:#fff;border:0;border-radius:6px;cursor:pointer}
+      table{border-collapse:collapse;width:100%;font-size:.88rem;margin-top:.5rem}
+      th,td{border:1px solid #e2e8f0;padding:.35rem .5rem}
+      th{background:#f8fafc}.r{text-align:right}
+      .tabs a{display:inline-block;margin-right:.5rem;font-size:.85rem}
+      .muted{color:#64748b;font-size:.85rem}
+    </style>
+  </head>
+  <body>
+    <header>
+      <a href="/">ホーム</a><a href="/accounting">会計</a><a href="/settings/keys">連携設定</a>
+      <span style="float:right">{period?.name ?? "会計期なし"}</span>
+    </header>
+    <main>
+      <h1>会計</h1>
+
+      <h2>入出金の登録</h2>
+      <form class="reg" id="reg">
+        <div><label>日付</label><input name="date" type="date" required value={new Date().toISOString().slice(0,10)} /></div>
+        <div><label>種別</label>
+          <select name="kind" id="kind">
+            <option value="income">収入</option>
+            <option value="expense">支出</option>
+            <option value="transfer">振替</option>
+          </select>
+        </div>
+        <div><label>口座</label>
+          <select name="wallet_id">{wallets.map((w)=>(<option value={w.id}>{w.name}</option>))}</select>
+        </div>
+        <div id="catBox"><label>科目</label>
+          <select name="category_id">{categories.map((c)=>(<option value={c.id} data-kind={c.kind}>{c.name}（{c.kind==="income"?"収":"支"}）</option>))}</select>
+        </div>
+        <div><label>金額</label><input name="amount" type="number" min="1" step="1" required /></div>
+        <div><button type="submit">登録</button></div>
+        <div style="grid-column:1/4"><label>摘要</label><input name="description" /></div>
+        <div id="counterBox" style="grid-column:4/6;display:none"><label>振替先口座</label>
+          <select name="counter_wallet_id">{wallets.map((w)=>(<option value={w.id}>{w.name}</option>))}</select>
+        </div>
+      </form>
+      <p class="muted" id="msg"></p>
+
+      <h2>収支計算書 <a class="muted" href="/accounting/export.csv">CSV出力</a></h2>
+      {is && (
+        <div style="display:flex;gap:2rem;flex-wrap:wrap">
+          <table style="flex:1;min-width:280px">
+            <thead><tr><th>収入科目</th><th class="r">金額</th></tr></thead>
+            <tbody>
+              {is.income.map((r)=>(<tr><td>{r.name}</td><td class="r">{yen(r.amount)}</td></tr>))}
+              <tr><th>収入合計</th><th class="r">{yen(is.totalIncome)}</th></tr>
+            </tbody>
+          </table>
+          <table style="flex:1;min-width:280px">
+            <thead><tr><th>支出科目</th><th class="r">金額</th></tr></thead>
+            <tbody>
+              {is.expense.map((r)=>(<tr><td>{r.name}</td><td class="r">{yen(r.amount)}</td></tr>))}
+              <tr><th>支出合計</th><th class="r">{yen(is.totalExpense)}</th></tr>
+            </tbody>
+          </table>
+        </div>
+      )}
+      {is && (<p><strong>当期収支：{yen(is.totalIncome - is.totalExpense)}</strong></p>)}
+
+      <h2>出納帳</h2>
+      <div class="tabs">{wallets.map((w)=>(<a href={`/accounting?wallet=${w.id}`}>{w.name}</a>))}</div>
+      {book && (
+        <table>
+          <thead><tr><th>日付</th><th>種別</th><th>科目/摘要</th><th class="r">入金</th><th class="r">出金</th><th class="r">残高</th><th></th></tr></thead>
+          <tbody>
+            {book.rows.map((t)=>{
+              const isIn = (t.kind==="income"&&t.wallet_id===selWallet)||(t.kind==="transfer"&&t.counter_wallet_id===selWallet);
+              return (
+                <tr>
+                  <td>{t.date}</td><td>{t.kind}</td><td>{t.description ?? ""}</td>
+                  <td class="r">{isIn?yen(t.amount):""}</td>
+                  <td class="r">{!isIn?yen(t.amount):""}</td>
+                  <td class="r">{yen(t.running)}</td>
+                  <td><button data-del={t.id} style="background:#ef4444;padding:.2rem .5rem">削除</button></td>
+                </tr>
+              );
+            })}
+            {book.rows.length===0 && (<tr><td colspan="7" class="muted">取引がありません。</td></tr>)}
+          </tbody>
+        </table>
+      )}
+
+      <h2>予算実績</h2>
+      <table>
+        <thead><tr><th>科目</th><th class="r">予算</th><th class="r">実績</th><th class="r">差異</th></tr></thead>
+        <tbody>
+          {ba.map((r)=>(<tr><td>{r.name}</td><td class="r">{yen(r.budget)}</td><td class="r">{yen(r.actual)}</td><td class="r">{yen(r.budget-r.actual)}</td></tr>))}
+        </tbody>
+      </table>
+
+      <script type="module">
+        const kind=document.getElementById("kind"), catBox=document.getElementById("catBox"), counterBox=document.getElementById("counterBox");
+        function sync(){ const t=kind.value; catBox.style.display=t==="transfer"?"none":""; counterBox.style.display=t==="transfer"?"":"none";
+          for(const o of document.querySelectorAll('[name=category_id] option')){ const k=o.dataset.kind; o.hidden = (t==="income"&&k!=="income")||(t==="expense"&&k!=="expense"); }
+          const vis=[...document.querySelectorAll('[name=category_id] option')].find(o=>!o.hidden); if(vis) vis.selected=true;
+        }
+        kind.addEventListener("change",sync); sync();
+        const reg=document.getElementById("reg"), msg=document.getElementById("msg");
+        reg.addEventListener("submit",async(e)=>{e.preventDefault();
+          const data=Object.fromEntries(new FormData(reg));
+          const r=await fetch("/api/tx",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(data)});
+          const j=await r.json(); msg.textContent=j.ok?"登録しました":("エラー:"+(j.error||"")); if(j.ok) location.reload();
+        });
+        document.querySelectorAll("[data-del]").forEach(b=>b.addEventListener("click",async()=>{
+          if(!confirm("この取引を削除（ゴミ箱へ）しますか？"))return;
+          await fetch("/api/tx",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({_action:"delete",id:b.dataset.del})});
+          location.reload();
+        }));
+      </script>
+    </main>
+  </body>
+</html>

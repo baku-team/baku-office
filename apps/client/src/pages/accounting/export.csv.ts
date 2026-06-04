@@ -1,0 +1,33 @@
+import type { APIRoute } from "astro";
+import { currentPeriod } from "../../lib/accounting.ts";
+
+export const prerender = false;
+
+// 取引明細のCSV出力（§8.1：出力はPDF/CSV）。Excelで開けるよう BOM 付き UTF-8。
+export const GET: APIRoute = async ({ locals }) => {
+  const env = locals.runtime.env;
+  const period = await currentPeriod(env);
+  if (!period) return new Response("会計期がありません", { status: 400 });
+  const { results } = await env.DB.prepare(
+    `SELECT t.date, w.name AS wallet, t.kind, c.name AS category, t.amount, t.description, w2.name AS counter
+     FROM transactions t
+     JOIN wallets w ON w.id=t.wallet_id
+     LEFT JOIN categories c ON c.id=t.category_id
+     LEFT JOIN wallets w2 ON w2.id=t.counter_wallet_id
+     WHERE t.fiscal_period_id=? AND t.deleted_at IS NULL ORDER BY t.date, t.created_at`,
+  ).bind(period.id).all<{ date: string; wallet: string; kind: string; category: string | null; amount: number; description: string | null; counter: string | null }>();
+
+  const esc = (v: unknown) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+  const header = ["日付", "口座", "種別", "科目", "金額", "摘要", "振替先"];
+  const lines = [header.map(esc).join(",")];
+  for (const r of results) {
+    lines.push([r.date, r.wallet, r.kind, r.category ?? "", r.amount, r.description ?? "", r.counter ?? ""].map(esc).join(","));
+  }
+  const csv = "﻿" + lines.join("\r\n");
+  return new Response(csv, {
+    headers: {
+      "content-type": "text/csv; charset=utf-8",
+      "content-disposition": `attachment; filename="transactions_${period.name}.csv"`,
+    },
+  });
+};
