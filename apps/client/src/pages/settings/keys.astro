@@ -33,6 +33,7 @@ const mark = (b: boolean) => (b ? "✓ 設定済み" : "未設定");
     <main>
       <h1>連携設定（APIキー）</h1>
       <p class="st">保存時に各サービスへテスト呼び出しで検証し、MASTER_KEY で暗号化して保存します（CFダッシュボード不要・§10.3）。空欄は変更なし。</p>
+      <p class="st">📲 <strong>LINEエージェント（Zプラン）</strong>：LINE Developers の Messaging API Webhook URL に <code>{Astro.url.origin}/api/line/webhook</code> を設定してください。</p>
       <form id="f">
         <label>Gemini APIキー <span class="st">（{mark(status.gemini)}）</span></label>
         <input name="gemini" type="password" placeholder="AIza..." autocomplete="off" />

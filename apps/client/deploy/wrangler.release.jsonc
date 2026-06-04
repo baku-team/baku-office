@@ -18,8 +18,8 @@
   ],
 
   "vars": {
-    // 当社ホストポータル（ライセンス取得・統合チェック）。配布時に確定値を入れる。
-    "HOST_BASE_URL": "https://portal.baku-office.example"
+    // 当社ホストポータル（ライセンス取得・統合チェック）。本番はカスタムドメインへ差し替え。
+    "HOST_BASE_URL": "https://baku-office-portal.fragrant-sun-78f3.workers.dev"
   }
   // 顧客が後で設定（管理画面/Secrets）：MASTER_KEY（無ければ初回生成）、VERIFY_PUBLIC_JWK（当社配布の公開検証鍵）、
   //   GOOGLE_CLIENT_ID/SECRET（組織ログイン）、LINE_LOGIN_*/DISCORD_*（個人ログイン）。
