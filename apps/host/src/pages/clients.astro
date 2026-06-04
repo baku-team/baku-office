@@ -1,6 +1,9 @@
 ---
 export const prerender = false;
 const env = Astro.locals.runtime.env;
+const { getHostSession } = await import("../lib/hostauth.ts");
+const ses = await getHostSession(env, Astro.request);
+if (!ses?.isAdmin) return Astro.redirect("/login", 302);
 type Row = {
   license_id: string;
   org_name: string;

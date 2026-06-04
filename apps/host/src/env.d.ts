@@ -11,6 +11,8 @@ interface Env {
   GOOGLE_CLIENT_ID?: string;
   GOOGLE_CLIENT_SECRET?: string;
   ADMIN_KEY?: string;
+  // スタッフ管理者のGoogleメール（カンマ区切り）。ここに含まれるアカウントのみ管理ポータルを操作可。
+  HOST_ADMIN_EMAILS?: string;
   // Stripe（§2・P5）。未設定のdevでは dev-confirm で入金をシミュレート。
   STRIPE_SECRET_KEY?: string;
   STRIPE_WEBHOOK_SECRET?: string;

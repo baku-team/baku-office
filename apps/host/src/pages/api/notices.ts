@@ -1,14 +1,17 @@
 import type { APIRoute } from "astro";
 import { randomId } from "@baku-office/shared";
 import { nowSec } from "../../lib/host.ts";
+import { getHostSession } from "../../lib/hostauth.ts";
 
 export const prerender = false;
 const json = (o: unknown, s = 200) => new Response(JSON.stringify(o), { status: s, headers: { "content-type": "application/json" } });
 
-// お知らせ・通知配信（§13.1）。ADMIN_KEY 設定時はそれで保護（本番はGoogle管理者ログイン＝今後）。
+// お知らせ・通知配信（§13.1）。管理者セッション、または ADMIN_KEY ヘッダ で保護。
 export const POST: APIRoute = async ({ request, locals }) => {
   const env = locals.runtime.env;
-  if (env.ADMIN_KEY && request.headers.get("x-admin-key") !== env.ADMIN_KEY) return json({ error: "forbidden" }, 403);
+  const ses = await getHostSession(env, request);
+  const byKey = env.ADMIN_KEY && request.headers.get("x-admin-key") === env.ADMIN_KEY;
+  if (!ses?.isAdmin && !byKey) return json({ error: "forbidden" }, 403);
   const b = (await request.json().catch(() => ({}))) as { _action?: string; id?: string; severity?: string; body?: string };
 
   if (b._action === "deactivate" && b.id) {

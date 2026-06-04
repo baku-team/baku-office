@@ -1,0 +1,24 @@
+---
+export const prerender = false;
+const env = Astro.locals.runtime.env;
+const { googleEnabled } = await import("../lib/hostauth.ts");
+const google = googleEnabled(env);
+const e = Astro.url.searchParams.get("e");
+---
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" /><title>スタッフログイン — baku-office ホスト</title>
+<style>body{font-family:system-ui,sans-serif;max-width:440px;margin:3rem auto;padding:0 1rem;color:#1c2530}
+.card{border:1px solid #e2e8f0;border-radius:12px;padding:1.25rem}a.btn,button{display:inline-block;padding:.6rem 1.2rem;background:#2563eb;color:#fff;border:0;border-radius:8px;cursor:pointer;text-decoration:none}.g{background:#fff;color:#1c2530;border:1px solid #cbd5e1}.muted{color:#64748b;font-size:.85rem}</style></head>
+<body>
+<h1>baku-office ホスト管理</h1>
+{e && <p style="color:#b91c1c">{e === "state" ? "セッション切れ。再度お試しください。" : "認証に失敗しました。"}</p>}
+<div class="card">
+  {google
+    ? <><p class="muted">スタッフのGoogleアカウントでログイン（HOST_ADMIN_EMAILS に登録された管理者のみ操作可）。</p><a class="btn g" href="/api/auth/google/start">Googleでログイン</a></>
+    : <><p class="muted">Google未設定。dev管理者ログイン：</p><button id="dev">管理者としてログイン（dev）</button></>}
+</div>
+<script type="module">
+  const d=document.getElementById("dev");
+  if(d) d.onclick=async()=>{const r=await fetch("/api/auth/dev",{method:"POST"});(await r.json()).ok?location.href="/clients":alert("失敗");};
+</script>
+</body></html>

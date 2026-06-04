@@ -1,6 +1,9 @@
 ---
 export const prerender = false;
 const env = Astro.locals.runtime.env;
+const { getHostSession } = await import("../lib/hostauth.ts");
+const ses = await getHostSession(env, Astro.request);
+if (!ses?.isAdmin) return Astro.redirect("/login", 302);
 const { results } = await env.DB.prepare("SELECT id,severity,body,active,created_at FROM notices ORDER BY created_at DESC LIMIT 100").all<{ id: string; severity: string; body: string; active: number; created_at: number }>();
 const d = (s: number) => new Date(s * 1000).toISOString().slice(0, 16).replace("T", " ");
 ---
