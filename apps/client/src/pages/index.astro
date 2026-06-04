@@ -46,6 +46,8 @@ const ses = await getSession(env, Astro.request).catch(() => null);
         {ses?.ctx === "personal" && <a href="/personal">個人</a>}
         {(ses?.role === "admin" || ses?.role === "accounting" || ses?.role === "clerical") && <a href="/review">共有承認</a>}
         {ses?.role === "admin" && ses?.ctx === "org" && <a href="/settings/members">人・ロール管理</a>}
+        {ses?.role === "admin" && ses?.ctx === "org" && <a href="/billing">プラン・課金</a>}
+        <a href="/files">ファイル</a>
         <a href="/settings/keys">連携設定</a>
       </nav>
       <span style="margin-left:auto" class="badge">{planLabel}</span>

@@ -40,6 +40,19 @@ export async function pollHost(env: Env, deployUrl?: string): Promise<CheckRespo
   }
 }
 
+// 保存済みトークンから licenseId を取り出す（課金導線で host へ渡す）。
+export async function getLicenseId(env: Env): Promise<string | null> {
+  const token = await getToken(env);
+  if (!token) return null;
+  try {
+    const env2 = JSON.parse(atob(token)) as { body: string };
+    const payload = JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(env2.body), (c) => c.charCodeAt(0)))) as { licenseId: string };
+    return payload.licenseId;
+  } catch {
+    return null;
+  }
+}
+
 // 直近に保存したエンタイトルメント（オフライン時のフォールバック表示用）。
 export async function cachedEntitlement(env: Env): Promise<Entitlement> {
   return ((await env.LICENSE.get(KV_ENTITLEMENT)) as Entitlement) ?? "free";
