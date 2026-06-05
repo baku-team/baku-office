@@ -16,8 +16,8 @@ interface Env {
   // Stripe（§2・P5）。未設定のdevでは dev-confirm で入金をシミュレート。
   STRIPE_SECRET_KEY?: string;
   STRIPE_WEBHOOK_SECRET?: string;
-  STRIPE_PRICE_Y?: string;
-  STRIPE_PRICE_Z?: string;
+  STRIPE_PRICE_PLUS?: string;
+  STRIPE_PRICE_PRO?: string;
 }
 
 type Runtime = import("@astrojs/cloudflare").Runtime<Env>;

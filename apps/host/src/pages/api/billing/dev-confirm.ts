@@ -12,7 +12,7 @@ export const GET: APIRoute = async ({ url, locals }) => {
   const licenseId = url.searchParams.get("license_id");
   const plan = url.searchParams.get("plan") as Plan | null;
   const ret = url.searchParams.get("return");
-  if (!licenseId || !plan || !["Y", "Z"].includes(plan)) return new Response("license_id と plan(Y/Z) が必要", { status: 400 });
+  if (!licenseId || !plan || !["plus", "pro"].includes(plan)) return new Response("license_id と plan(plus/pro) が必要", { status: 400 });
   await activateEntitlement(env, licenseId, plan);
   if (ret) return Response.redirect(ret, 302);
   return new Response(`✅ [dev] ${plan} に昇格しました（入金確認シミュレート）。クライアントに戻ってください。`);

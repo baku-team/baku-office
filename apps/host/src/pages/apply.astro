@@ -5,13 +5,13 @@ const clientBase = "https://baku-office-app.fragrant-sun-78f3.workers.dev";
 ---
 <Host title="申込" active="/apply" auth={false}>
   <h1 style="margin-top:1rem">団体の申込</h1>
-  <p class="muted">団体情報とプランを入力（Phase1：Google認証は省略）。Xは即時にライセンス発行（無料）。</p>
+  <p class="muted">団体情報とプランを入力（Phase1：Google認証は省略）。Freeは即時にライセンス発行（無料）。</p>
   <div class="card">
     <div class="field"><label>団体名</label><input id="orgName" required /></div>
     <div class="field"><label>代表者名</label><input id="contactName" /></div>
     <div class="field"><label>連絡先メール</label><input id="contactEmail" type="email" /></div>
     <div class="field"><label>プラン</label>
-      <select id="plan"><option value="X">X（完全無料）</option><option value="Y">Y（AI・Gemini）</option><option value="Z">Z（エージェント・LINE/Claude）</option></select>
+      <select id="plan"><option value="free">Free（完全無料）</option><option value="plus">Plus（AI・Gemini）</option><option value="pro">Pro（エージェント・LINE/Claude）</option></select>
     </div>
     <button class="btn btn-primary" id="submit">申し込む</button>
   </div>

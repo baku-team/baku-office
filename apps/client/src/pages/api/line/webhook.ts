@@ -12,7 +12,7 @@ export const prerender = false;
 
 type LineEvent = { type: string; replyToken?: string; source?: { userId?: string }; message?: { type: string; text?: string; id?: string; fileName?: string } };
 
-// Zプランのエージェント受け口。text/image/file/audio を処理。各AI機能は対応キー設定時のみ実行。
+// Proプランのエージェント受け口。text/image/file/audio を処理。各AI機能は対応キー設定時のみ実行。
 export const POST: APIRoute = async ({ request, locals }) => {
   const env = locals.runtime.env;
   const origin = new URL(request.url).origin;
@@ -29,8 +29,8 @@ export const POST: APIRoute = async ({ request, locals }) => {
     if (ev.type !== "message" || !ev.replyToken) continue;
     const userId = ev.source?.userId ?? "anon";
     const reply = ev.replyToken;
-    if (entitlement !== "Z") {
-      locals.runtime.ctx.waitUntil(lineReply(accessToken, reply, "エージェント機能は Z プランで有効になります（管理画面のプラン・課金から）。"));
+    if (entitlement !== "pro") {
+      locals.runtime.ctx.waitUntil(lineReply(accessToken, reply, "エージェント機能は Pro プランで有効になります（管理画面のプラン・課金から）。"));
       continue;
     }
     const m = ev.message!;

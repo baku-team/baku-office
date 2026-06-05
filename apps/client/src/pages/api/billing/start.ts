@@ -11,7 +11,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
   const ses = await getSession(env, request);
   if (!ses || ses.role !== "admin" || ses.ctx !== "org") return json({ error: "管理者のみ" }, 403);
   const b = (await request.json().catch(() => ({}))) as { plan?: string };
-  if (!["Y", "Z"].includes(b.plan ?? "")) return json({ error: "plan(Y/Z)が必要" }, 400);
+  if (!["plus", "pro"].includes(b.plan ?? "")) return json({ error: "plan(plus/pro)が必要" }, 400);
   const licenseId = await getLicenseId(env);
   if (!licenseId) return json({ error: "ライセンス未取得" }, 400);
 

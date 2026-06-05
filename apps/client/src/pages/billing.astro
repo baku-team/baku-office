@@ -1,6 +1,7 @@
 ---
 export const prerender = false;
 import App from "../layouts/App.astro";
+import { planLabel } from "@baku-office/shared";
 const env = Astro.locals.runtime.env;
 const { getSession } = await import("../lib/auth.ts");
 const ses = await getSession(env, Astro.request);
@@ -12,19 +13,18 @@ const licenseId = await getLicenseId(env);
 const hostBase = env.HOST_BASE_URL.replace(/\/$/, "");
 let stripe = false;
 try { stripe = ((await (await hostFetch(env, "/api/billing/status")).json()) as { stripe?: boolean }).stripe ?? false; } catch { /* offline */ }
-const label = (e: string) => (e === "Z" ? "Z（エージェント）" : e === "Y" ? "Y（AI）" : "X（無料）");
 ---
 <App title="プラン・課金" active="/billing">
   <h1>プラン・課金</h1>
   {!stripe && (<div class="banner banner-warn">🧪 <strong>デモモード</strong>：Stripe未接続のため、下の「支払った（デモ）」で入金を擬似確認しエンタイトルメントを昇格します（本番はStripe決済）。</div>)}
-  <div class="card">現在のプラン：<span class="pill">{label(entitlement)}</span>
-    <p class="muted">入金が確認・継続している間のみ有料機能が有効（§2.3）。無料(X)は常に利用可。データはロック・削除しません。</p>
+  <div class="card">現在のプラン：<span class="pill">{planLabel(entitlement)}</span>
+    <p class="muted">入金が確認・継続している間のみ有料機能が有効（§2.3）。無料(Free)は常に利用可。データはロック・削除しません。</p>
   </div>
   <div class="card" style="margin-top:1rem">
     <h2 style="margin-top:0;border:0">アップグレード</h2>
     <p class="muted">{stripe ? "カードは即時、銀行振込・コンビニは入金確認後に反映（§2.4）。" : "デモ：ボタンで即時に昇格します。"}</p>
-    <button class={`btn ${stripe?"btn-primary":"btn-warn"} up`} data-plan="Y" disabled={entitlement==="Y"||entitlement==="Z"}>{stripe ? "Y（AI）にする" : "【デモ】Y に支払った"}</button>
-    <button class={`btn ${stripe?"btn-primary":"btn-warn"} up`} data-plan="Z" disabled={entitlement==="Z"}>{stripe ? "Z（エージェント）にする" : "【デモ】Z に支払った"}</button>
+    <button class={`btn ${stripe?"btn-primary":"btn-warn"} up`} data-plan="plus" disabled={entitlement==="plus"||entitlement==="pro"}>{stripe ? "Plus（AI）にする" : "【デモ】Plus に支払った"}</button>
+    <button class={`btn ${stripe?"btn-primary":"btn-warn"} up`} data-plan="pro" disabled={entitlement==="pro"}>{stripe ? "Pro（エージェント）にする" : "【デモ】Pro に支払った"}</button>
   </div>
   <script slot="scripts" is:inline define:vars={{ licenseId, hostBase, stripe }}>
     document.querySelectorAll(".up").forEach(b=>b.addEventListener("click",async(e)=>{

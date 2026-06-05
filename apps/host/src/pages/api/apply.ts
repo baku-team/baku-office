@@ -4,7 +4,7 @@ import { initialEntitlement, type Plan } from "@baku-office/shared";
 
 export const prerender = false;
 
-// 申込（§5ホスト側）：団体情報＋プラン → customers/licenses 作成。X は即 free、Y/Z は入金前 free 相当（§2.3）。
+// 申込（§5ホスト側）：団体情報＋プラン → customers/licenses 作成。free は即時、plus/pro は入金前 free 相当（§2.3）。
 // Phase1：Google認証は dev（googleSub 任意）。本番は /api/auth/google でログイン後に呼ぶ。
 export const POST: APIRoute = async ({ request, locals }) => {
   const env = locals.runtime.env;
@@ -15,8 +15,8 @@ export const POST: APIRoute = async ({ request, locals }) => {
     plan?: Plan;
     googleSub?: string;
   };
-  if (!b.orgName || !b.plan || !["X", "Y", "Z"].includes(b.plan)) {
-    return json({ error: "orgName と plan(X/Y/Z) が必要" }, 400);
+  if (!b.orgName || !b.plan || !["free", "plus", "pro"].includes(b.plan)) {
+    return json({ error: "orgName と plan(free/plus/pro) が必要" }, 400);
   }
   const now = nowSec();
   const customerId = randomId();

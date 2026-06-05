@@ -12,8 +12,8 @@ CREATE TABLE IF NOT EXISTS customers (
 CREATE TABLE IF NOT EXISTS licenses (
   license_id TEXT PRIMARY KEY,
   customer_id TEXT NOT NULL,
-  plan TEXT NOT NULL,              -- X / Y / Z（申込時の選択）
-  entitlement TEXT NOT NULL,       -- free / Y / Z（入金確認で昇格＝§2.3）
+  plan TEXT NOT NULL,              -- free / plus / pro（申込時の選択）
+  entitlement TEXT NOT NULL,       -- free / plus / pro（入金確認で昇格＝§2.3）
   status TEXT NOT NULL DEFAULT 'active', -- active / suspended
   google_sub TEXT,                 -- 申込時Googleアカウントのsub（アクティベーション突合）
   deploy_url TEXT,                 -- クライアントのデプロイ先URL

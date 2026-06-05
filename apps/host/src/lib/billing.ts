@@ -9,7 +9,7 @@ export function stripeEnabled(env: Env): boolean {
 
 // Stripe Checkout セッション作成（REST直叩き・SDK不要）。
 export async function createCheckout(env: Env, licenseId: string, plan: Plan, successUrl: string, cancelUrl: string): Promise<string | null> {
-  const price = plan === "Z" ? env.STRIPE_PRICE_Z : env.STRIPE_PRICE_Y;
+  const price = plan === "pro" ? env.STRIPE_PRICE_PRO : env.STRIPE_PRICE_PLUS;
   if (!env.STRIPE_SECRET_KEY || !price) return null;
   const body = new URLSearchParams({
     mode: "subscription",
@@ -35,9 +35,9 @@ export async function createCheckout(env: Env, licenseId: string, plan: Plan, su
   return ((await r.json()) as { url?: string }).url ?? null;
 }
 
-// エンタイトルメント昇格（入金確認時）。plan を実体化（X→Y→Z）。
+// エンタイトルメント昇格（入金確認時）。plan を実体化（free→plus→pro）。
 export async function activateEntitlement(env: Env, licenseId: string, plan: Plan): Promise<void> {
-  const ent: Entitlement = plan === "X" ? "free" : plan;
+  const ent: Entitlement = plan === "free" ? "free" : plan;
   await env.DB.prepare("UPDATE licenses SET plan=?, entitlement=?, last_seen=? WHERE license_id=?")
     .bind(plan, ent, nowSec(), licenseId)
     .run();

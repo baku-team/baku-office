@@ -17,7 +17,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
   if (evt.type === "checkout.session.completed" || evt.type === "invoice.paid") {
     const o = evt.data.object;
     const licenseId = o.client_reference_id ?? o.metadata?.license_id;
-    const plan = (o.metadata?.plan as Plan) ?? "Y";
+    const plan = (o.metadata?.plan as Plan) ?? "plus";
     if (licenseId) await activateEntitlement(env, licenseId, plan);
   }
   return new Response("ok");

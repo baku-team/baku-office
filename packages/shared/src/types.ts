@@ -1,10 +1,10 @@
 // 共有型（設計書 v1.0 準拠）。
 
-// エンタイトルメント状態（§2・§4）。free=X相当 / Y=AI / Z=エージェント。
-export type Entitlement = "free" | "Y" | "Z";
+// エンタイトルメント状態（§2・§4）。free=無料 / plus=AI / pro=エージェント。
+export type Entitlement = "free" | "plus" | "pro";
 
 // プラン（申込時の選択。入金前は free 相当で稼働＝プロビジョナル§2.3）。
-export type Plan = "X" | "Y" | "Z";
+export type Plan = "free" | "plus" | "pro";
 
 // 署名ライセンストークンのペイロード（当社発行・初回アクティベートで取得）。
 export type LicensePayload = {
@@ -34,7 +34,20 @@ export type Notice = {
 // 組織ロール（§6.4）。
 export type Role = "admin" | "accounting" | "clerical" | "other" | "member";
 
-// プラン→初期エンタイトルメント（入金前/Xは free。Y/Zは入金確認で昇格＝§2.3）。
-export function initialEntitlement(plan: Plan): Entitlement {
-  return plan === "X" ? "free" : "free"; // Y/Zも入金前は free 相当（プロビジョナル）
+// プラン→初期エンタイトルメント（free は即時。plus/pro も入金確認まで free 相当＝§2.3）。
+export function initialEntitlement(_plan: Plan): Entitlement {
+  return "free"; // plus/pro も入金前は free 相当（プロビジョナル）
+}
+
+// エンタイトルメントの序列（free < plus < pro）。
+export const ENTITLEMENT_RANK: Record<Entitlement, number> = { free: 0, plus: 1, pro: 2 };
+
+// min 以上のエンタイトルメントか（例：atLeast(e,"plus") で AI 系を判定）。
+export function atLeast(e: Entitlement, min: Entitlement): boolean {
+  return ENTITLEMENT_RANK[e] >= ENTITLEMENT_RANK[min];
+}
+
+// ユーザー向けプラン表示名。
+export function planLabel(p: Plan | Entitlement): string {
+  return p === "pro" ? "Pro（エージェント）" : p === "plus" ? "Plus（AI）" : "Free（無料）";
 }

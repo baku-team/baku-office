@@ -1,11 +1,11 @@
 ---
 export const prerender = false;
 import App from "../layouts/App.astro";
+import { planLabel } from "@baku-office/shared";
 const env = Astro.locals.runtime.env;
 const { pollHost, cachedEntitlement } = await import("../lib/client.ts");
 const check = await pollHost(env, Astro.url.origin);
 const entitlement = check?.entitlement ?? (await cachedEntitlement(env));
-const planLabel = entitlement === "Z" ? "Z（エージェント）" : entitlement === "Y" ? "Y（AI）" : "X（無料）相当";
 let balance = 0;
 try { balance = (await env.DB.prepare("SELECT COALESCE(SUM(opening_balance),0) AS b FROM wallets").first<{ b: number }>())?.b ?? 0; } catch { /* 未マイグレ */ }
 const notices = check?.notices ?? [];
@@ -13,7 +13,7 @@ const yen = (n: number) => "¥" + n.toLocaleString("ja-JP");
 ---
 <App title="ホーム" active="/">
   <h1>ホーム</h1>
-  <p class="muted">プラン：<span class="pill">{planLabel}</span> ／ {check ? "ホスト疎通OK" : "オフライン（キャッシュ表示）"}</p>
+  <p class="muted">プラン：<span class="pill">{planLabel(entitlement)}</span> ／ {check ? "ホスト疎通OK" : "オフライン（キャッシュ表示）"}</p>
 
   {notices.map((n) => (<div class={`banner ${n.severity === "critical" ? "banner-danger" : n.severity === "important" ? "banner-warn" : "banner-info"}`} data-sev={n.severity} data-id={n.id}>{n.body}</div>))}
 
@@ -21,7 +21,7 @@ const yen = (n: number) => "¥" + n.toLocaleString("ja-JP");
     <div class="card"><div class="label">口座残高（期首合計）</div><div class="num">{yen(balance)}</div></div>
     <div class="card"><div class="label">当月収支</div><div class="num">¥0</div><div class="muted">会計で登録</div></div>
     <div class="card"><div class="label">未処理伝票</div><div class="num">0</div></div>
-    <div class="card"><div class="label">プラン / ライセンス</div><div class="num" style="font-size:1.1rem">{planLabel}</div></div>
+    <div class="card"><div class="label">プラン / ライセンス</div><div class="num" style="font-size:1.1rem">{planLabel(entitlement)}</div></div>
   </div>
 
   <h2>できること</h2>

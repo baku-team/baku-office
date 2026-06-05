@@ -10,7 +10,7 @@ const json = (o: unknown, s = 200) => new Response(JSON.stringify(o), { status: 
 export const POST: APIRoute = async ({ request, locals }) => {
   const env = locals.runtime.env;
   const b = (await request.json().catch(() => ({}))) as { licenseId?: string; plan?: Plan; returnUrl?: string };
-  if (!b.licenseId || !["Y", "Z"].includes(b.plan ?? "")) return json({ error: "licenseId と plan(Y/Z) が必要" }, 400);
+  if (!b.licenseId || !["plus", "pro"].includes(b.plan ?? "")) return json({ error: "licenseId と plan(plus/pro) が必要" }, 400);
 
   const lic = await env.DB.prepare("SELECT license_id FROM licenses WHERE license_id=? AND status='active'").bind(b.licenseId).first();
   if (!lic) return json({ error: "ライセンス無効" }, 400);
