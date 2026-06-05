@@ -21,8 +21,18 @@ if (code) {
 ---
 <App title="アクティベーション" auth={false}>
   <h1 style="margin-top:1rem">baku-office をアクティベート</h1>
-  {message
-    ? <div class="banner banner-danger">{message}</div>
-    : <p>この団体のアプリはまだライセンスを取得していません。当社から案内された<strong>アクティベーションURL（?license_id=…付き）</strong>を開いてください。</p>}
-  <p class="muted">（Phase1：Googleログインは省略。本番は申込時のGoogleアカウントで認証＝§4）</p>
+  {message && <div class="banner banner-danger">{message}</div>}
+  <div class="card">
+    <p>当社から発行された <strong>ライセンスID</strong> を貼り付けてアクティベートしてください（申込完了画面に表示されています）。</p>
+    <div class="field"><input id="lid" placeholder="ライセンスID" /></div>
+    <button class="btn btn-primary" id="go">アクティベート</button>
+  </div>
+  <p class="muted">アクティベート後、Google でログインすると利用開始です。</p>
+  <script slot="scripts" is:inline>
+    document.getElementById("go")?.addEventListener("click", () => {
+      const v = document.getElementById("lid").value.trim();
+      if (!v) { (window.bo?.toast ? window.bo.toast("ライセンスIDを入力してください", "err") : alert("ライセンスIDを入力してください")); return; }
+      location.href = "/activate?license_id=" + encodeURIComponent(v);
+    });
+  </script>
 </App>
