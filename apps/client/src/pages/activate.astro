@@ -23,11 +23,11 @@ if (code) {
   <h1 style="margin-top:1rem">baku-office をアクティベート</h1>
   {message && <div class="banner banner-danger">{message}</div>}
   <div class="card">
-    <p>当社から発行された <strong>ライセンスID</strong> を貼り付けてアクティベートしてください（申込完了画面に表示されています）。</p>
-    <div class="field"><input id="lid" placeholder="ライセンスID" /></div>
-    <button class="btn btn-primary" id="go">アクティベート</button>
+    <p><strong>2ステップで完了します。</strong></p>
+    <div class="field"><label>① ライセンスIDを貼り付け<span class="muted">（申込完了画面に表示されています）</span></label><input id="lid" placeholder="ライセンスID をここに貼り付け" /></div>
+    <button class="btn btn-primary" id="go" style="width:100%;padding:.8rem;font-size:1.05rem;margin-top:.3rem">② アクティベートする</button>
   </div>
-  <p class="muted">アクティベート後、Google でログインすると利用開始です。</p>
+  <p class="muted">アクティベート後、続けて「Google でログイン」すると利用開始です。</p>
   <script slot="scripts" is:inline>
     document.getElementById("go")?.addEventListener("click", () => {
       const v = document.getElementById("lid").value.trim();
