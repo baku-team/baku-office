@@ -92,6 +92,12 @@ export async function validateApiKey(name: string, value: string): Promise<{ ok:
       });
       return r.ok ? { ok: true } : { ok: false, detail: `Claude ${r.status}` };
     }
+    if (name === "notion") {
+      const r = await fetch("https://api.notion.com/v1/users/me", {
+        headers: { authorization: `Bearer ${value}`, "Notion-Version": "2022-06-28" },
+      });
+      return r.ok ? { ok: true } : { ok: false, detail: `Notion ${r.status}` };
+    }
     // line_secret / line_token は単体検証が難しいため形式チェックのみ。
     return value.length > 0 ? { ok: true } : { ok: false, detail: "空" };
   } catch (e) {

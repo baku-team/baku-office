@@ -1,0 +1,83 @@
+---
+export const prerender = false;
+import App from "../layouts/App.astro";
+import { atLeast } from "@baku-office/shared";
+const env = Astro.locals.runtime.env;
+const { getSession } = await import("../lib/auth.ts");
+const ses = await getSession(env, Astro.request);
+if (!ses) return Astro.redirect("/login", 302);
+const isAdmin = ses.role === "admin" && ses.ctx === "org";
+const { cachedEntitlement } = await import("../lib/client.ts");
+const hasPlus = atLeast(await cachedEntitlement(env), "plus");
+const { listImported } = await import("../lib/import.ts");
+const { fmtBytes } = await import("../lib/storage-usage.ts");
+const r2Enabled = !!env.MEDIA_R2;
+const imported = hasPlus ? await listImported(env) : [];
+const fmt = (s: number) => new Date(s * 1000).toISOString().slice(0, 10);
+---
+<App title="資料インポート" active="/import">
+  <h1>資料インポート（Notion / Googleドライブ）</h1>
+  {!hasPlus && (
+    <div class="card">
+      <div class="banner banner-warn">この機能は <strong>Plus 以上</strong>のプランで利用できます。</div>
+      <p class="muted">Notion や Googleドライブの資料を取り込みます（既定はメタ情報のみ）。</p>
+      <a class="btn btn-primary" href="/billing">プラン・課金へ</a>
+    </div>
+  )}
+  {hasPlus && (
+    <Fragment>
+      <p class="muted">既定は<strong>メタ情報のみ</strong>を取り込みます。実ファイル（バイナリ）の取り込みは <strong>R2 有効時のみ</strong>のオプションです。実行前に容量と費用を試算します。</p>
+      {!isAdmin && (<div class="banner banner-warn">インポートの実行は管理者のみ可能です。</div>)}
+
+      <div class="card">
+        <div class="row">
+          <label style="flex:1">取り込み元
+            <select id="src"><option value="drive">Googleドライブ（同期済みメタ）</option><option value="notion">Notion</option></select>
+          </label>
+          <label style="flex:1;display:flex;align-items:center;gap:6px;margin-top:1.4rem">
+            <input type="checkbox" id="withFiles" disabled={!r2Enabled} /> 実ファイルもR2へ取り込む{!r2Enabled && "（R2無効）"}
+          </label>
+        </div>
+        <div class="row" style="margin-top:.5rem">
+          <button class="btn" id="sim">容量・費用を試算</button>
+          {isAdmin && (<button class="btn btn-primary" id="run" disabled>この内容で取り込む</button>)}
+        </div>
+        <div id="simout" class="banner banner-info" hidden style="margin-top:.6rem;white-space:pre-wrap"></div>
+      </div>
+
+      <h2>取り込み済み</h2>
+      <div class="table-wrap"><table>
+        <thead><tr><th>タイトル</th><th>元</th><th>種類</th><th>サイズ</th><th>実体</th><th>取込日</th></tr></thead>
+        <tbody>
+          {imported.map((it) => (<tr><td>{it.title}</td><td>{it.source}</td><td class="muted" style="font-size:.8rem">{it.mime ?? "—"}</td><td>{it.size ? fmtBytes(it.size) : "—"}</td><td>{it.file_id ? "R2保存" : "メタのみ"}</td><td class="muted">{fmt(it.imported_at)}</td></tr>))}
+          {imported.length === 0 && (<tr><td colspan="6" class="muted">まだ取り込みがありません。</td></tr>)}
+        </tbody>
+      </table></div>
+
+      <script slot="scripts" is:inline>
+        const out = document.getElementById("simout");
+        const runBtn = document.getElementById("run");
+        const body = () => ({ source: document.getElementById("src").value, withFiles: document.getElementById("withFiles").checked });
+        const yen = (n) => "¥" + (n || 0).toLocaleString("ja-JP");
+        const mb = (n) => (n / 1048576).toFixed(1) + "MB";
+        document.getElementById("sim").addEventListener("click", async (e) => {
+          const r = await window.bo.api("/api/import", { _action: "simulate", ...body() }, { btn: e.currentTarget, successMsg: null });
+          if (!r.ok) return;
+          const d = r.data;
+          out.hidden = false;
+          out.textContent =
+            "対象：" + d.count + " 件\n" +
+            "メタ増加（D1）：約 " + mb(d.metaBytes) + (d.d1Over ? "  ⚠️上限超過の恐れ" : "") + "\n" +
+            "実ファイル（R2）：" + (d.withFiles && d.r2Enabled ? "約 " + mb(d.binaryBytes) + " / 概算 " + yen(d.r2CostYen) + "/月" + (d.r2Over ? "  ⚠️上限超過の恐れ" : "") : "取り込まない（メタのみ）") + "\n\n" +
+            "対策：\n- " + (d.advice || []).join("\n- ");
+          if (runBtn) runBtn.disabled = false;
+        });
+        if (runBtn) runBtn.addEventListener("click", async (e) => {
+          if (!confirm("この内容で取り込みますか？")) return;
+          const r = await window.bo.api("/api/import", { _action: "run", ...body() }, { btn: e.currentTarget, successMsg: null });
+          if (r.ok) { window.bo.toast(r.data.imported + " 件取り込みました（R2:" + r.data.files + "）"); setTimeout(() => location.reload(), 1000); }
+        });
+      </script>
+    </Fragment>
+  )}
+</App>

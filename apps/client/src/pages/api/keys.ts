@@ -3,7 +3,7 @@ import { saveApiKey, hasApiKey, validateApiKey } from "../../lib/client.ts";
 
 export const prerender = false;
 
-const FIELDS = ["gemini", "line_secret", "line_token", "claude"] as const;
+const FIELDS = ["gemini", "line_secret", "line_token", "claude", "notion"] as const;
 type Field = (typeof FIELDS)[number];
 
 // GET：各キーの設定状態（マスク。値は返さない）。
