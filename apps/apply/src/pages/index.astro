@@ -108,7 +108,7 @@ const deployUrl = "https://deploy.workers.cloudflare.com/?url=https://github.com
           '<ol class="steps">' +
           '<li><strong>下のボタンでデプロイ</strong><br><span class="muted">Cloudflare と GitHub にログインすると、あなたの Cloudflare にアプリが作られます（鍵などの設定は不要）。</span><br><br>' +
           '<a href="' + deployUrl + '" target="_blank" rel="noreferrer"><img src="https://deploy.workers.cloudflare.com/button" alt="Deploy to Cloudflare" height="36"></a></li>' +
-          '<li><strong>アプリを開く</strong><br><span class="muted">デプロイ完了後、Cloudflare の「<strong>Workers &amp; Pages</strong>」一覧で <code>baku-office</code> をクリックして開きます（または完了画面の「Visit」）。</span></li>' +
+          '<li><strong>アプリを開く</strong><br><span class="muted">デプロイが完了すると <strong>「Visit（プロジェクトにアクセス）」ボタン</strong>が表示されます。これを押すとあなたのアプリが開きます。<br>見つからない場合は <a href="https://dash.cloudflare.com/?to=/:account/workers-and-pages" target="_blank" rel="noreferrer">Cloudflare ダッシュボード</a> →「Workers &amp; Pages」→ <code>baku-office</code> をクリック。</span></li>' +
           '<li><strong>Google でログイン</strong><br><span class="muted">アプリが開いたら「<strong>Google でログイン</strong>」を押し、<strong>申込時に入力したメール（' + (body.contactEmail || "申込メール") + '）の Google アカウント</strong>でログインしてください。自動でアクティベートされて利用開始です。<strong>ライセンスIDの入力は不要</strong>です。</span></li>' +
           '</ol>' +
           '<p class="muted">URL・サブドメイン・ライセンスIDを調べたり入力したりする必要はありません。Cloudflare の画面から <code>baku-office</code> を開いて Google ログインするだけです。</p>' +
