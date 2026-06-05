@@ -14,7 +14,7 @@ const mark = (b: boolean) => (b ? "✓ 設定済み" : "未設定");
 <App title="連携設定" active="/settings/keys">
   <h1>連携設定（APIキー）</h1>
   <p class="muted">保存時に各サービスへテスト呼び出しで検証し、暗号化して保存します（CFダッシュボード不要・§10.3）。空欄は変更なし。</p>
-  <div class="banner banner-info">📲 LINEエージェント（Zプラン）：LINE Developers の Messaging API Webhook URL に <code>{Astro.url.origin}/api/line/webhook</code> を設定してください。</div>
+  <div class="banner banner-info">📲 LINEエージェント（Proプラン）：LINE Developers の Messaging API Webhook URL に <code>{Astro.url.origin}/api/line/webhook</code> を設定してください。</div>
 
   <div class="card">
     <div class="field"><label>Gemini APIキー <span class="muted">（{mark(status.gemini)}）</span></label><input name="gemini" type="password" placeholder="AIza..." autocomplete="off" /></div>

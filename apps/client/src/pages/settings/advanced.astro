@@ -1,20 +1,33 @@
 ---
 export const prerender = false;
 import App from "../../layouts/App.astro";
+import { atLeast } from "@baku-office/shared";
 const env = Astro.locals.runtime.env;
 const { getSession } = await import("../../lib/auth.ts");
 const ses = await getSession(env, Astro.request);
 if (!ses || ses.role !== "admin" || ses.ctx !== "org") return Astro.redirect("/login", 302);
+const entitlement = await (await import("../../lib/client.ts")).cachedEntitlement(env);
+const hasPlus = atLeast(entitlement, "plus");
 const { listSkills } = await import("../../lib/skills.ts");
 const { listCapabilities, CAPABILITY_LABEL } = await import("../../lib/capabilities.ts");
 const { storageMode, maxUploadMb } = await import("../../lib/storage.ts");
-const skills = await listSkills(env);
-const caps = await listCapabilities(env);
+// Plus 未満では高度なオプションを読み込まない（表示もしない）。
+const skills = hasPlus ? await listSkills(env) : [];
+const caps = hasPlus ? await listCapabilities(env) : [];
 const mode = storageMode(env);
-const curMax = await maxUploadMb(env);
+const curMax = hasPlus ? await maxUploadMb(env) : 5;
 ---
 <App title="高度なオプション" active="/settings/advanced">
   <h1>高度なオプション</h1>
+  {!hasPlus && (
+    <div class="card">
+      <div class="banner banner-warn">この機能は <strong>Plus 以上</strong>のプランで利用できます。</div>
+      <p class="muted">任意API（画像・音声・動画生成）／Agent Skills／ストレージ上限／Workers Paid 案内などの高度な設定は、Plus 以上で開放されます。</p>
+      <a class="btn btn-primary" href="/billing">プラン・課金へ</a>
+    </div>
+  )}
+  {hasPlus && (
+  <div class="adv">
   <div class="banner banner-warn">⚠️ ここでは<strong>従量課金につながる機能</strong>を扱います。利用には対応APIキーの登録と各サービスの課金が必要です。</div>
 
   <h2>ストレージ上限（標準モード・KV）</h2>
@@ -38,7 +51,7 @@ const curMax = await maxUploadMb(env);
   </tbody></table></div>
 
   <h2>Agent Skills（コード実行・従量課金）</h2>
-  <p class="muted">SKILL.md を登録して独自業務スキルを追加（Worker内でevalしません）。mode=instruction（通常費）／code（Anthropic code execution＝従量課金）。管理者がレビューして有効化。LINEから「〇〇スキルで…」で実行（要 Z＋Claude）。</p>
+  <p class="muted">SKILL.md を登録して独自業務スキルを追加（Worker内でevalしません）。mode=instruction（通常費）／code（Anthropic code execution＝従量課金）。管理者がレビューして有効化。LINEから「〇〇スキルで…」で実行（要 Pro＋Claude）。</p>
   <details><summary>スキルを追加</summary>
     <div class="field"><input id="sname" placeholder="スキル名（呼び出し名）" /></div>
     <div class="row"><input id="sdesc" placeholder="説明（任意）" /><select id="smode" style="flex:0 0 200px"><option value="instruction">instruction（通常費）</option><option value="code">code（従量課金）</option></select></div>
@@ -52,7 +65,10 @@ const curMax = await maxUploadMb(env);
 
   <h2>Workers Paid（CF有料プラン）への切替案内</h2>
   <div class="banner banner-info">無料枠では CPU時間・実行時間(waitUntil)・サブリクエスト数 等に上限があり、大きなファイル処理や生成でエラーになることがあります（<a href="/diagnostics">診断</a>）。安定運用には Cloudflareダッシュボードで <strong>Workers &amp; Pages → Plans → Workers Paid（月$5〜）</strong> に切り替えてください。データ・デプロイはそのまま、上限が大幅緩和されます。</div>
+  </div>
+  )}
 
+  {hasPlus && (
   <script slot="scripts" is:inline>
     const cap=(b,btn)=>window.bo.api("/api/capabilities",b,{btn});
     const sk=(b,btn)=>window.bo.api("/api/skills",b,{btn});
@@ -68,4 +84,5 @@ const curMax = await maxUploadMb(env);
       tr.querySelector(".sdis")?.addEventListener("click",async(e)=>{const r=await sk({_action:"enable",id,enabled:false},e.target);if(r.ok)setTimeout(()=>location.reload(),500);});
       tr.querySelector(".sdel")?.addEventListener("click",async(e)=>{if(confirm("削除しますか？")){const r=await sk({_action:"delete",id},e.target);if(r.ok)setTimeout(()=>location.reload(),500);}});});
   </script>
+  )}
 </App>

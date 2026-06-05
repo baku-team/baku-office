@@ -1,5 +1,6 @@
 ---
 import "../styles/app.css";
+import { atLeast, type Entitlement } from "@baku-office/shared";
 const env = Astro.locals.runtime.env;
 interface Props { title: string; active?: string; auth?: boolean }
 const { title, active = "", auth = true } = Astro.props as Props;
@@ -8,10 +9,13 @@ const { getSession } = await import("../lib/auth.ts");
 const ses = await getSession(env, Astro.request).catch(() => null);
 let limitErr = false;
 try { limitErr = await (await import("../lib/diag.ts")).hasRecentLimitError(env); } catch { /* noop */ }
+let entitlement: Entitlement = "free";
+try { entitlement = await (await import("../lib/client.ts")).cachedEntitlement(env); } catch { /* noop */ }
 
 // ロールに応じたナビ（DRY）。
 type Item = { href: string; label: string; show: boolean };
 const isAdminOrg = ses?.role === "admin" && ses?.ctx === "org";
+const hasPlus = atLeast(entitlement, "plus"); // AI系・高度なオプションのゲート
 const canReview = ses?.role === "admin" || ses?.role === "accounting" || ses?.role === "clerical";
 const items: Item[] = [
   { href: "/", label: "ホーム", show: true },
@@ -25,7 +29,7 @@ const items: Item[] = [
   { href: "/billing", label: "プラン・課金", show: isAdminOrg },
   { href: "/settings/keys", label: "連携設定", show: true },
   { href: "/diagnostics", label: "診断", show: true },
-  { href: "/settings/advanced", label: "高度なオプション", show: isAdminOrg },
+  { href: "/settings/advanced", label: "高度なオプション", show: isAdminOrg && hasPlus },
 ];
 ---
 <!doctype html>

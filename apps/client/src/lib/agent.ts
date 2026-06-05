@@ -1,4 +1,4 @@
-// Zプランの会計・庶務エージェント（設計書§2/付録B）。
+// Proプランの会計・庶務エージェント（設計書§2/付録B）。
 // Gemini function-calling のツールループで、新データモデル（personal_items/knowledge/reminders/users）を操作。
 // APIキーは連携設定の暗号KVから復号して使用。
 import { getApiKey } from "./client.ts";
