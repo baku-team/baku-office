@@ -5,20 +5,60 @@ const env = Astro.locals.runtime.env;
 const { getHostSession } = await import("../lib/hostauth.ts");
 const ses = await getHostSession(env, Astro.request);
 if (!ses?.isAdmin) return Astro.redirect("/login", 302);
-type Row = { license_id: string; org_name: string; plan: string; entitlement: string; status: string; version: string | null; last_seen: number | null };
+type Row = {
+  license_id: string; org_name: string; contact_name: string | null; contact_email: string | null;
+  plan: string; entitlement: string; status: string; version: string | null; deploy_url: string | null;
+  created_at: number; last_seen: number | null;
+};
 const { results } = await env.DB.prepare(
-  `SELECT l.license_id, c.org_name, l.plan, l.entitlement, l.status, l.version, l.last_seen
+  `SELECT l.license_id, c.org_name, c.contact_name, c.contact_email,
+          l.plan, l.entitlement, l.status, l.version, l.deploy_url, l.created_at, l.last_seen
    FROM licenses l JOIN customers c ON c.id = l.customer_id ORDER BY l.created_at DESC LIMIT 200`,
 ).all<Row>();
 const fmt = (s: number | null) => (s ? new Date(s * 1000).toISOString().slice(0, 16).replace("T", " ") : "—");
+const PLANS = ["free", "plus", "pro"];
+const opt = (cur: string, v: string) => ({ value: v, selected: cur === v });
 ---
 <Host title="クライアント管理" active="/clients">
   <h1>クライアント管理</h1>
+  <p class="muted">団体の詳細を確認し、プラン／エンタイトルメント／ステータスを手動変更できます。エンタイトルメントは次回の統合チェックで反映、停止してもデータは保持されます。</p>
   <div class="table-wrap"><table>
-    <thead><tr><th>団体</th><th>プラン</th><th>エンタイトルメント</th><th>状態</th><th>稼働ver</th><th>最終受信</th><th>ライセンスID</th></tr></thead>
+    <thead><tr><th>団体 / 連絡先</th><th>プラン</th><th>エンタイトルメント</th><th>状態</th><th>稼働ver</th><th>登録日</th><th>最終受信</th><th>操作</th></tr></thead>
     <tbody>
-      {results.map((r) => (<tr><td>{r.org_name}</td><td>{r.plan}</td><td><span class="pill">{r.entitlement}</span></td><td>{r.status}</td><td>{r.version ?? "—"}</td><td>{fmt(r.last_seen)}</td><td><code style="font-size:.8rem">{r.license_id}</code></td></tr>))}
-      {results.length === 0 && (<tr><td colspan="7" class="muted">まだ申込がありません。</td></tr>)}
+      {results.map((r) => (
+        <tr data-lic={r.license_id}>
+          <td>
+            <strong>{r.org_name}</strong>
+            <div class="muted" style="font-size:.8rem">代表：{r.contact_name ?? "—"} ／ {r.contact_email ?? "—"}</div>
+            <div class="muted" style="font-size:.75rem">ID：<code>{r.license_id}</code></div>
+            <div class="muted" style="font-size:.75rem">{r.deploy_url ? <a href={r.deploy_url} target="_blank" rel="noreferrer">デプロイ先を開く</a> : "未デプロイ"}</div>
+          </td>
+          <td><select class="c-plan">{PLANS.map((v) => (<option {...opt(r.plan, v)}>{v}</option>))}</select></td>
+          <td><select class="c-ent">{PLANS.map((v) => (<option {...opt(r.entitlement, v)}>{v}</option>))}</select></td>
+          <td><select class="c-status"><option {...opt(r.status, "active")}>active</option><option {...opt(r.status, "suspended")}>suspended</option></select></td>
+          <td>{r.version ?? "—"}</td>
+          <td>{fmt(r.created_at)}</td>
+          <td>{fmt(r.last_seen)}</td>
+          <td><button class="btn btn-sm btn-primary c-save">保存</button></td>
+        </tr>
+      ))}
+      {results.length === 0 && (<tr><td colspan="8" class="muted">まだ申込がありません。</td></tr>)}
     </tbody>
   </table></div>
+
+  <script slot="scripts" is:inline>
+    document.querySelectorAll("tr[data-lic]").forEach((tr) => {
+      const btn = tr.querySelector(".c-save");
+      if (!btn) return;
+      btn.addEventListener("click", async (e) => {
+        const body = {
+          license_id: tr.dataset.lic,
+          plan: tr.querySelector(".c-plan").value,
+          entitlement: tr.querySelector(".c-ent").value,
+          status: tr.querySelector(".c-status").value,
+        };
+        await window.bo.api("/api/clients", body, { btn: e.currentTarget, successMsg: "更新しました" });
+      });
+    });
+  </script>
 </Host>
