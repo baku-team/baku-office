@@ -6,6 +6,8 @@ interface Env {
   PORTAL: KVNamespace;
   ASSETS: Fetcher;
   LATEST_VERSION: string;
+  // 申込専用Worker（baku-office-apply）のURL。ポータルから案内リンクを出す。
+  APPLY_URL?: string;
   // secrets（wrangler secret put）
   SIGNING_JWK?: string; // ライセンス署名（Ed25519秘密鍵JWK）
   GOOGLE_CLIENT_ID?: string;

@@ -1,0 +1,91 @@
+---
+export const prerender = false;
+const env = Astro.locals.runtime.env;
+const clientBase = env.CLIENT_BASE_URL;
+---
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>団体の申込 — baku-office</title>
+    <style>
+      * { box-sizing: border-box; }
+      body { font-family: system-ui, "Hiragino Sans", "Noto Sans JP", Meiryo, sans-serif; margin: 0; background: #f4f6f9; color: #1f2933; line-height: 1.6; }
+      .wrap { max-width: 640px; margin: 0 auto; padding: 28px 16px 64px; }
+      h1 { color: #14365c; margin: .2rem 0 .6rem; }
+      .brand { color: #14365c; font-weight: 800; letter-spacing: .02em; }
+      .card { background: #fff; border: 1px solid #dde3ea; border-radius: 10px; padding: 16px; margin: 14px 0; }
+      .field { margin: 10px 0; display: flex; flex-direction: column; gap: 4px; }
+      .field label { font-size: .85rem; color: #5b6770; }
+      .field input, .field select { padding: 9px; border: 1px solid #dde3ea; border-radius: 6px; font: inherit; background: #fff; }
+      .btn { background: #14365c; color: #fff; border: 0; border-radius: 8px; padding: 11px 20px; font-weight: 700; cursor: pointer; }
+      .btn[disabled] { opacity: .6; }
+      .muted { color: #6b7785; }
+      #out { white-space: pre-wrap; word-break: break-all; }
+      #toasts { position: fixed; left: 0; right: 0; bottom: 16px; display: flex; flex-direction: column; align-items: center; gap: 8px; pointer-events: none; }
+      .toast { background: #1f2933; color: #fff; padding: 9px 16px; border-radius: 8px; font-size: .9rem; opacity: 0; transform: translateY(8px); transition: .2s; }
+      .toast.show { opacity: 1; transform: none; }
+      .toast.err { background: #c0392b; } .toast.ok { background: #1f7a4d; } .toast.info { background: #14365c; }
+      .spin { display: inline-block; width: 12px; height: 12px; border: 2px solid #fff; border-top-color: transparent; border-radius: 50%; animation: s .6s linear infinite; vertical-align: -1px; margin-right: 6px; }
+      @keyframes s { to { transform: rotate(360deg); } }
+    </style>
+  </head>
+  <body>
+    <main class="wrap">
+      <div class="brand">baku-office</div>
+      <h1>団体の申込</h1>
+      <p class="muted">団体情報とプランを入力してください（Phase1：Google認証は省略）。<strong>Free は即時にライセンス発行（無料）</strong>。Plus／Pro は申込後の入金確認で有効化されます。</p>
+      <div class="card">
+        <div class="field"><label>団体名</label><input id="orgName" required /></div>
+        <div class="field"><label>代表者名</label><input id="contactName" /></div>
+        <div class="field"><label>連絡先メール</label><input id="contactEmail" type="email" /></div>
+        <div class="field"><label>プラン</label>
+          <select id="plan">
+            <option value="free">Free（完全無料）</option>
+            <option value="plus">Plus（AI・Gemini）</option>
+            <option value="pro">Pro（エージェント・LINE/Claude）</option>
+          </select>
+        </div>
+        <button class="btn" id="submit">申し込む</button>
+      </div>
+      <div class="card" id="out" hidden></div>
+    </main>
+    <div id="toasts" aria-live="polite"></div>
+
+    <script is:inline define:vars={{ clientBase }}>
+      const wrap = document.getElementById("toasts");
+      function toast(msg, kind = "ok") {
+        const el = document.createElement("div");
+        el.className = "toast " + (kind === "err" ? "err" : kind === "info" ? "info" : "ok");
+        el.textContent = msg; wrap.appendChild(el);
+        requestAnimationFrame(() => el.classList.add("show"));
+        setTimeout(() => { el.classList.remove("show"); setTimeout(() => el.remove(), 250); }, kind === "err" ? 5000 : 2800);
+      }
+      function busy(btn, on) { if (!btn) return; if (on) { btn.disabled = true; btn.dataset.label = btn.innerHTML; btn.innerHTML = '<span class="spin"></span>処理中…'; } else { btn.disabled = false; if (btn.dataset.label) btn.innerHTML = btn.dataset.label; } }
+      async function api(url, body, opts = {}) {
+        const btn = opts.btn; busy(btn, true);
+        try {
+          const r = await fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+          let j = {}; try { j = await r.json(); } catch {}
+          if (!r.ok || j.error) { toast("エラー：" + (j.error || r.status), "err"); return { ok: false, data: j }; }
+          if (opts.successMsg !== null) toast(opts.successMsg || "完了しました", "ok");
+          return { ok: true, data: j };
+        } catch (e) { toast("通信に失敗しました", "err"); return { ok: false }; } finally { busy(btn, false); }
+      }
+      window.bo = { toast, busy, api };
+
+      document.getElementById("submit").addEventListener("click", async (e) => {
+        const body = { orgName: orgName.value, contactName: contactName.value, contactEmail: contactEmail.value, plan: plan.value };
+        if (!body.orgName) { toast("団体名を入力してください", "err"); return; }
+        const r = await window.bo.api("/api/apply", body, { btn: e.currentTarget, successMsg: null });
+        if (!r.ok) return;
+        const j = r.data; window.bo.toast("ライセンスを発行しました");
+        const activate = clientBase + "/activate?license_id=" + encodeURIComponent(j.licenseId);
+        const out = document.getElementById("out"); out.hidden = false;
+        out.innerHTML = "✅ 発行しました\nライセンスID: " + j.licenseId + "\nプラン: " + j.plan + " / エンタイトルメント: " + j.entitlement +
+          '\n\nクライアントの初期アクティベーションURL（団体へ案内）:\n<a href="' + activate + '">' + activate + "</a>";
+      });
+    </script>
+  </body>
+</html>

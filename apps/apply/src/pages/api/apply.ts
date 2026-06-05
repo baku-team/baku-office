@@ -1,11 +1,11 @@
 import type { APIRoute } from "astro";
-import { nowSec, randomId } from "../../lib/host.ts";
-import { initialEntitlement, type Plan } from "@baku-office/shared";
+import { initialEntitlement, randomId, type Plan } from "@baku-office/shared";
 
 export const prerender = false;
+const nowSec = (): number => Math.floor(Date.now() / 1000);
 
-// 申込（§5ホスト側）：団体情報＋プラン → customers/licenses 作成。free は即時、plus/pro は入金前 free 相当（§2.3）。
-// Phase1：Google認証は dev（googleSub 任意）。本番は /api/auth/google でログイン後に呼ぶ。
+// 申込（申込専用Worker）：団体情報＋プラン → customers/licenses 作成。free は即時、plus/pro は入金前 free 相当（§2.3）。
+// ホストポータルと同じ D1 を共有。本番は Google ログイン後に呼ぶ（Phase1 は googleSub 任意）。
 export const POST: APIRoute = async ({ request, locals }) => {
   const env = locals.runtime.env;
   const b = (await request.json().catch(() => ({}))) as {

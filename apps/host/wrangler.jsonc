@@ -21,7 +21,9 @@
 
   "vars": {
     // 配布の最新バージョン（クライアントの統合チェックに返す）。
-    "LATEST_VERSION": "0.1.0"
+    "LATEST_VERSION": "0.1.0",
+    // 申込専用Worker（baku-office-apply）のURL。デプロイ後に実URLへ。
+    "APPLY_URL": "https://baku-office-apply.workers.dev"
   }
   // secret（wrangler secret put）：SIGNING_JWK（ライセンス署名）/ GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET / ADMIN_KEY
   //   （Stripe は Phase 5：STRIPE_SECRET_KEY / STRIPE_WEBHOOK_SECRET）

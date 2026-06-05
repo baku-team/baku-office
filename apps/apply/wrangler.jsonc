@@ -1,0 +1,24 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  // 申込専用Worker（当社アカウント）。ホストポータルから分離し、申込受付のみを担う。
+  "name": "baku-office-apply",
+  "main": "./dist/_worker.js/index.js",
+  "compatibility_date": "2025-04-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": { "binding": "ASSETS", "directory": "./dist" },
+  "observability": { "enabled": true },
+
+  // ホストと同じ D1 を共有（同一アカウント）。customers/licenses を作成する。
+  "d1_databases": [
+    { "binding": "DB", "database_name": "baku-office-portal-db", "database_id": "88e7ae93-ca09-49c6-a774-ffcbbe6898fc" }
+  ],
+  // Astro adapter が既定で要求するセッション用（未使用・ホストと同じ名前空間を流用）。
+  "kv_namespaces": [
+    { "binding": "SESSION", "id": "4fbe1be0e6da4f4d8cb38733e4e16039" }
+  ],
+
+  "vars": {
+    // アクティベーション案内に使うクライアントアプリのベースURL。
+    "CLIENT_BASE_URL": "https://baku-office-app.fragrant-sun-78f3.workers.dev"
+  }
+}

@@ -9,6 +9,7 @@
   "scripts": {
     "build:host": "npm -w apps/host run build",
     "build:client": "npm -w apps/client run build",
-    "typecheck": "npm -w packages/shared run typecheck && npm -w apps/host run typecheck && npm -w apps/client run typecheck"
+    "build:apply": "npm -w apps/apply run build",
+    "typecheck": "npm -w packages/shared run typecheck && npm -w apps/host run typecheck && npm -w apps/client run typecheck && npm -w apps/apply run typecheck"
   }
 }
