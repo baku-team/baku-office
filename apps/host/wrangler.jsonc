@@ -2,6 +2,8 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   // ホストポータル（当社アカウント）。業務データ・会員PIIは保持しない（設計書§7.3）。
   "name": "baku-office-portal",
+  // 本番ホストは baku-llc.co.jp の CF アカウント。
+  "account_id": "027ff037909969dea1fc303b4f4fe7fe",
   "main": "./dist/_worker.js/index.js",
   "compatibility_date": "2025-04-01",
   "compatibility_flags": ["nodejs_compat"],
@@ -10,20 +12,20 @@
 
   // B2B顧客・ライセンス・アクティベーション記録・通知（PIIなし／B2Bは暗号化規律）。
   "d1_databases": [
-    { "binding": "DB", "database_name": "baku-office-portal-db", "database_id": "88e7ae93-ca09-49c6-a774-ffcbbe6898fc" }
+    { "binding": "DB", "database_name": "baku-office-portal-db", "database_id": "df8d9397-9f9d-4a98-b826-38f3207cfd10" }
   ],
   // セッション・アクティベーションコード（短命）・配布バージョン等。
   "kv_namespaces": [
-    { "binding": "PORTAL", "id": "4fbe1be0e6da4f4d8cb38733e4e16039" },
+    { "binding": "PORTAL", "id": "d70cc408b72e4ce6a319cd474596f1c7" },
     // Astro adapter のセッション用（未使用だが既定で要求されるため PORTAL と同じ名前空間を流用）。
-    { "binding": "SESSION", "id": "4fbe1be0e6da4f4d8cb38733e4e16039" }
+    { "binding": "SESSION", "id": "d70cc408b72e4ce6a319cd474596f1c7" }
   ],
 
   "vars": {
     // 配布の最新バージョン（クライアントの統合チェックに返す）。
     "LATEST_VERSION": "0.1.0",
     // 申込専用Worker（baku-office-apply）のURL。
-    "APPLY_URL": "https://baku-office-apply.fragrant-sun-78f3.workers.dev"
+    "APPLY_URL": "https://baku-office-apply.baku-027.workers.dev"
   }
   // secret（wrangler secret put）：SIGNING_JWK（ライセンス署名）/ GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET / ADMIN_KEY
   //   （Stripe は Phase 5：STRIPE_SECRET_KEY / STRIPE_WEBHOOK_SECRET）

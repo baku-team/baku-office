@@ -1,6 +1,7 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   // クライアントアプリ（顧客の単一Worker）。Astro静的アセット＋API同居（設計書§3.4）。
+  // top-level＝開発/動作確認（amber-links.jp）。env.production＝本番自社用（baku-llc.co.jp）。
   "name": "baku-office-app",
   "main": "./dist/_worker.js/index.js",
   "compatibility_date": "2025-04-01",
@@ -8,28 +9,40 @@
   "assets": { "binding": "ASSETS", "directory": "./dist" },
   "observability": { "enabled": true },
 
-  // 業務データ（会計・名簿・ファイル・人）。設計書§8の全スキーマ。
+  // 開発（amber-links）。本番ホスト(baku-llc)は別アカウントのため HOST_BASE_URL へ URL fetch（Service Binding不可）。
   "d1_databases": [
     { "binding": "DB", "database_name": "baku-office-app-db", "database_id": "cb0a2a2d-d087-4051-8623-155166dfca57" }
   ],
-  // ライセンストークン・セッション・暗号化APIキー・notices。
   "kv_namespaces": [
     { "binding": "LICENSE", "id": "bd3d1d9642514b30ad5d79bdd4baf9ff" },
-    // ファイル本体（標準モード＝R2なし。カード不要）。
     { "binding": "MEDIA", "id": "e4a71bef0d99446a97df9d771a7d9768" },
-    // Astro adapter のセッション用（未使用だが既定で要求されるため LICENSE と同じ名前空間を流用）。
     { "binding": "SESSION", "id": "bd3d1d9642514b30ad5d79bdd4baf9ff" }
   ],
-
   "vars": {
-    // 当社ホストポータルのURL（ライセンス取得・統合チェックの相手）。本番(別アカウント)はカスタムドメイン。
-    "HOST_BASE_URL": "https://baku-office-portal.fragrant-sun-78f3.workers.dev"
+    "HOST_BASE_URL": "https://baku-office-portal.baku-027.workers.dev"
   },
-  // 同一アカウントのdev/検証用：host への Service Binding（workers.dev直fetchの1042回避）。
-  // 本番(顧客の別アカウント)ではこのバインディングは存在せず、HOST_BASE_URL(カスタムドメイン)へURL fetch。
-  "services": [
-    { "binding": "HOST", "service": "baku-office-portal" }
-  ]
-  // secret（wrangler secret put）：MASTER_KEY / VERIFY_PUBLIC_JWK / GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET
+
+  // 本番（baku-llc・自社利用）。host と同一アカウント＝Service Binding（HOST）が使える。
+  "env": {
+    "production": {
+      "name": "baku-office-app",
+      "account_id": "027ff037909969dea1fc303b4f4fe7fe",
+      "d1_databases": [
+        { "binding": "DB", "database_name": "baku-office-app-db", "database_id": "08b5cc15-b5d3-4e60-ac0a-2d9650608a06" }
+      ],
+      "kv_namespaces": [
+        { "binding": "LICENSE", "id": "ad1e0e280aef41fcaa4280158b141037" },
+        { "binding": "MEDIA", "id": "133aed1a4230406f9fae9759c7d77bd8" },
+        { "binding": "SESSION", "id": "ad1e0e280aef41fcaa4280158b141037" }
+      ],
+      "vars": {
+        "HOST_BASE_URL": "https://baku-office-portal.baku-027.workers.dev"
+      },
+      "services": [
+        { "binding": "HOST", "service": "baku-office-portal" }
+      ]
+    }
+  }
+  // secret（wrangler secret put／本番は --env production）：MASTER_KEY / VERIFY_PUBLIC_JWK / GOOGLE_*(任意) / INTERNAL_KEY
   // R2（高度モード・任意）：[[r2_buckets]] binding=MEDIA_R2（カード必要・§11）
 }
