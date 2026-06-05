@@ -9,7 +9,7 @@ const line = providerEnabled(env, "line");
 const discord = providerEnabled(env, "discord");
 const e = Astro.url.searchParams.get("e");
 const activated = Astro.url.searchParams.get("activated");
-const emsg: Record<string, string> = { state: "セッションが切れました。再度お試しください。", oauth: "認証に失敗しました。", notorg: "この組織のGoogleアカウントではありません。", pending: "登録は管理者の承認待ちです。" };
+const emsg: Record<string, string> = { state: "セッションが切れました。再度お試しください。", oauth: "認証に失敗しました。", notorg: "この組織のGoogleアカウントではありません。", pending: "登録は管理者の承認待ちです。", noapply: "このGoogleアカウント（メール）に対応する申込が見つかりません。申込時のメールのGoogleアカウントでログインしてください。" };
 ---
 <App title="ログイン" auth={false}>
   <h1 style="margin-top:1rem">ログイン</h1>

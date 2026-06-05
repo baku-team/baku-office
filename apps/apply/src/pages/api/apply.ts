@@ -15,8 +15,8 @@ export const POST: APIRoute = async ({ request, locals }) => {
     plan?: Plan;
     googleSub?: string;
   };
-  if (!b.orgName || !b.plan || !["free", "plus", "pro"].includes(b.plan)) {
-    return json({ error: "orgName と plan(free/plus/pro) が必要" }, 400);
+  if (!b.orgName || !b.contactEmail || !b.plan || !["free", "plus", "pro"].includes(b.plan)) {
+    return json({ error: "orgName・contactEmail・plan(free/plus/pro) が必要" }, 400);
   }
   const now = nowSec();
   const customerId = randomId();

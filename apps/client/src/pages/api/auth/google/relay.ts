@@ -1,6 +1,6 @@
 import type { APIRoute } from "astro";
 import { makeSessionCookie, sessionExp } from "../../../../lib/auth.ts";
-import { getVerifyJwk } from "../../../../lib/client.ts";
+import { getVerifyJwk, getToken, saveToken, hostFetch } from "../../../../lib/client.ts";
 import { importVerifyKey, verifyEnvelope, payloadOf } from "@baku-office/shared";
 
 export const prerender = false;
@@ -24,6 +24,16 @@ export const GET: APIRoute = async ({ url, request, locals }) => {
   if (!(await verifyEnvelope(pub, envlp))) return redir("/login?e=oauth");
   const p = payloadOf(envlp) as { sub?: string; email?: string; name?: string; exp?: number };
   if (!p.sub || !p.exp || p.exp < Math.floor(Date.now() / 1000)) return redir("/login?e=state");
+
+  // 未アクティベートなら、Googleのメールと申込メールを突合してライセンスを取得（§4・アプリを開いてログインするだけ）。
+  if (!(await getToken(env)) && p.email) {
+    try {
+      const r = await hostFetch(env, "/api/activate-by-email", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email: p.email, deployUrl: url.origin }) });
+      const j = (await r.json().catch(() => ({}))) as { ok?: boolean; token?: string };
+      if (j.ok && j.token) await saveToken(env, j.token);
+      else return redir("/login?e=noapply");
+    } catch { return redir("/login?e=oauth"); }
+  }
 
   // 組織コンテキスト：初回ログインで組織Googleアカウントを束縛、以後は一致必須（§6.2）。
   const stored = await env.LICENSE.get("org_google_sub");

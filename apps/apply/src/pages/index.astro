@@ -59,7 +59,7 @@ const deployUrl = "https://deploy.workers.cloudflare.com/?url=https://github.com
         <h2>② 団体情報とプランを入力</h2>
         <div class="field"><label>団体名</label><input id="orgName" required /></div>
         <div class="field"><label>代表者名</label><input id="contactName" /></div>
-        <div class="field"><label>連絡先メール</label><input id="contactEmail" type="email" /></div>
+        <div class="field"><label>連絡先メール（<strong>ログインに使う Google アカウントのメール</strong>）</label><input id="contactEmail" type="email" required placeholder="例：team@your-domain.com（Googleアカウント）" /></div>
         <div class="field"><label>プラン</label>
           <select id="plan">
             <option value="free">Free（完全無料）</option>
@@ -88,6 +88,7 @@ const deployUrl = "https://deploy.workers.cloudflare.com/?url=https://github.com
       document.getElementById("submit").addEventListener("click", async (e) => {
         const body = { orgName: orgName.value, contactName: contactName.value, contactEmail: contactEmail.value, plan: plan.value };
         if (!body.orgName) { toast("団体名を入力してください", "err"); return; }
+        if (!body.contactEmail) { toast("連絡先メール（ログインに使う Google アカウント）を入力してください", "err"); return; }
         const btn = e.currentTarget; busy(btn, true);
         let j = {};
         try {
@@ -107,17 +108,12 @@ const deployUrl = "https://deploy.workers.cloudflare.com/?url=https://github.com
           '<ol class="steps">' +
           '<li><strong>下のボタンでデプロイ</strong><br><span class="muted">Cloudflare と GitHub にログインすると、あなたの Cloudflare にアプリが作られます（鍵などの設定は不要）。</span><br><br>' +
           '<a href="' + deployUrl + '" target="_blank" rel="noreferrer"><img src="https://deploy.workers.cloudflare.com/button" alt="Deploy to Cloudflare" height="36"></a></li>' +
-          '<li><strong>ライセンスIDをコピー</strong><br><span class="muted">次のアクティベートで使います。コピーしておいてください。</span>' +
-          '<div style="display:flex;gap:6px;margin-top:6px;align-items:center"><code id="lidbox" style="flex:1;min-width:0;overflow:auto">' + j.licenseId + '</code><button class="btn" id="copyid" style="flex:0 0 auto">コピー</button></div></li>' +
-          '<li><strong>アプリを開いてアクティベート</strong><br><span class="muted">デプロイ完了後、Cloudflare の「<strong>Workers &amp; Pages</strong>」一覧で <code>baku-office</code> を開きます（一覧の名前をクリック → 表示される URL を開く）。最初に開くと<strong>アクティベート画面</strong>が出るので、上のライセンスIDを貼り付けて「② アクティベートする」を押してください。</span></li>' +
-          '<li><strong>Google でログイン</strong><br><span class="muted">アクティベート後、団体の Google アカウントでログインすれば利用開始です。</span></li>' +
+          '<li><strong>アプリを開く</strong><br><span class="muted">デプロイ完了後、Cloudflare の「<strong>Workers &amp; Pages</strong>」一覧で <code>baku-office</code> をクリックして開きます（または完了画面の「Visit」）。</span></li>' +
+          '<li><strong>Google でログイン</strong><br><span class="muted">アプリが開いたら「<strong>Google でログイン</strong>」を押し、<strong>申込時に入力したメール（' + (body.contactEmail || "申込メール") + '）の Google アカウント</strong>でログインしてください。自動でアクティベートされて利用開始です。<strong>ライセンスIDの入力は不要</strong>です。</span></li>' +
           '</ol>' +
-          '<p class="muted">URL やサブドメインを調べる必要はありません。Cloudflare の画面から <code>baku-office</code> を開けば、アプリ側でアクティベート画面が出ます。</p>';
+          '<p class="muted">URL・サブドメイン・ライセンスIDを調べたり入力したりする必要はありません。Cloudflare の画面から <code>baku-office</code> を開いて Google ログインするだけです。</p>' +
+          '<p class="muted" style="font-size:.85em">（手動が必要な場合のライセンスID：<code>' + j.licenseId + '</code>）</p>';
         out.scrollIntoView({ behavior: "smooth" });
-        document.getElementById("copyid").addEventListener("click", async () => {
-          try { await navigator.clipboard.writeText(j.licenseId); toast("ライセンスIDをコピーしました"); }
-          catch { toast("コピーできませんでした。手動で選択してください", "err"); }
-        });
       });
     </script>
   </body>
