@@ -107,11 +107,21 @@ const deployUrl = "https://deploy.workers.cloudflare.com/?url=https://github.com
           '<ol class="steps">' +
           '<li><strong>下のボタンでデプロイ</strong><br><span class="muted">Cloudflare と GitHub にログインすると、あなたの Cloudflare にアプリが作られます（鍵などの設定は不要）。</span><br><br>' +
           '<a href="' + deployUrl + '" target="_blank" rel="noreferrer"><img src="https://deploy.workers.cloudflare.com/button" alt="Deploy to Cloudflare" height="36"></a></li>' +
-          '<li><strong>アクティベート</strong><br><span class="muted">デプロイ完了後に表示される「あなたのアプリのURL」を開き、その末尾に次を付けてアクセスします：</span><br><code>/activate?license_id=' + j.licenseId + '</code></li>' +
+          '<li><strong>アクティベート</strong><br><span class="muted">デプロイ完了後に表示された「あなたのアプリのURL」を下に貼ってください。アクティベート用リンクを自動で作成します。</span>' +
+          '<div style="display:flex;gap:6px;margin-top:6px"><input id="appurl" placeholder="https://baku-office.xxxx.workers.dev" style="flex:1;min-width:0;padding:8px;border:1px solid #dde3ea;border-radius:6px;font:inherit" /><button class="btn" id="genlink" style="flex:0 0 auto">リンク作成</button></div>' +
+          '<div id="actlink" style="margin-top:8px"></div></li>' +
           '<li><strong>Google でログイン</strong><br><span class="muted">団体の Google アカウントでログインすれば利用開始です。</span></li>' +
           '</ol>' +
           '<p class="muted">このライセンスIDは控えておいてください（アクティベートに使います）。</p>';
         out.scrollIntoView({ behavior: "smooth" });
+        document.getElementById("genlink").addEventListener("click", () => {
+          let u = document.getElementById("appurl").value.trim();
+          if (!u) { toast("アプリのURLを貼ってください", "err"); return; }
+          if (!/^https?:\/\//.test(u)) u = "https://" + u;
+          u = u.replace(/\/+$/, "");
+          const link = u + "/activate?license_id=" + encodeURIComponent(j.licenseId);
+          document.getElementById("actlink").innerHTML = '<a href="' + link + '" target="_blank" rel="noreferrer" style="font-weight:700;color:#1f7a4d">▶ アクティベートを開く</a>';
+        });
       });
     </script>
   </body>
