@@ -1,0 +1,40 @@
+name: Publish client distribution bundle
+
+# クライアント配布バンドル（難読化済み）を公開リポ baku-team/baku-office-app へ自動公開。
+# クライアントはこの公開リポを Deploy ボタン/フォーク同期で取得（§3）。ホスト/ソースは含めない。
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps/client/**"
+      - "packages/shared/**"
+      - ".github/workflows/publish-client.yml"
+  workflow_dispatch: {}
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install deps
+        run: npm ci
+      - name: Build release bundle (minified, no TS source / no host)
+        run: npm -w apps/client run release
+      - name: Push bundle to public distribution repo
+        env:
+          # 公開配布リポ(baku-team/baku-office-app)への書き込み権限を持つ PAT を
+          # private リポの Settings → Secrets → Actions に PUBLISH_TOKEN として登録すること。
+          PUBLISH_TOKEN: ${{ secrets.PUBLISH_TOKEN }}
+        run: |
+          set -e
+          cd apps/client/release
+          git init -q
+          git checkout -q -B main
+          git config user.name "baku-office-ci"
+          git config user.email "ci@baku-office"
+          git add -A
+          git commit -q -m "release: ${GITHUB_SHA::7} (auto-published from baku-office@main)"
+          git push -f "https://x-access-token:${PUBLISH_TOKEN}@github.com/baku-team/baku-office-app.git" main

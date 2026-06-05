@@ -4,7 +4,7 @@ import { nowSec } from "./accounting.ts";
 
 // KV値の物理上限は25MiB。既定は安全側5MB、高度なオプションで1〜25MBに変更可（§11）。
 const KV_HARD_MAX_MB = 25;
-const KV_DEFAULT_MB = 5;
+const KV_DEFAULT_MB = 25; // KV値の物理上限と同じ25MBを既定に（高度なオプションで1〜25に調整可）
 
 export function storageMode(env: Env): "r2" | "kv" {
   return env.MEDIA_R2 ? "r2" : "kv";

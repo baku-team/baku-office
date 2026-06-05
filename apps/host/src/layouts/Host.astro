@@ -1,0 +1,62 @@
+---
+import "../styles/app.css";
+const env = Astro.locals.runtime.env;
+interface Props { title: string; active?: string; auth?: boolean }
+const { title, active = "", auth = true } = Astro.props as Props;
+const { getHostSession } = await import("../lib/hostauth.ts");
+const ses = await getHostSession(env, Astro.request).catch(() => null);
+const items = [
+  { href: "/", label: "ポータル" },
+  { href: "/clients", label: "クライアント管理" },
+  { href: "/notices", label: "お知らせ配信" },
+  { href: "/apply", label: "申込" },
+];
+---
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>{title} — baku-office ホスト</title>
+  </head>
+  <body>
+    {auth && (
+      <header class="appbar">
+        <div class="appbar-inner">
+          <a class="brand" href="/">baku-office <span style="opacity:.6;font-weight:400;font-size:.8rem">ホスト</span></a>
+          <nav class="nav">
+            {items.map((i) => (<a href={i.href} aria-current={active === i.href ? "page" : undefined}>{i.label}</a>))}
+          </nav>
+          <span class="user">{ses?.isAdmin ? <>{ses.email}・<a href="#" id="bo-logout">ログアウト</a></> : <a href="/login">スタッフログイン</a>}</span>
+        </div>
+      </header>
+    )}
+    <main class="wrap"><slot /></main>
+    <div id="toasts" aria-live="polite"></div>
+    <script>
+      const wrap = document.getElementById("toasts");
+      function toast(msg, kind = "ok") {
+        const el = document.createElement("div");
+        el.className = "toast " + (kind === "err" ? "err" : kind === "info" ? "info" : "ok");
+        el.textContent = msg; wrap?.appendChild(el);
+        requestAnimationFrame(() => el.classList.add("show"));
+        setTimeout(() => { el.classList.remove("show"); setTimeout(() => el.remove(), 250); }, kind === "err" ? 5000 : 2800);
+      }
+      function busy(btn, on) { if (!btn) return; if (on) { btn.disabled = true; btn.dataset.label = btn.innerHTML; btn.innerHTML = '<span class="spin"></span>処理中…'; } else { btn.disabled = false; if (btn.dataset.label) btn.innerHTML = btn.dataset.label; } }
+      async function api(url, body, opts = {}) {
+        const btn = opts.btn; busy(btn, true);
+        try {
+          const r = await fetch(url, { method: opts.method || "POST", headers: { "content-type": "application/json" }, body: body !== undefined ? JSON.stringify(body) : undefined });
+          let j = {}; try { j = await r.json(); } catch {}
+          if (!r.ok || j.error) { toast(opts.errMsg || ("エラー：" + (j.error || r.status)), "err"); return { ok: false, data: j }; }
+          if (opts.successMsg !== null) toast(opts.successMsg || "完了しました", "ok");
+          return { ok: true, data: j };
+        } catch (e) { toast("通信に失敗しました", "err"); return { ok: false }; } finally { busy(btn, false); }
+      }
+      window.bo = { toast, busy, api };
+      const lo = document.getElementById("bo-logout");
+      if (lo) lo.addEventListener("click", async (e) => { e.preventDefault(); await fetch("/api/auth/dev", { method: "DELETE" }); location.href = "/login"; });
+    </script>
+    <slot name="scripts" />
+  </body>
+</html>
