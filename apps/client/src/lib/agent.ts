@@ -4,7 +4,7 @@
 import { getApiKey } from "./client.ts";
 import * as T from "./agent-tools.ts";
 import { webSearch, makeDocument } from "./media-ai.ts";
-import { listSkills, runSkill } from "./skills.ts";
+import { listSkills, runSkill, generateSkill } from "./skills.ts";
 import { listCapabilities, invokeCapability, capabilitySummary, videoStatusText } from "./capabilities.ts";
 import { getAiEngine, getCustomPrompt } from "./settings.ts";
 import { recordUsage, overBudget } from "./usage.ts";
@@ -26,6 +26,7 @@ const TOOLS = [
   { name: "save_knowledge", description: "組織ナレッジを保存", parameters: { type: "object", properties: { title: { type: "string" }, body: { type: "string" } }, required: ["title", "body"] } },
   { name: "search_knowledge", description: "組織ナレッジを検索", parameters: { type: "object", properties: { query: { type: "string" } }, required: ["query"] } },
   { name: "search_members", description: "メンバー（名簿）を検索", parameters: { type: "object", properties: { query: { type: "string" } }, required: ["query"] } },
+  { name: "install_skill", description: "ユーザーの要望から新しい業務スキルを設計して登録（無効状態で保存。管理者が高度なオプションで有効化）", parameters: { type: "object", properties: { request: { type: "string", description: "欲しいスキルの要望" } }, required: ["request"] } },
 ];
 // API依存ツール（キーがある時だけ宣言＝モデルに見せる）。
 const GEMINI_TOOLS = [
@@ -97,6 +98,7 @@ async function execTool(env: Env, owner: string, baseUrl: string, name: string, 
     case "save_knowledge": return T.saveKnowledge(env, owner, { title: String(args.title), body: String(args.body) });
     case "search_knowledge": return T.searchKnowledge(env, { query: String(args.query) });
     case "search_members": return T.searchMembers(env, { query: String(args.query ?? "") });
+    case "install_skill": { const g = await generateSkill(env, owner, String(args.request ?? "")); return g.ok ? `スキル「${g.name}」を作成しました（無効状態）。管理者が高度なオプションで有効化すると使えます。` : (g.error ?? "スキル生成に失敗しました。"); }
     case "web_search": return (await webSearch(env, String(args.query))) ?? "web検索は未設定です。";
     case "make_document": return makeDocument(env, owner, baseUrl, { type: String(args.type ?? "md"), title: String(args.title), content: String(args.content) });
     case "run_skill": return runSkill(env, owner, baseUrl, String(args.name), String(args.input ?? ""));

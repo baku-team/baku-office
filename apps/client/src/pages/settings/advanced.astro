@@ -73,7 +73,11 @@ const curMax = hasPlus ? await maxUploadMb(env) : 5;
 
   <h2>Agent Skills（コード実行・従量課金）</h2>
   <p class="muted">SKILL.md を登録して独自業務スキルを追加（Worker内でevalしません）。mode=instruction（通常費）／code（Anthropic code execution＝従量課金）。管理者がレビューして有効化。LINEから「〇〇スキルで…」で実行（要 Pro＋Claude）。</p>
-  <details><summary>スキルを追加</summary>
+  <div class="card">
+    <p class="muted">🤖 <strong>AIに作らせる</strong>：やりたいことを書くと、AI がスキル（SKILL.md）を設計して<strong>無効状態で自動登録</strong>します。内容を確認し、下の一覧で有効化してください。</p>
+    <div class="row"><input id="skreq" placeholder="例：月次の会費集計表を作るスキル" /><button class="btn btn-primary" id="skgen" style="flex:0 0 auto">AIに作らせる</button></div>
+  </div>
+  <details><summary>スキルを手動で追加</summary>
     <div class="field"><input id="sname" placeholder="スキル名（呼び出し名）" /></div>
     <div class="row"><input id="sdesc" placeholder="説明（任意）" /><select id="smode" style="flex:0 0 200px"><option value="instruction">instruction（通常費）</option><option value="code">code（従量課金）</option></select></div>
     <div class="field"><textarea id="smd" rows="5" placeholder="SKILL.md（手順・テンプレート）"></textarea></div>
@@ -103,6 +107,12 @@ const curMax = hasPlus ? await maxUploadMb(env) : 5;
     document.getElementById("savePrompt").addEventListener("click",async(e)=>{
       const prompt=document.getElementById("customPrompt").value;
       await window.bo.api("/api/settings",{_action:"custom_prompt",prompt},{btn:e.currentTarget,successMsg:"カスタム指示を保存しました"});
+    });
+    document.getElementById("skgen").addEventListener("click",async(e)=>{
+      const request=document.getElementById("skreq").value.trim();
+      if(!request){window.bo.toast("作りたいスキルの要望を入力してください","err");return;}
+      const r=await window.bo.api("/api/skills",{_action:"generate",request},{btn:e.currentTarget,successMsg:null});
+      if(r.ok){window.bo.toast("スキル「"+(r.data.name||"")+"」を作成しました（無効状態）");setTimeout(()=>location.reload(),900);}
     });
     document.getElementById("saveMax").addEventListener("click",async(e)=>{const v=document.getElementById("maxmb").value;const r=await window.bo.api("/api/settings",{_action:"max_upload",mb:Number(v)},{btn:e.currentTarget,successMsg:"上限を保存しました"});if(r.ok)setTimeout(()=>location.reload(),600);});
     document.getElementById("capadd").addEventListener("click",async(e)=>{const r=await cap({_action:"create",capability:document.getElementById("cap").value,provider:document.getElementById("cprov").value,model:document.getElementById("cmodel").value,endpoint:document.getElementById("cendpoint").value,api_key:document.getElementById("ckey").value},e.currentTarget);if(r.ok){window.bo.toast("登録しました（無効状態）");setTimeout(()=>location.reload(),600);}});
