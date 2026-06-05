@@ -7,6 +7,8 @@ interface Env {
   MEDIA?: KVNamespace; // 専用ファイルKV（任意）。無ければ LICENSE を流用（配布は単一KV）。
   ASSETS: Fetcher;
   HOST_BASE_URL: string;
+  // Deploy時に入力すると、アプリを開くだけで自動アクティベート（任意・セルフ導入）。
+  LICENSE_ID?: string;
   // 同一アカウントでの host への配信路（workers.dev同士の直fetchはCFが遮断＝error1042）。
   // 別アカウント（本番の自己ホスト）では未設定＝HOST_BASE_URL(カスタムドメイン)へURL fetch。
   HOST?: Fetcher;

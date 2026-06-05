@@ -14,6 +14,10 @@ export const onRequest = defineMiddleware(async (context, next) => {
   if (exempt) return next();
 
   const token = await getToken(env);
-  if (!token) return context.redirect("/activate", 302);
+  if (!token) {
+    // LICENSE_ID が設定されていれば自動アクティベート（アプリを開くだけで完了）。無ければ手動入力画面へ。
+    if (env.LICENSE_ID) return context.redirect("/activate?license_id=" + encodeURIComponent(env.LICENSE_ID), 302);
+    return context.redirect("/activate", 302);
+  }
   return next();
 });
