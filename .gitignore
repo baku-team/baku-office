@@ -24,3 +24,5 @@ worker/wrangler.host.toml
 .signing.jwk
 .verify_public.jwk
 .provision_key
+
+apps/client/release/

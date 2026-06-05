@@ -18,10 +18,11 @@
   ],
 
   "vars": {
-    // 当社ホストポータル（ライセンス取得・統合チェック）。本番はカスタムドメインへ差し替え。
-    "HOST_BASE_URL": "https://baku-office-portal.fragrant-sun-78f3.workers.dev"
+    // 当社ホストポータル（ライセンス取得・統合チェック・ログイン中継・検証鍵配布）。
+    "HOST_BASE_URL": "https://baku-office-portal.baku-027.workers.dev"
   }
-  // 顧客が後で設定（管理画面/Secrets）：MASTER_KEY（無ければ初回生成）、VERIFY_PUBLIC_JWK（当社配布の公開検証鍵）、
-  //   GOOGLE_CLIENT_ID/SECRET（組織ログイン）、LINE_LOGIN_*/DISCORD_*（個人ログイン）。
+  // ★ secret 投入は不要：MASTER_KEY は初回自動生成（団体のKVに保存）、ライセンス検証鍵はホストから自動取得、
+  //   組織ログインは当社ホスト経由の中継（団体側のGoogle設定不要）。
+  // AIを使う場合のみ、デプロイ後に管理画面「連携設定」で Gemini／（Pro）LINE・Claude のAPIキーを登録。
   // R2（高度モード・任意）：[[r2_buckets]] binding=MEDIA_R2（カード必要・§11）。
 }
