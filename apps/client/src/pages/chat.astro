@@ -1,0 +1,90 @@
+---
+export const prerender = false;
+import App from "../layouts/App.astro";
+import { atLeast } from "@baku-office/shared";
+const env = Astro.locals.runtime.env;
+const { getSession } = await import("../lib/auth.ts");
+const ses = await getSession(env, Astro.request);
+if (!ses) return Astro.redirect("/login", 302);
+const { cachedEntitlement } = await import("../lib/client.ts");
+const hasPlus = atLeast(await cachedEntitlement(env), "plus");
+---
+<App title="AIチャット" active="/chat">
+  <h1>AIチャット</h1>
+  {!hasPlus && (
+    <div class="card">
+      <div class="banner banner-warn">この機能は <strong>Plus 以上</strong>のプランで利用できます。</div>
+      <p class="muted">集計・DB／ファイル検索・文書作成を会話で実行し、結果を PDF／TXT／md／HTML／CSV でダウンロードできます。</p>
+      <a class="btn btn-primary" href="/billing">プラン・課金へ</a>
+    </div>
+  )}
+  {hasPlus && (
+    <Fragment>
+      <p class="muted">集計・DB／ファイル検索・文書作成を依頼できます（例：「6月の交通費を科目別に集計して」）。生成結果は各形式でダウンロードできます。</p>
+      <div id="log"></div>
+      <div class="cinput">
+        <textarea id="msg" placeholder="メッセージを入力（Ctrl/⌘+Enter で送信）"></textarea>
+        <button class="btn btn-primary" id="send" style="flex:0 0 auto">送信</button>
+      </div>
+
+      <script slot="scripts" is:inline>
+        const log = document.getElementById("log");
+        const esc = (s) => s.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+        function dload(text, ext, mime) {
+          if (ext === "pdf") {
+            const w = window.open("", "_blank");
+            if (!w) { window.bo.toast("PDF化はポップアップ許可が必要です", "err"); return; }
+            w.document.write('<title>baku-office</title><pre style="white-space:pre-wrap;font-family:system-ui,sans-serif;padding:24px">' + esc(text) + "</pre>");
+            w.document.close(); w.focus(); w.print(); return;
+          }
+          let body = text;
+          if (ext === "html") body = '<!doctype html><meta charset="utf-8"><title>baku-office</title><pre style="white-space:pre-wrap;font-family:system-ui,sans-serif">' + esc(text) + "</pre>";
+          const blob = new Blob([body], { type: mime || "text/plain" });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url; a.download = "baku-office-" + Date.now() + "." + ext;
+          document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+        }
+        function addMsg(role, text) {
+          const d = document.createElement("div");
+          d.className = "cmsg " + role;
+          d.innerHTML = '<div class="cbub">' + esc(text).replace(/\n/g, "<br>") + "</div>";
+          if (role === "a") {
+            const dl = document.createElement("div"); dl.className = "cdl"; dl.append("DL：");
+            [["txt", "text/plain"], ["md", "text/markdown"], ["html", "text/html"], ["csv", "text/csv"], ["pdf", ""]].forEach(([ext, mime]) => {
+              const a = document.createElement("a"); a.href = "#"; a.textContent = ext.toUpperCase();
+              a.addEventListener("click", (e) => { e.preventDefault(); dload(text, ext, mime); });
+              dl.appendChild(a);
+            });
+            d.appendChild(dl);
+          }
+          log.appendChild(d); log.scrollTop = log.scrollHeight;
+        }
+        async function send() {
+          const ta = document.getElementById("msg");
+          const text = ta.value.trim(); if (!text) return;
+          addMsg("u", text); ta.value = "";
+          const r = await window.bo.api("/api/chat", { message: text }, { btn: document.getElementById("send"), successMsg: null });
+          if (r.ok) addMsg("a", r.data.reply);
+        }
+        document.getElementById("send").addEventListener("click", send);
+        document.getElementById("msg").addEventListener("keydown", (e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); send(); } });
+      </script>
+    </Fragment>
+  )}
+</App>
+
+<style>
+  #log { border: 1px solid #dde3ea; border-radius: 8px; padding: 12px; min-height: 240px; max-height: 52vh; overflow-y: auto; background: #fff; display: flex; flex-direction: column; gap: 8px; }
+  .cmsg { max-width: 88%; }
+  .cmsg.u { align-self: flex-end; }
+  .cmsg.a { align-self: flex-start; }
+  .cbub { padding: 8px 12px; border-radius: 10px; font-size: .92rem; line-height: 1.5; }
+  .cmsg.u .cbub { background: #14365c; color: #fff; border-bottom-right-radius: 2px; }
+  .cmsg.a .cbub { background: #eef1f5; color: #27313c; border-bottom-left-radius: 2px; }
+  .cdl { display: flex; gap: 6px; align-items: center; margin-top: 4px; font-size: .74rem; color: #6b7785; }
+  .cdl a { color: #5b6770; text-decoration: none; border: 1px solid #dde3ea; border-radius: 4px; padding: 1px 7px; }
+  .cdl a:hover { background: #f4f6f9; }
+  .cinput { display: flex; gap: 8px; margin-top: 12px; }
+  .cinput textarea { flex: 1; min-height: 52px; padding: 8px; border: 1px solid #dde3ea; border-radius: 8px; font: inherit; resize: vertical; }
+</style>

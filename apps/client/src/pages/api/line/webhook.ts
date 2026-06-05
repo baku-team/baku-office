@@ -39,7 +39,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
       try {
       if (m.type === "image" && m.id) {
         const img = await fetchLineImage(accessToken, m.id);
-        out = img ? await runAgent(env, userId, "この画像（領収書なら record_expense で記録）を処理してください。", img, origin) : "画像を取得できませんでした。";
+        out = img ? await runAgent(env, `line:${userId}`, "この画像（領収書なら record_expense で記録）を処理してください。", img, origin) : "画像を取得できませんでした。";
       } else if (m.type === "file" && m.id) {
         // ファイル（PDF等）→ KV/R2保存 → 要約ジョブ投入（drainでGemini要約）。
         const content = await fetchLineContent(accessToken, m.id);
@@ -60,7 +60,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
           out = "🎤 文字起こし・議事録化しました（議事録に保存）。\n\n" + text.slice(0, 1500);
         }
       } else if (m.type === "text") {
-        out = await runAgent(env, userId, m.text ?? "", undefined, origin);
+        out = await runAgent(env, `line:${userId}`, m.text ?? "", undefined, origin);
       } else return;
       await lineReply(accessToken, reply, out);
       for (const r of await dueReminders(env, `line:${userId}`)) { await linePush(accessToken, userId, `⏰ リマインド：${r.content}`); await markReminderDone(env, r.id); }

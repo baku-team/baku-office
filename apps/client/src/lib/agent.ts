@@ -80,8 +80,9 @@ async function execTool(env: Env, owner: string, baseUrl: string, name: string, 
 }
 
 // テキスト発話 → ツールループ。最大4ホップで関数呼び出しを解決して最終テキストを返す。
+// owner はデータスコープ識別子（LINE は `line:<userId>`、Web は session.uid）。呼び出し側で付与する。
 // API依存ツール（web_search=Gemini／make_document=Claude）は対応キーがある時だけモデルに提示。
-export async function runAgent(env: Env, lineUserId: string, text: string, image?: { mimeType: string; dataB64: string }, baseUrl = ""): Promise<string> {
+export async function runAgent(env: Env, owner: string, text: string, image?: { mimeType: string; dataB64: string }, baseUrl = ""): Promise<string> {
   const key = await getApiKey(env, "gemini");
   if (!key) return "AI機能が未設定です。管理画面の『連携設定』で Gemini APIキーを登録してください。";
   const hasClaude = !!(await getApiKey(env, "claude"));
@@ -90,7 +91,6 @@ export async function runAgent(env: Env, lineUserId: string, text: string, image
   const capDecls = caps.map((c) => CAP_TOOLS[c.capability]).filter(Boolean);
   if (caps.some((c) => c.capability === "video_gen")) capDecls.push(VIDEO_STATUS_TOOL);
   const decls = [...TOOLS, ...GEMINI_TOOLS, ...(hasClaude ? CLAUDE_TOOLS : []), ...(enabledSkills.length ? [skillTool(enabledSkills.map((s) => s.name))] : []), ...capDecls];
-  const owner = `line:${lineUserId}`;
   // 自己認識：有効な追加能力をシステム文脈へ（AI/エージェントが参照できるように）。
   const capInfo = await capabilitySummary(env);
   const sys = capInfo ? `${SYSTEM}\n${capInfo}` : SYSTEM;

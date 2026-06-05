@@ -23,6 +23,7 @@ const items: Item[] = [
   { href: "/files", label: "ファイル", show: true },
   { href: "/schedule", label: "予定", show: true },
   { href: "/minutes", label: "議事録", show: true },
+  { href: "/chat", label: "AIチャット", show: hasPlus },
   { href: "/personal", label: "個人", show: ses?.ctx === "personal" },
   { href: "/review", label: "共有承認", show: !!canReview },
   { href: "/settings/members", label: "人・ロール", show: isAdminOrg },
