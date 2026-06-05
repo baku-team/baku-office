@@ -1,4 +1,8 @@
-# baku-office セットアップ・運用ガイド
+> ⚠️ **レガシー（旧LINEエージェント `worker/` 用）**：本書は再設計前の LINEエージェント単体（2Worker・Ed25519配信）の手順です。
+> 現行アプリの手順は **[../apps/client/SETUP.md](../apps/client/SETUP.md)** と **[../OPERATIONS.md](../OPERATIONS.md)**、正本は **[../integrated_design_package_v1.0.md](../integrated_design_package_v1.0.md)**。
+> `worker/` は参考として温存。
+
+# baku-office セットアップ・運用ガイド（旧LINEエージェント・worker/）
 
 LINE上で動くClaudeエージェント（会話・履歴・モデル自動切替・Web検索・メモ/タスク・画像/書類保存・リマインダー・署名config/ライセンス）の立ち上げと運用手順。
 

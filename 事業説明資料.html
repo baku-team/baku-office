@@ -307,7 +307,7 @@
     <div class="arrow">→</div>
     <div class="node alt"><div class="t">エージェント基盤</div><div class="d">Cloudflare Workers</div></div>
     <div class="arrow">→</div>
-    <div class="node"><div class="t">AIエンジン</div><div class="d">Claude API ＋ Workers AI</div></div>
+    <div class="node"><div class="t">AIエンジン</div><div class="d">Gemini（無料枠）＋ Claude API（上位）＋ 任意API（BYOK）</div></div>
   </div>
   <div class="flow" style="margin-top:0;">
     <div class="node" style="flex:0 0 34%;"><div class="t">データ</div><div class="d">顧客アカウント内に保持（当社は預からない）</div></div>
@@ -336,7 +336,7 @@
   <div class="sec-no">05</div>
   <h2 class="sec">AIエージェントの賢さ</h2>
 
-  <p><b>Claude を頭脳（主）</b>に据え、安く済む処理だけを Cloudflare Workers AI に委譲。
+  <p><b>用途で使い分け</b>：通常処理は <b>Gemini 無料枠</b>、高度な判断や機微情報は <b>Claude</b>（学習なし・BYOK）。画像/音声/動画などは任意APIをBYOKで追加。
   賢さを最優先しつつ、コストを抑えます。難易度に応じてモデルを自動で切り替えます。</p>
 
   <h3>モデルの3段自動切替</h3>
@@ -450,7 +450,7 @@
   <h2 class="sec">導入の操作イメージ</h2>
 
   <p class="lead-p"><b>Cloudflareアカウントだけ作って当社を招待</b>すれば、あとは<b>自動セットアップ</b>。
-  残りは<b>キーをコピペするだけ</b>で稼働します。Workers AI 製のウィザードが手順を会話で案内します。</p>
+  残りは<b>キーをコピペするだけ</b>で稼働します。管理画面のウィザードが手順を案内します。</p>
 
   <div class="callout">
     <b>※ 各アカウントの作成はお客様ご自身で行っていただきます</b>：<b>Cloudflare ／ Claude API ／ LINE（または Discord）</b>のアカウント作成は、各社規約により<b>お客様ご自身でのサインアップが必要</b>です（当社による代理作成はできません）。当社は<b>作成手順の案内・入力の検証・自動配線</b>を担当し、お客様の操作は最小限（コピペ中心）にします。
@@ -478,7 +478,7 @@
       <div class="bar"><b>② 自動セットアップ</b>（当社が実行）</div>
       <div class="body">
         <div class="chk"><span class="c">✓</span> エージェントWorker 配備</div>
-        <div class="chk"><span class="c">✓</span> Workers AI 準備</div>
+        <div class="chk"><span class="c">✓</span> AI（Gemini）準備</div>
         <div class="chk"><span class="c">✓</span> DB / ストレージ作成</div>
         <div class="chk"><span class="c">✓</span> 定期実行・鍵設定</div>
         <div class="chk"><span class="c">✓</span> 疎通確認</div>
@@ -654,7 +654,7 @@
       <tr><td class="em">Dedicated</td><td class="price">¥120,000〜</td><td>〜¥4,800</td><td>約¥5,800</td><td><b>約95.2%</b></td></tr>
     </tbody>
   </table>
-  <p class="small muted">※内包AI枠＝月間AI使用上限（原価ベース）。Sonnet既定・プロンプトキャッシュ・Workers AI委譲を前提とした概算。¥150/$・Claude標準単価で試算。実利用は上限未満が多く、実効粗利はさらに高い見込み。</p>
+  <p class="small muted">※内包AI枠＝月間AI使用上限（原価ベース）。Sonnet既定・プロンプトキャッシュ・Gemini無料枠への委譲を前提とした概算。¥150/$・Claude標準単価で試算。実利用は上限未満が多く、実効粗利はさらに高い見込み。</p>
 
   <h3>粗利益率を守る仕組み</h3>
   <div class="grid col2">

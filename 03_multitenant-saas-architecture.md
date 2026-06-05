@@ -1,3 +1,5 @@
+> ℹ️ **背景設計**：本書は事業・運用設計の前身です。**現行の正本は [integrated_design_package_v1.0.md](integrated_design_package_v1.0.md)**（会計・庶務SaaS／プラン・課金・認証・データモデル等を統合）。実装は `apps/`、運用は [OPERATIONS.md](OPERATIONS.md)、配備・更新は [ARCHITECTURE.md](ARCHITECTURE.md)。本書は事業設計の根拠として保持。
+
 # 03. マルチテナント SaaS アーキテクチャ（1000社スケール・CLI運用前提）
 
 [01](01_deploy-pipeline.md) / [02](02_cloud-agent.md) のキットを、**多数の企業・団体へ提供し運用を当社が担う事業**として成立させる設計。**新運用形態＝「顧客所有アカウント＋当社ホストの承認・ロジック配信＋ライセンス制御（本文は非中継）」をベース**とし、当社は原則データを保有せず、導入支援・共同運用で報酬を得る。すべての運用は CLI（`tenantctl`）から回す。

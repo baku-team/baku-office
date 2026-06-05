@@ -1,3 +1,5 @@
+> ℹ️ **背景資料（PoC記録）**：本書は PoC期の記録です。**現行スタックは [README.md](README.md)（Astro+@astrojs/cloudflare、D1/KV/R2、Gemini/Claude/任意API・BYOK）**、正本は [integrated_design_package_v1.0.md](integrated_design_package_v1.0.md)。PoCコード（`poc/`・`poc-workers/`）は削除済み。
+
 # 05. 実装 — PoC記録と技術スタック
 
 [03](03_multitenant-saas-architecture.md) の設計を実装に移すための、**PoC実測の記録**と**確定した技術スタック**。実装は原則 Claude Code で自動化し、顧客/開発者の手作業を最小化する。

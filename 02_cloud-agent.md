@@ -1,3 +1,7 @@
+> ⚠️ **レガシー設計（背景資料）**：本書は旧 `cf-line-agent-kit` のエージェント単体設計（Workers AI＋Claudeの二層）です。
+> 現行 **baku-office** は AI を **Gemini（無料枠）＋Claude（上位・BYOK）＋任意API** で構成し、エージェントは `apps/client`（Zプラン）に統合済み。
+> 正本は [integrated_design_package_v1.0.md](integrated_design_package_v1.0.md)、運用は [OPERATIONS.md](OPERATIONS.md)。本書は経緯・参考として保持。
+
 # 02. クラウドエージェント — Workers AI + Claude API
 
 LINE（または任意の入力）から渡されたテキストを受け取り、ツールを呼び、応答文を返す

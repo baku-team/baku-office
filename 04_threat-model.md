@@ -1,3 +1,5 @@
+> ℹ️ **背景設計**：脅威モデルは現行 baku-office にも有効です。正本は [integrated_design_package_v1.0.md](integrated_design_package_v1.0.md)。本番ゲート（KMS署名・FIDO2・admin JIT）は [PROGRESS.md](PROGRESS.md) で「課題保留」中。
+
 # 04. 脅威モデル（レッドチーム分析）
 
 [03](03_multitenant-saas-architecture.md) の運用形態（顧客所有アカウント＋当社は承認・ロジック配信のみ・本文非中継・ライセンス制御）に対する攻撃面の分析。実装前のセキュリティ基準。正式対策は [03 の 16-10](03_multitenant-saas-architecture.md) に組込み。
