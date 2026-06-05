@@ -52,6 +52,8 @@ GitHub Actions ──wrangler deploy──▶ Cloudflare Workers / Pages / D1
 | [PROGRESS.md](PROGRESS.md) | **進捗トラッカー（生きた管理ファイル）**。ビルドフェーズ・本番ゲート(🔒)・実行順序・決定ログをチェックリストで管理。着手/完了で更新。 |
 | [worker/](worker/) ／ [worker/SETUP.md](worker/SETUP.md) | **本番アプリ（実装コード）＋立ち上げ手順**。1つのコードを **クライアント（`wrangler.client.toml`＝LINE/会話/データ・検証のみ）** と **ホスト（`wrangler.host.toml`＝署名・配信専用）** の2Workerにデプロイ。`setup-client.sh`／`setup-host.sh`／`setup-tenant.sh`。 |
 | [integrated_design_package_v1.0.md](integrated_design_package_v1.0.md) | **統合設計パッケージ v1.0（baku-office の最新の正）**。01〜05 と PROGRESS を統合した到達点。新規参照はまずこれ。 |
+| [OPERATIONS.md](OPERATIONS.md) | **操作フロー（ホスト側／クライアント側の手順）**。申込→発行→配備→アクティベート→日常運用→更新までの実務手順。 |
+| [ARCHITECTURE.md](ARCHITECTURE.md) | **更新フローと基本＋カスタム設計**。CI配布・自動マイグレーション・カスタム機能の両立。 |
 
 > 01/02 は「1つのエージェントを動かす」最小キット。03 は「それを事業として運用する」上位設計。04 はそのセキュリティ基準。
 > 新運用形態では、02 のオーケストレーションは固定 Worker として顧客アカウントへ事前配備（難読化）し、当社CPがライセンスゲートで配信するのは config（プロンプト/ツール/人格/パラメータ＝データ）のみ（Workers は eval 不可＝コードは事前配備が前提）。Anthropic/LINEは顧客が直接・本文は当社を通らない＝非中継。03 の 17-2。
