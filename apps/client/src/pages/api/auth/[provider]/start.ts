@@ -20,7 +20,7 @@ export const GET: APIRoute = async ({ params, url, locals }) => {
   }
 
   // Google 未設定でも、当社ホストの共有OAuth（中継ログイン）が使えるなら中継へ（クライアントはGoogle設定不要）。
-  if (p === "google" && env.VERIFY_PUBLIC_JWK && env.HOST_BASE_URL) {
+  if (p === "google" && env.HOST_BASE_URL) {
     const state = newState();
     const ret = `${url.origin}/api/auth/google/relay`;
     const relay = `${env.HOST_BASE_URL.replace(/\/$/, "")}/api/relay/google/start?return=${encodeURIComponent(ret)}&cstate=${state}`;

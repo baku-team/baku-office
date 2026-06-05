@@ -16,7 +16,7 @@ export async function listCapabilities(env: Env, onlyEnabled = false): Promise<C
 }
 export async function createCapability(env: Env, a: { capability: string; provider?: string; endpoint?: string; model?: string; api_key?: string }): Promise<string> {
   const id = randomId();
-  const enc = a.api_key ? await encryptField(masterKey(env), a.api_key, "api-keys") : null;
+  const enc = a.api_key ? await encryptField(await masterKey(env), a.api_key, "api-keys") : null;
   await env.DB.prepare("INSERT INTO capabilities (id,capability,provider,endpoint,model,api_key,enabled,created_at) VALUES (?,?,?,?,?,?,0,?)")
     .bind(id, a.capability, a.provider ?? null, a.endpoint ?? null, a.model ?? null, enc, nowSec()).run();
   return id;
@@ -30,7 +30,7 @@ export async function deleteCapability(env: Env, id: string): Promise<void> {
 async function capKey(env: Env, id: string): Promise<string | null> {
   const row = await env.DB.prepare("SELECT api_key FROM capabilities WHERE id=?").bind(id).first<{ api_key: string | null }>();
   if (!row?.api_key) return null;
-  try { return await decryptField(masterKey(env), row.api_key, "api-keys"); } catch { return null; }
+  try { return await decryptField(await masterKey(env), row.api_key, "api-keys"); } catch { return null; }
 }
 
 // エージェントの自己認識用：有効な能力の一覧テキスト。

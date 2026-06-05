@@ -1,6 +1,7 @@
 import type { APIRoute } from "astro";
 import { makeSessionCookie, sessionExp } from "../../../../lib/auth.ts";
-import { importVerifyKey, verifyEnvelope, payloadOf, type Ed25519Jwk } from "@baku-office/shared";
+import { getVerifyJwk } from "../../../../lib/client.ts";
+import { importVerifyKey, verifyEnvelope, payloadOf } from "@baku-office/shared";
 
 export const prerender = false;
 const redir = (loc: string, cookie?: string) =>
@@ -14,11 +15,12 @@ export const GET: APIRoute = async ({ url, request, locals }) => {
   const cookieState = /oauth_state=([^;]+)/.exec(request.headers.get("cookie") ?? "")?.[1];
   if (url.searchParams.get("e")) return redir("/login?e=oauth");
   if (!token || !state || state !== cookieState) return redir("/login?e=state");
-  if (!env.VERIFY_PUBLIC_JWK) return redir("/login?e=oauth");
+  const jwk = await getVerifyJwk(env);
+  if (!jwk) return redir("/login?e=oauth");
 
   let envlp: { body: string; sig: string };
   try { envlp = JSON.parse(atob(token)); } catch { return redir("/login?e=oauth"); }
-  const pub = await importVerifyKey(JSON.parse(env.VERIFY_PUBLIC_JWK) as Ed25519Jwk);
+  const pub = await importVerifyKey(jwk);
   if (!(await verifyEnvelope(pub, envlp))) return redir("/login?e=oauth");
   const p = payloadOf(envlp) as { sub?: string; email?: string; name?: string; exp?: number };
   if (!p.sub || !p.exp || p.exp < Math.floor(Date.now() / 1000)) return redir("/login?e=state");

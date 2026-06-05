@@ -7,12 +7,12 @@ export type UserRow = { id: string; display_name: string | null; role: Role; sta
 
 // PII暗号化（display_name）。
 async function encName(env: Env, name: string): Promise<string> {
-  return encryptField(masterKey(env), name, "member-pii");
+  return encryptField(await masterKey(env), name, "member-pii");
 }
 async function decName(env: Env, stored: string | null): Promise<string> {
   if (!stored) return "";
   try {
-    return await decryptField(masterKey(env), stored, "member-pii");
+    return await decryptField(await masterKey(env), stored, "member-pii");
   } catch {
     return "(復号失敗)";
   }

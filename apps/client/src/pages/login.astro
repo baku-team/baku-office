@@ -4,7 +4,7 @@ import App from "../layouts/App.astro";
 const env = Astro.locals.runtime.env;
 const { providerEnabled } = await import("../lib/oauth.ts");
 // 自前Google設定、または当社ホスト経由の中継ログイン（VERIFY_PUBLIC_JWK＋HOST_BASE_URL）が使えるなら Google ボタンを出す。
-const google = providerEnabled(env, "google") || !!(env.VERIFY_PUBLIC_JWK && env.HOST_BASE_URL);
+const google = providerEnabled(env, "google") || !!env.HOST_BASE_URL;
 const line = providerEnabled(env, "line");
 const discord = providerEnabled(env, "discord");
 const e = Astro.url.searchParams.get("e");

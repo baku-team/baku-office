@@ -1,5 +1,5 @@
 // クライアント側の共通ロジック：ライセンストークンの保持・統合チェック・APIキーの暗号保存（§4/7/10）。
-import { encryptField, decryptField, type CheckResponse, type Entitlement } from "@baku-office/shared";
+import { encryptField, decryptField, generateMasterKey, type CheckResponse, type Entitlement, type Ed25519Jwk } from "@baku-office/shared";
 
 const KV_TOKEN = "license_token";
 const KV_ENTITLEMENT = "entitlement";
@@ -58,21 +58,37 @@ export async function cachedEntitlement(env: Env): Promise<Entitlement> {
   return ((await env.LICENSE.get(KV_ENTITLEMENT)) as Entitlement) ?? "free";
 }
 
-// MASTER_KEY（無ければ実行時生成は不可＝Secretで設定。未設定時はエラー文言で促す）。
-export function masterKey(env: Env): string {
-  if (!env.MASTER_KEY) throw new Error("MASTER_KEY 未設定（wrangler secret put MASTER_KEY）。");
-  return env.MASTER_KEY;
+// MASTER_KEY：secret があれば優先、無ければ生成して LICENSE KV に保存（セルフ導入＝secret投入不要）。
+// 鍵は団体自身の CF アカウント内（KV）に保持。当社は保持しない。
+export async function masterKey(env: Env): Promise<string> {
+  if (env.MASTER_KEY) return env.MASTER_KEY;
+  let k = await env.LICENSE.get("master_key");
+  if (!k) { k = generateMasterKey(); await env.LICENSE.put("master_key", k); }
+  return k;
+}
+
+// ライセンス署名の検証鍵（公開鍵）。secret があれば優先、無ければホストの /api/pubkey から取得して KV キャッシュ。
+export async function getVerifyJwk(env: Env): Promise<Ed25519Jwk | null> {
+  const parse = (s: string): Ed25519Jwk | null => { try { return JSON.parse(s) as Ed25519Jwk; } catch { return null; } };
+  if (env.VERIFY_PUBLIC_JWK) return parse(env.VERIFY_PUBLIC_JWK);
+  const cached = await env.LICENSE.get("verify_jwk");
+  if (cached) return parse(cached);
+  try {
+    const r = await hostFetch(env, "/api/pubkey");
+    if (r.ok) { const t = await r.text(); if (parse(t)) { await env.LICENSE.put("verify_jwk", t); return parse(t); } }
+  } catch { /* offline */ }
+  return null;
 }
 
 // APIキーの暗号保存（§10.3）。domain=api-keys でサブ鍵分離。
 export async function saveApiKey(env: Env, name: string, value: string): Promise<void> {
-  const enc = await encryptField(masterKey(env), value, "api-keys");
+  const enc = await encryptField(await masterKey(env), value, "api-keys");
   await env.LICENSE.put(KEY_PREFIX + name, enc);
 }
 export async function getApiKey(env: Env, name: string): Promise<string | null> {
   const stored = await env.LICENSE.get(KEY_PREFIX + name);
   if (!stored) return null;
-  return decryptField(masterKey(env), stored, "api-keys");
+  return decryptField(await masterKey(env), stored, "api-keys");
 }
 export async function hasApiKey(env: Env, name: string): Promise<boolean> {
   return (await env.LICENSE.get(KEY_PREFIX + name)) !== null;

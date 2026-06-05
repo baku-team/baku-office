@@ -12,8 +12,8 @@ export const POST: APIRoute = async ({ request, locals }) => {
   const b = (await request.json().catch(() => ({}))) as { mode?: string; loginId?: string; password?: string };
 
   if (b.mode === "org") {
-    // dev専用：本番（中継/Google ログインが有効＝VERIFY_PUBLIC_JWK 設定済み）では無効化して悪用を防ぐ。
-    if (env.VERIFY_PUBLIC_JWK) return json({ error: "本番では Google でログインしてください" }, 403);
+    // dev専用：本番（HOST_BASE_URL 設定＝中継ログイン有効、または VERIFY_PUBLIC_JWK 設定）では無効化して悪用を防ぐ。
+    if (env.HOST_BASE_URL || env.VERIFY_PUBLIC_JWK) return json({ error: "本番では Google でログインしてください" }, 403);
     const cookie = await makeSessionCookie(env, { uid: "org", role: "admin", ctx: "org", name: "組織管理者", exp: sessionExp() });
     return json({ ok: true, role: "admin", ctx: "org" }, 200, { "set-cookie": cookie });
   }

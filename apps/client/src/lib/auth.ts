@@ -14,7 +14,7 @@ const b64urlToBytes = (s: string) =>
   Uint8Array.from(atob(s.replace(/-/g, "+").replace(/_/g, "/")), (c) => c.charCodeAt(0));
 
 async function hmacKey(env: Env): Promise<CryptoKey> {
-  const raw = Uint8Array.from(atob(masterKey(env)), (c) => c.charCodeAt(0)); // MASTER_KEYは標準base64
+  const raw = Uint8Array.from(atob(await masterKey(env)), (c) => c.charCodeAt(0)); // MASTER_KEYは標準base64
   return crypto.subtle.importKey("raw", raw, { name: "HMAC", hash: "SHA-256" }, false, ["sign", "verify"]);
 }
 

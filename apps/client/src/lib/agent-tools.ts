@@ -46,7 +46,7 @@ export async function searchKnowledge(env: Env, a: { query: string }): Promise<s
 // 名簿は暗号化されているため復号して照合（小規模前提）。
 export async function searchMembers(env: Env, a: { query: string }): Promise<string> {
   const { results } = await env.DB.prepare("SELECT display_name,role,status FROM users WHERE status='active'").all<{ display_name: string | null; role: string; status: string }>();
-  const mk = masterKey(env);
+  const mk = await masterKey(env);
   const out: string[] = [];
   for (const u of results) {
     let name = "";
