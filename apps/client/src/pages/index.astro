@@ -6,6 +6,11 @@ const env = Astro.locals.runtime.env;
 const { pollHost, cachedEntitlement } = await import("../lib/client.ts");
 const check = await pollHost(env, Astro.url.origin);
 const entitlement = check?.entitlement ?? (await cachedEntitlement(env));
+const { getStorageUsage, fmtBytes } = await import("../lib/storage-usage.ts");
+const storage = await getStorageUsage(env);
+const pct = (u: number, l: number) => (u < 0 || l <= 0 ? 0 : Math.min(100, Math.round((u / l) * 100)));
+const hintText: Record<string, string> = { paid: "高度なオプション → Workers Paid で上限を拡張できます。", r2: "高度なオプションで R2 を有効化すると大容量に対応できます。", drive: "Google ドライブの空き容量をご確認ください。", none: "" };
+const nearFull = storage.filter((s) => s.enabled && s.used >= 0 && pct(s.used, s.limit) >= 80);
 let balance = 0;
 try { balance = (await env.DB.prepare("SELECT COALESCE(SUM(opening_balance),0) AS b FROM wallets").first<{ b: number }>())?.b ?? 0; } catch { /* 未マイグレ */ }
 const notices = check?.notices ?? [];
@@ -24,6 +29,20 @@ const yen = (n: number) => "¥" + n.toLocaleString("ja-JP");
     <div class="card"><div class="label">プラン / ライセンス</div><div class="num" style="font-size:1.1rem">{planLabel(entitlement)}</div></div>
   </div>
 
+  <h2>ストレージ使用量</h2>
+  {nearFull.map((s) => (<div class="banner banner-warn">⚠️ <strong>{s.label}</strong> が上限の {pct(s.used, s.limit)}% に達しています。{hintText[s.hint]}</div>))}
+  <div class="grid">
+    {storage.map((s) => (
+      <div class="card">
+        <div class="label">{s.label}{!s.enabled && (s.key === "r2" ? "（未使用）" : s.key === "drive" ? "（未連携）" : "")}</div>
+        <div class="gauge"><div class={`gfill ${pct(s.used, s.limit) >= 80 ? "hot" : ""}`} style={`width:${pct(s.used, s.limit)}%`}></div></div>
+        <div class="muted" style="font-size:.82rem;margin-top:4px">{s.used < 0 ? "計測不可" : `${fmtBytes(s.used)} / ${fmtBytes(s.limit)}（${pct(s.used, s.limit)}%）`}</div>
+        {(s.hint === "paid" || s.hint === "r2") && (<div class="muted" style="font-size:.74rem;margin-top:2px"><a href="/settings/advanced">{s.hint === "r2" ? "R2 を有効化" : "Workers Paid で拡張"}</a></div>)}
+        {s.key === "drive" && !s.enabled && (<div class="muted" style="font-size:.74rem;margin-top:2px"><a href="/drive">連携する</a></div>)}
+      </div>
+    ))}
+  </div>
+
   <h2>できること</h2>
   <div class="grid">
     <a class="card" href="/accounting" style="text-decoration:none;color:inherit"><strong>会計</strong><div class="muted">入出金・出納帳・収支・CSV</div></a>
@@ -31,6 +50,12 @@ const yen = (n: number) => "¥" + n.toLocaleString("ja-JP");
     <a class="card" href="/minutes" style="text-decoration:none;color:inherit"><strong>議事録</strong><div class="muted">作成・一覧</div></a>
     <a class="card" href="/settings/keys" style="text-decoration:none;color:inherit"><strong>連携設定</strong><div class="muted">Gemini/LINE/Claude</div></a>
   </div>
+
+  <style>
+    .gauge { height: 8px; background: #eef1f5; border-radius: 4px; overflow: hidden; margin-top: 6px; }
+    .gfill { height: 100%; background: #14365c; border-radius: 4px; transition: width .3s; }
+    .gfill.hot { background: #b4541a; }
+  </style>
 
   <div class="modal" id="critModal"><div class="box"><h2 style="margin-top:0;border:0">重要なお知らせ</h2><div id="critBody"></div><button class="btn btn-primary" id="critAck" style="margin-top:1rem">確認しました</button></div></div>
 

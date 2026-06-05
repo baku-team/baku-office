@@ -13,6 +13,8 @@ const { hasApiKey } = await import("../../lib/client.ts");
 const engine = hasPlus ? await getAiEngine(env) : "gemini";
 const custom = hasPlus ? await getCustomPrompt(env) : "";
 const claudeSet = hasPlus ? await hasApiKey(env, "claude") : false;
+const { getStorageLimits } = await import("../../lib/storage-usage.ts");
+const slimits: Partial<Record<string, number>> = hasPlus ? await getStorageLimits(env) : {};
 const { listSkills } = await import("../../lib/skills.ts");
 const { listCapabilities, CAPABILITY_LABEL } = await import("../../lib/capabilities.ts");
 const { storageMode, maxUploadMb } = await import("../../lib/storage.ts");
@@ -55,6 +57,14 @@ const curMax = hasPlus ? await maxUploadMb(env) : 5;
   <div class="card">
     <p class="muted">現在：<strong>{mode === "r2" ? "高度モード（R2・上限なし）" : `標準モード（KV）・1ファイル上限 ${curMax}MB`}</strong>。KVの値上限は <strong>25MiB</strong> までで、既定は安全側の5MB。下で1〜25MBに変更できます（R2有効時はこの上限は無視）。</p>
     <div class="row"><input id="maxmb" type="number" min="1" max="25" value={curMax} style="flex:0 0 120px" /><button class="btn btn-primary" id="saveMax" style="flex:0 0 auto">上限を保存</button></div>
+  </div>
+
+  <h2>容量上限（ホームのゲージ表示用）</h2>
+  <div class="card">
+    <p class="muted">ホームのストレージゲージに使う上限値（GB）。Workers Paid／R2 を有効化したら実際の枠に合わせて調整してください。空欄は既定（D1=5／KV=1／R2=10／Drive=15）。</p>
+    <div class="row"><label style="flex:1">D1（GB）<input id="lim-d1" type="number" min="0" step="0.1" value={slimits.d1 ?? ""} /></label><label style="flex:1">KV（GB）<input id="lim-kv" type="number" min="0" step="0.1" value={slimits.kv ?? ""} /></label></div>
+    <div class="row"><label style="flex:1">R2（GB）<input id="lim-r2" type="number" min="0" step="0.1" value={slimits.r2 ?? ""} /></label><label style="flex:1">Drive（GB）<input id="lim-drive" type="number" min="0" step="0.1" value={slimits.drive ?? ""} /></label></div>
+    <button class="btn btn-primary" id="saveStorageLim" style="margin-top:.5rem">容量上限を保存</button>
   </div>
 
   <h2>任意API（画像生成・音声合成・動画生成など）</h2>
@@ -107,6 +117,11 @@ const curMax = hasPlus ? await maxUploadMb(env) : 5;
     document.getElementById("savePrompt").addEventListener("click",async(e)=>{
       const prompt=document.getElementById("customPrompt").value;
       await window.bo.api("/api/settings",{_action:"custom_prompt",prompt},{btn:e.currentTarget,successMsg:"カスタム指示を保存しました"});
+    });
+    document.getElementById("saveStorageLim").addEventListener("click",async(e)=>{
+      const g=(id)=>{const v=document.getElementById(id).value;return v?Number(v):0;};
+      const limits={d1:g("lim-d1"),kv:g("lim-kv"),r2:g("lim-r2"),drive:g("lim-drive")};
+      await window.bo.api("/api/settings",{_action:"storage_limits",limits},{btn:e.currentTarget,successMsg:"容量上限を保存しました"});
     });
     document.getElementById("skgen").addEventListener("click",async(e)=>{
       const request=document.getElementById("skreq").value.trim();
