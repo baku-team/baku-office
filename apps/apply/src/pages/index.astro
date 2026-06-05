@@ -110,6 +110,9 @@ const deployUrl = "https://deploy.workers.cloudflare.com/?url=https://github.com
           '<li><strong>ライセンスIDを入力（自動アクティベート）</strong><br><span class="muted">デプロイ画面の環境変数 <code>LICENSE_ID</code> の欄に、下のライセンスIDを貼り付けてからデプロイしてください。これだけで、アプリを開いたときに自動でアクティベートされます。</span>' +
           '<div style="display:flex;gap:6px;margin-top:6px;align-items:center"><code id="lidbox" style="flex:1;min-width:0;overflow:auto">' + j.licenseId + '</code><button class="btn" id="copyid" style="flex:0 0 auto">コピー</button></div>' +
           '<span class="muted" style="font-size:.85em">※デプロイ画面に <code>LICENSE_ID</code> の入力欄が見当たらない場合は、デプロイ後にアプリを開くと出る画面で、このIDを貼り付けてください。</span></li>' +
+          '<li><strong>アクティベート</strong><br><span class="muted">上の手順で <code>LICENSE_ID</code> を入れていれば、アプリを開くだけで自動完了します。手動の場合は、あなたの Cloudflare の <strong>workers.dev サブドメイン</strong>（<code>baku-office.◯◯◯.workers.dev</code> の ◯◯◯ 部分）を入力すると、アクティベート用ボタンを作成します。</span>' +
+          '<div style="display:flex;gap:6px;margin-top:6px"><input id="subdom" placeholder="◯◯◯（サブドメイン）または完全なURL" style="flex:1;min-width:0;padding:8px;border:1px solid #dde3ea;border-radius:6px;font:inherit" /><button class="btn" id="genlink" style="flex:0 0 auto">作成</button></div>' +
+          '<div id="actlink" style="margin-top:8px"></div></li>' +
           '<li><strong>Google でログイン</strong><br><span class="muted">アクティベート後、団体の Google アカウントでログインすれば利用開始です。</span></li>' +
           '</ol>' +
           '<p class="muted">このライセンスIDは控えておいてください。</p>';
@@ -117,6 +120,14 @@ const deployUrl = "https://deploy.workers.cloudflare.com/?url=https://github.com
         document.getElementById("copyid").addEventListener("click", async () => {
           try { await navigator.clipboard.writeText(j.licenseId); toast("ライセンスIDをコピーしました"); }
           catch { toast("コピーできませんでした。手動で選択してください", "err"); }
+        });
+        document.getElementById("genlink").addEventListener("click", () => {
+          let s = document.getElementById("subdom").value.trim();
+          if (!s) { toast("サブドメインを入力してください", "err"); return; }
+          s = s.replace(/^https?:\/\//, "").replace(/\/.*$/, ""); // フルURL/ホスト貼付にも対応
+          const host = s.includes(".workers.dev") ? "https://" + s : "https://baku-office." + s + ".workers.dev";
+          const link = host + "/activate?license_id=" + encodeURIComponent(j.licenseId);
+          document.getElementById("actlink").innerHTML = '<a href="' + link + '" target="_blank" rel="noreferrer" style="display:inline-block;background:#1f7a4d;color:#fff;padding:10px 18px;border-radius:8px;font-weight:700;text-decoration:none">▶ アクティベートする</a>';
         });
       });
     </script>
