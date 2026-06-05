@@ -9,12 +9,13 @@
   "assets": { "binding": "ASSETS", "directory": "." },
   "observability": { "enabled": true },
 
-  // D1 マイグレーションは Deploy/ビルド工程で自動適用（§3.2手順5）。
-  "d1_databases": [{ "binding": "DB", "database_name": "baku-office-db", "migrations_dir": "migrations" }],
+  // 自動プロビジョニング（公式推奨）：id・名前を省略し binding のみ。Deploy時にCFが一意名で自動作成する。
+  // ※名前を固定すると「already exists」衝突の原因になるため指定しない。
+  "d1_databases": [{ "binding": "DB", "migrations_dir": "migrations" }],
   "kv_namespaces": [
-    { "binding": "LICENSE", "title": "baku-office-LICENSE" },
-    { "binding": "MEDIA", "title": "baku-office-MEDIA" },
-    { "binding": "SESSION", "title": "baku-office-SESSION" }
+    { "binding": "LICENSE" },
+    { "binding": "MEDIA" },
+    { "binding": "SESSION" }
   ],
 
   "vars": {
