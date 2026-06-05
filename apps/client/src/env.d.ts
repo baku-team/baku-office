@@ -4,7 +4,7 @@
 interface Env {
   DB: D1Database;
   LICENSE: KVNamespace;
-  MEDIA: KVNamespace;
+  MEDIA?: KVNamespace; // 専用ファイルKV（任意）。無ければ LICENSE を流用（配布は単一KV）。
   ASSETS: Fetcher;
   HOST_BASE_URL: string;
   // 同一アカウントでの host への配信路（workers.dev同士の直fetchはCFが遮断＝error1042）。

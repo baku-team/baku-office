@@ -9,13 +9,13 @@
   "assets": { "binding": "ASSETS", "directory": "." },
   "observability": { "enabled": true },
 
-  // 自動プロビジョニング（公式推奨）：id・名前を省略し binding のみ。Deploy時にCFが一意名で自動作成する。
-  // ※名前を固定すると「already exists」衝突の原因になるため指定しない。
+  // 自動プロビジョニング（公式推奨）：id・名前を省略し binding のみ。Deploy時にCFが自動作成する。
+  // KVは単一（LICENSE）に集約：複数KVの自動命名が衝突（already exists）するのを避けるため。
+  //   ファイルは LICENSE に "f/" prefix で保存（storage.ts の mediaKv フォールバック）。
+  //   Astro session は未使用のため SESSION KV も不要。
   "d1_databases": [{ "binding": "DB", "migrations_dir": "migrations" }],
   "kv_namespaces": [
-    { "binding": "LICENSE" },
-    { "binding": "MEDIA" },
-    { "binding": "SESSION" }
+    { "binding": "LICENSE" }
   ],
 
   "vars": {

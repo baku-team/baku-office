@@ -10,6 +10,12 @@ export function storageMode(env: Env): "r2" | "kv" {
   return env.MEDIA_R2 ? "r2" : "kv";
 }
 
+// ファイル保存用KV。専用 MEDIA があれば使い、無ければ LICENSE を流用（配布は自動プロビジョンのKV衝突回避のため単一KV）。
+// キーは "f/<id>" prefix のため LICENSE の他キー（apikey:/license_token 等）と衝突しない。
+function mediaKv(env: Env): KVNamespace {
+  return env.MEDIA ?? env.LICENSE;
+}
+
 // 標準モードの1ファイル上限(MB)。LICENSE KV の設定値（無ければ既定5、最大25）。
 export async function maxUploadMb(env: Env): Promise<number> {
   const v = Number(await env.LICENSE.get("max_upload_mb"));
@@ -38,7 +44,7 @@ export async function saveFile(env: Env, file: File, createdBy: string): Promise
     const limit = (await maxUploadMb(env)) * 1024 * 1024;
     if (buf.byteLength > limit) throw new Error(`標準モードは1ファイル ${limit / 1024 / 1024}MB まで（高度なオプションで上限変更 or R2有効化）`);
     const key = `f/${id}`;
-    await env.MEDIA.put(key, buf, { metadata: { contentType: file.type || "application/octet-stream" } });
+    await mediaKv(env).put(key, buf, { metadata: { contentType: file.type || "application/octet-stream" } });
     ref = `kv:${key}`;
   }
   await env.DB.prepare("INSERT INTO files (id,name,size,mime,ref,created_by,created_at) VALUES (?,?,?,?,?,?,?)")
@@ -55,7 +61,7 @@ export async function getFile(env: Env, id: string): Promise<{ buf: ArrayBuffer;
     if (!obj) return null;
     return { buf: await obj.arrayBuffer(), mime: row.mime ?? "application/octet-stream", name: row.name };
   }
-  const obj = await env.MEDIA.get(row.ref.replace(/^kv:/, ""), { type: "arrayBuffer" });
+  const obj = await mediaKv(env).get(row.ref.replace(/^kv:/, ""), { type: "arrayBuffer" });
   if (!obj) return null;
   return { buf: obj, mime: row.mime ?? "application/octet-stream", name: row.name };
 }
