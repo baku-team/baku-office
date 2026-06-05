@@ -8,6 +8,11 @@ const ses = await getSession(env, Astro.request);
 if (!ses || ses.role !== "admin" || ses.ctx !== "org") return Astro.redirect("/login", 302);
 const entitlement = await (await import("../../lib/client.ts")).cachedEntitlement(env);
 const hasPlus = atLeast(entitlement, "plus");
+const { getAiEngine, getCustomPrompt } = await import("../../lib/settings.ts");
+const { hasApiKey } = await import("../../lib/client.ts");
+const engine = hasPlus ? await getAiEngine(env) : "gemini";
+const custom = hasPlus ? await getCustomPrompt(env) : "";
+const claudeSet = hasPlus ? await hasApiKey(env, "claude") : false;
 const { listSkills } = await import("../../lib/skills.ts");
 const { listCapabilities, CAPABILITY_LABEL } = await import("../../lib/capabilities.ts");
 const { storageMode, maxUploadMb } = await import("../../lib/storage.ts");
@@ -29,6 +34,22 @@ const curMax = hasPlus ? await maxUploadMb(env) : 5;
   {hasPlus && (
   <div class="adv">
   <div class="banner banner-warn">⚠️ ここでは<strong>従量課金につながる機能</strong>を扱います。利用には対応APIキーの登録と各サービスの課金が必要です。</div>
+
+  <h2>AIエンジン</h2>
+  <div class="card">
+    <p class="muted">通常の回答に使うエンジンを選択します。<strong>Gemini</strong>は無料枠、<strong>Claude</strong>は高精度（BYOK・任意設定）。Claude は Pro 限定ではなく、Plus 以上で APIキーを登録すれば選べます。</p>
+    <div class="field"><label><input type="radio" name="engine" value="gemini" checked={engine === "gemini"} /> Gemini（無料枠）</label></div>
+    <div class="field"><label><input type="radio" name="engine" value="claude" checked={engine === "claude"} /> Claude（BYOK・要APIキー）</label></div>
+    <div class="field"><input id="claudeKey" type="password" placeholder={claudeSet ? "Claude APIキー（設定済み・変更時のみ入力）" : "Claude APIキー（Claude選択時に必要）"} /></div>
+    <button class="btn btn-primary" id="saveEngine">エンジン設定を保存</button>
+  </div>
+
+  <h2>カスタム指示（口調・人格・回答形式）</h2>
+  <div class="card">
+    <p class="muted">AIへ常に追加する指示。例：「丁寧語で簡潔に」「箇条書き中心」「団体名は○○会」。安全制約（破壊操作の確認など）は変更されません。</p>
+    <div class="field"><textarea id="customPrompt" rows="4" placeholder="例：回答は敬語で簡潔に。金額は¥表記。専門用語は補足を添える。">{custom}</textarea></div>
+    <button class="btn btn-primary" id="savePrompt">カスタム指示を保存</button>
+  </div>
 
   <h2>ストレージ上限（標準モード・KV）</h2>
   <div class="card">
@@ -72,6 +93,17 @@ const curMax = hasPlus ? await maxUploadMb(env) : 5;
   <script slot="scripts" is:inline>
     const cap=(b,btn)=>window.bo.api("/api/capabilities",b,{btn});
     const sk=(b,btn)=>window.bo.api("/api/skills",b,{btn});
+    document.getElementById("saveEngine").addEventListener("click",async(e)=>{
+      const engine=document.querySelector('input[name="engine"]:checked').value;
+      const ck=document.getElementById("claudeKey").value.trim();
+      if(ck){const kr=await window.bo.api("/api/keys",{claude:ck},{btn:e.currentTarget,successMsg:null});if(!kr.ok)return;if(kr.data.result&&kr.data.result.claude&&!kr.data.result.claude.ok){window.bo.toast("Claudeキー検証失敗："+(kr.data.result.claude.detail||""),"err");return;}}
+      const r=await window.bo.api("/api/settings",{_action:"ai_engine",engine},{btn:e.currentTarget,successMsg:"エンジン設定を保存しました"});
+      if(r.ok)setTimeout(()=>location.reload(),600);
+    });
+    document.getElementById("savePrompt").addEventListener("click",async(e)=>{
+      const prompt=document.getElementById("customPrompt").value;
+      await window.bo.api("/api/settings",{_action:"custom_prompt",prompt},{btn:e.currentTarget,successMsg:"カスタム指示を保存しました"});
+    });
     document.getElementById("saveMax").addEventListener("click",async(e)=>{const v=document.getElementById("maxmb").value;const r=await window.bo.api("/api/settings",{_action:"max_upload",mb:Number(v)},{btn:e.currentTarget,successMsg:"上限を保存しました"});if(r.ok)setTimeout(()=>location.reload(),600);});
     document.getElementById("capadd").addEventListener("click",async(e)=>{const r=await cap({_action:"create",capability:document.getElementById("cap").value,provider:document.getElementById("cprov").value,model:document.getElementById("cmodel").value,endpoint:document.getElementById("cendpoint").value,api_key:document.getElementById("ckey").value},e.currentTarget);if(r.ok){window.bo.toast("登録しました（無効状態）");setTimeout(()=>location.reload(),600);}});
     document.querySelectorAll("tr[data-cid]").forEach(tr=>{const id=tr.dataset.cid;

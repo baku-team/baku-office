@@ -6,6 +6,7 @@ import * as T from "./agent-tools.ts";
 import { webSearch, makeDocument } from "./media-ai.ts";
 import { listSkills, runSkill } from "./skills.ts";
 import { listCapabilities, invokeCapability, capabilitySummary, videoStatusText } from "./capabilities.ts";
+import { getAiEngine, getCustomPrompt } from "./settings.ts";
 
 const SYSTEM =
   "あなたは団体の会計・庶務を補助するLINEアシスタント『baku-office』です。日本語で簡潔に。" +
@@ -58,6 +59,33 @@ async function gemini(key: string, contents: Content[], decls: unknown[], sys: s
   return data.candidates?.[0]?.content ?? null;
 }
 
+// Claude（Anthropic Messages API）でのツールループ。Gemini宣言を Claude の tools 形式に変換して使う。
+type Decl = { name: string; description: string; parameters: unknown };
+type CContent = { type: string; text?: string; id?: string; name?: string; input?: Record<string, unknown> };
+async function claudeAgent(key: string, sys: string, decls: Decl[], userText: string, exec: (name: string, args: Record<string, unknown>) => Promise<string>): Promise<string> {
+  const tools = decls.map((d) => ({ name: d.name, description: d.description, input_schema: d.parameters }));
+  const messages: { role: string; content: unknown }[] = [{ role: "user", content: userText }];
+  for (let hop = 0; hop < 4; hop++) {
+    const r = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+      body: JSON.stringify({ model: "claude-sonnet-4-6", max_tokens: 1500, system: sys, tools, messages }),
+    });
+    if (!r.ok) { console.log("[claude-agent]", r.status, (await r.text()).slice(0, 200)); return "（Claudeの応答に失敗しました）"; }
+    const data = (await r.json()) as { content?: CContent[]; stop_reason?: string };
+    const content = data.content ?? [];
+    const toolUses = content.filter((c) => c.type === "tool_use");
+    if (!toolUses.length || data.stop_reason !== "tool_use") {
+      return content.filter((c) => c.type === "text").map((c) => c.text ?? "").join("").trim() || "（応答が空でした）";
+    }
+    messages.push({ role: "assistant", content });
+    const results = [];
+    for (const tu of toolUses) results.push({ type: "tool_result", tool_use_id: tu.id, content: await exec(tu.name!, tu.input ?? {}) });
+    messages.push({ role: "user", content: results });
+  }
+  return "処理が長くなりました。もう一度お試しください。";
+}
+
 async function execTool(env: Env, owner: string, baseUrl: string, name: string, args: Record<string, unknown>): Promise<string> {
   switch (name) {
     case "record_expense": return T.recordExpense(env, owner, { amount: Number(args.amount), title: String(args.title), date: args.date ? String(args.date) : undefined });
@@ -83,23 +111,33 @@ async function execTool(env: Env, owner: string, baseUrl: string, name: string, 
 // owner はデータスコープ識別子（LINE は `line:<userId>`、Web は session.uid）。呼び出し側で付与する。
 // API依存ツール（web_search=Gemini／make_document=Claude）は対応キーがある時だけモデルに提示。
 export async function runAgent(env: Env, owner: string, text: string, image?: { mimeType: string; dataB64: string }, baseUrl = ""): Promise<string> {
-  const key = await getApiKey(env, "gemini");
-  if (!key) return "AI機能が未設定です。管理画面の『連携設定』で Gemini APIキーを登録してください。";
-  const hasClaude = !!(await getApiKey(env, "claude"));
+  const geminiKey = await getApiKey(env, "gemini");
+  const claudeKey = await getApiKey(env, "claude");
+  if (!geminiKey && !claudeKey) return "AI機能が未設定です。管理画面の『連携設定』または『高度なオプション』で Gemini か Claude のAPIキーを登録してください。";
+  const hasClaude = !!claudeKey;
+  const engine = await getAiEngine(env);
   const enabledSkills = hasClaude ? await listSkills(env, true) : [];
   const caps = await listCapabilities(env, true);
   const capDecls = caps.map((c) => CAP_TOOLS[c.capability]).filter(Boolean);
   if (caps.some((c) => c.capability === "video_gen")) capDecls.push(VIDEO_STATUS_TOOL);
   const decls = [...TOOLS, ...GEMINI_TOOLS, ...(hasClaude ? CLAUDE_TOOLS : []), ...(enabledSkills.length ? [skillTool(enabledSkills.map((s) => s.name))] : []), ...capDecls];
-  // 自己認識：有効な追加能力をシステム文脈へ（AI/エージェントが参照できるように）。
+  // 自己認識：有効な追加能力＋団体のカスタム指示（口調・人格・回答形式）をシステム文脈へ。安全制約は不変。
   const capInfo = await capabilitySummary(env);
-  const sys = capInfo ? `${SYSTEM}\n${capInfo}` : SYSTEM;
+  const custom = await getCustomPrompt(env);
+  const sys = [SYSTEM, capInfo, custom && `団体の追加指示（口調・人格・回答形式など。安全制約は変更しない）:\n${custom}`].filter(Boolean).join("\n");
+
+  // エンジン選択：Claude（BYOK）を選択／Geminiが無い場合は Claude で実行（画像はGeminiパスのみ対応）。
+  if (claudeKey && (engine === "claude" || !geminiKey) && !image) {
+    return claudeAgent(claudeKey, sys, decls as Decl[], text || "（依頼）", (n, a) => execTool(env, owner, baseUrl, n, a));
+  }
+  if (!geminiKey) return "選択中のエンジンが未設定です。『連携設定』で Gemini APIキーを登録するか、高度なオプションでエンジンを Claude に切り替えてください。";
+
   const firstParts: Part[] = [{ text: text || "（画像）" }];
   if (image) firstParts.push({ inlineData: { mimeType: image.mimeType, data: image.dataB64 } });
   const contents: Content[] = [{ role: "user", parts: firstParts }];
 
   for (let hop = 0; hop < 4; hop++) {
-    const out = await gemini(key, contents, decls, sys);
+    const out = await gemini(geminiKey, contents, decls, sys);
     if (!out) return "（AIの応答に失敗しました）";
     const calls = out.parts.filter((p) => p.functionCall);
     if (!calls.length) return out.parts.map((p) => p.text ?? "").join("").trim() || "（応答が空でした）";
