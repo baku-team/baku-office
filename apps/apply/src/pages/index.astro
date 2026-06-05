@@ -108,12 +108,21 @@ const deployUrl = "https://deploy.workers.cloudflare.com/?url=https://github.com
           '<ol class="steps">' +
           '<li><strong>下のボタンでデプロイ</strong><br><span class="muted">Cloudflare と GitHub にログインすると、あなたの Cloudflare にアプリが作られます（鍵などの設定は不要）。</span><br><br>' +
           '<a href="' + deployUrl + '" target="_blank" rel="noreferrer"><img src="https://deploy.workers.cloudflare.com/button" alt="Deploy to Cloudflare" height="36"></a></li>' +
-          '<li><strong>アプリを開く</strong><br><span class="muted">デプロイが完了すると <strong>「Visit（プロジェクトにアクセス）」ボタン</strong>が表示されます。これを押すとあなたのアプリが開きます。<br>見つからない場合は <a href="https://dash.cloudflare.com/?to=/:account/workers-and-pages" target="_blank" rel="noreferrer">Cloudflare ダッシュボード</a> →「Workers &amp; Pages」→ <code>baku-office</code> をクリック。</span></li>' +
-          '<li><strong>Google でログイン</strong><br><span class="muted">アプリが開いたら「<strong>Google でログイン</strong>」を押し、<strong>申込時に入力したメール（' + (body.contactEmail || "申込メール") + '）の Google アカウント</strong>でログインしてください。自動でアクティベートされて利用開始です。<strong>ライセンスIDの入力は不要</strong>です。</span></li>' +
+          '<li><strong>アプリのURLを確認</strong><br><span class="muted">デプロイ完了後、<a href="https://dash.cloudflare.com/?to=/:account/workers-and-pages" target="_blank" rel="noreferrer">Cloudflare の「Workers &amp; Pages」</a> を開き、一覧の <code>baku-office</code> をクリックします。ページ上部に <strong>あなたのアプリのURL</strong>（<code>https://baku-office.◯◯◯.workers.dev</code>）が表示されるので、それを下に貼り付けてください（<code>◯◯◯</code> のサブドメインだけでもOK）。</span>' +
+          '<div style="display:flex;gap:6px;margin-top:6px"><input id="appurl" placeholder="https://baku-office.◯◯◯.workers.dev または ◯◯◯" style="flex:1;min-width:0;padding:8px;border:1px solid #dde3ea;border-radius:6px;font:inherit" /><button class="btn" id="openapp" style="flex:0 0 auto">アプリを開く</button></div>' +
+          '<div id="openhint" style="margin-top:6px"></div></li>' +
+          '<li><strong>Google でログイン</strong><br><span class="muted">アプリが開いたら「<strong>Google でログイン</strong>」を押し、<strong>申込時に入力したメール（' + (body.contactEmail || "申込メール") + '）の Google アカウント</strong>でログインしてください。自動でアクティベートされて利用開始です（ライセンスIDの入力は不要）。</span></li>' +
           '</ol>' +
-          '<p class="muted">URL・サブドメイン・ライセンスIDを調べたり入力したりする必要はありません。Cloudflare の画面から <code>baku-office</code> を開いて Google ログインするだけです。</p>' +
           '<p class="muted" style="font-size:.85em">（手動が必要な場合のライセンスID：<code>' + j.licenseId + '</code>）</p>';
         out.scrollIntoView({ behavior: "smooth" });
+        document.getElementById("openapp").addEventListener("click", () => {
+          let s = document.getElementById("appurl").value.trim();
+          if (!s) { toast("アプリのURL（またはサブドメイン）を貼ってください", "err"); return; }
+          s = s.replace(/^https?:\/\//, "").replace(/\/.*$/, "");
+          const host = s.includes(".workers.dev") ? "https://" + s : "https://baku-office." + s + ".workers.dev";
+          document.getElementById("openhint").innerHTML = '開けない場合はこちら：<a href="' + host + '/" target="_blank" rel="noreferrer">' + host + '</a>';
+          window.open(host + "/", "_blank");
+        });
       });
     </script>
   </body>
