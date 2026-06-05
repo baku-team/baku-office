@@ -8,10 +8,12 @@ const google = providerEnabled(env, "google") || !!(env.VERIFY_PUBLIC_JWK && env
 const line = providerEnabled(env, "line");
 const discord = providerEnabled(env, "discord");
 const e = Astro.url.searchParams.get("e");
+const activated = Astro.url.searchParams.get("activated");
 const emsg: Record<string, string> = { state: "セッションが切れました。再度お試しください。", oauth: "認証に失敗しました。", notorg: "この組織のGoogleアカウントではありません。", pending: "登録は管理者の承認待ちです。" };
 ---
 <App title="ログイン" auth={false}>
   <h1 style="margin-top:1rem">ログイン</h1>
+  {activated && <div class="banner banner-info">✅ アクティベーションが完了しました。続けて Google でログインしてください。</div>}
   {e && <div class="banner banner-danger">{emsg[e] ?? "エラー"}</div>}
   <div class="card">
     <h2 style="margin-top:0;border:0">組織（管理者）</h2>

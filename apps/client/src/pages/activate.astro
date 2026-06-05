@@ -15,7 +15,7 @@ if (code) {
   const { hostFetch, saveToken } = await import("../lib/client.ts");
   const r = await hostFetch(env, "/api/token", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ code, deployUrl: origin }) });
   const j = (await r.json().catch(() => ({}))) as { ok?: boolean; token?: string; error?: string };
-  if (j.ok && j.token) { await saveToken(env, j.token); return Astro.redirect("/", 302); }
+  if (j.ok && j.token) { await saveToken(env, j.token); return Astro.redirect("/login?activated=1", 302); }
   message = "アクティベーションに失敗しました：" + (j.error ?? "不明なエラー");
 }
 ---

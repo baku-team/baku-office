@@ -3,6 +3,8 @@ export const prerender = false;
 import App from "../layouts/App.astro";
 import { planLabel } from "@baku-office/shared";
 const env = Astro.locals.runtime.env;
+const { getSession } = await import("../lib/auth.ts");
+if (!(await getSession(env, Astro.request))) return Astro.redirect("/login", 302);
 const { pollHost, cachedEntitlement } = await import("../lib/client.ts");
 const check = await pollHost(env, Astro.url.origin);
 const entitlement = check?.entitlement ?? (await cachedEntitlement(env));
