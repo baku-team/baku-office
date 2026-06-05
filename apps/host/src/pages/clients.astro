@@ -39,7 +39,7 @@ const opt = (cur: string, v: string) => ({ value: v, selected: cur === v });
           <td>{r.version ?? "—"}</td>
           <td>{fmt(r.created_at)}</td>
           <td>{fmt(r.last_seen)}</td>
-          <td><button class="btn btn-sm btn-primary c-save">保存</button></td>
+          <td style="white-space:nowrap"><button class="btn btn-sm btn-primary c-save">保存</button> <button class="btn btn-sm btn-danger c-del">削除</button></td>
         </tr>
       ))}
       {results.length === 0 && (<tr><td colspan="8" class="muted">まだ申込がありません。</td></tr>)}
@@ -58,6 +58,11 @@ const opt = (cur: string, v: string) => ({ value: v, selected: cur === v });
           status: tr.querySelector(".c-status").value,
         };
         await window.bo.api("/api/clients", body, { btn: e.currentTarget, successMsg: "更新しました" });
+      });
+      tr.querySelector(".c-del")?.addEventListener("click", async (e) => {
+        if (!confirm("この団体を削除（アクティベート解除）しますか？\n有料機能は停止し、再開には再申込が必要です。")) return;
+        const r = await window.bo.api("/api/clients", { _action: "delete", license_id: tr.dataset.lic }, { btn: e.currentTarget, successMsg: "削除しました" });
+        if (r.ok) setTimeout(() => location.reload(), 500);
       });
     });
   </script>

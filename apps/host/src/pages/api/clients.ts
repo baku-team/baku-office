@@ -10,8 +10,21 @@ export const POST: APIRoute = async ({ request, locals }) => {
   const env = locals.runtime.env;
   const ses = await getHostSession(env, request);
   if (!ses?.isAdmin) return json({ error: "管理者のみ" }, 403);
-  const b = (await request.json().catch(() => ({}))) as { license_id?: string; plan?: string; entitlement?: string; status?: string };
+  const b = (await request.json().catch(() => ({}))) as { _action?: string; license_id?: string; plan?: string; entitlement?: string; status?: string };
   if (!b.license_id) return json({ error: "license_id が必要" }, 400);
+
+  // 削除（アクティベート解除）：ライセンス・アクティベーションコード・（他に紐づくライセンスが無ければ）顧客を削除。
+  // クライアント側の既存トークンは次回の統合チェックでライセンス無し＝無料(Free)相当に落ち、有料機能が停止する。再開は再申込。
+  if (b._action === "delete") {
+    const row = await env.DB.prepare("SELECT customer_id FROM licenses WHERE license_id = ?").bind(b.license_id).first<{ customer_id: string }>();
+    await env.DB.prepare("DELETE FROM licenses WHERE license_id = ?").bind(b.license_id).run();
+    await env.DB.prepare("DELETE FROM activation_codes WHERE license_id = ?").bind(b.license_id).run();
+    if (row?.customer_id) {
+      const other = await env.DB.prepare("SELECT 1 FROM licenses WHERE customer_id = ? LIMIT 1").bind(row.customer_id).first();
+      if (!other) await env.DB.prepare("DELETE FROM customers WHERE id = ?").bind(row.customer_id).run();
+    }
+    return json({ ok: true });
+  }
 
   const sets: string[] = [];
   const binds: unknown[] = [];
