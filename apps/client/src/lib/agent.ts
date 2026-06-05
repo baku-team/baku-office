@@ -7,6 +7,7 @@ import { webSearch, makeDocument } from "./media-ai.ts";
 import { listSkills, runSkill } from "./skills.ts";
 import { listCapabilities, invokeCapability, capabilitySummary, videoStatusText } from "./capabilities.ts";
 import { getAiEngine, getCustomPrompt } from "./settings.ts";
+import { recordUsage, overBudget } from "./usage.ts";
 
 const SYSTEM =
   "あなたは団体の会計・庶務を補助するLINEアシスタント『baku-office』です。日本語で簡潔に。" +
@@ -127,10 +128,22 @@ export async function runAgent(env: Env, owner: string, text: string, image?: { 
   const sys = [SYSTEM, capInfo, custom && `団体の追加指示（口調・人格・回答形式など。安全制約は変更しない）:\n${custom}`].filter(Boolean).join("\n");
 
   // エンジン選択：Claude（BYOK）を選択／Geminiが無い場合は Claude で実行（画像はGeminiパスのみ対応）。
-  if (claudeKey && (engine === "claude" || !geminiKey) && !image) {
-    return claudeAgent(claudeKey, sys, decls as Decl[], text || "（依頼）", (n, a) => execTool(env, owner, baseUrl, n, a));
+  const useClaude = !!claudeKey && (engine === "claude" || !geminiKey) && !image;
+  if (useClaude) {
+    const b = await overBudget(env, "claude");
+    if (b === "pause") return "Claudeの今月の利用上限に達しました（高度なオプション → API使用量 で変更できます）。";
+    if (b !== "switch_free") {
+      // ok：Claudeで実行。
+      await recordUsage(env, "claude");
+      return claudeAgent(claudeKey!, sys, decls as Decl[], text || "（依頼）", (n, a) => execTool(env, owner, baseUrl, n, a));
+    }
+    // switch_free：Geminiが使えればフォールバック、無ければ停止。
+    if (!geminiKey) return "Claudeの上限に達しました（Gemini未設定のため停止）。高度なオプションで上限を変更してください。";
   }
   if (!geminiKey) return "選択中のエンジンが未設定です。『連携設定』で Gemini APIキーを登録するか、高度なオプションでエンジンを Claude に切り替えてください。";
+  const gb = await overBudget(env, "gemini");
+  if (gb !== "ok") return "Geminiの今月の利用上限に達しました（高度なオプション → API使用量 で変更できます）。";
+  await recordUsage(env, "gemini");
 
   const firstParts: Part[] = [{ text: text || "（画像）" }];
   if (image) firstParts.push({ inlineData: { mimeType: image.mimeType, data: image.dataB64 } });

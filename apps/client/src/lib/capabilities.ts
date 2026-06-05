@@ -4,6 +4,7 @@ import { randomId, encryptField, decryptField } from "@baku-office/shared";
 import { masterKey } from "./client.ts";
 import { saveFile } from "./storage.ts";
 import { nowSec } from "./accounting.ts";
+import { recordUsage } from "./usage.ts";
 
 export type Capability = { id: string; capability: string; provider: string | null; endpoint: string | null; model: string | null; enabled: number; created_at: number };
 
@@ -45,6 +46,7 @@ export async function invokeCapability(env: Env, owner: string, baseUrl: string,
   if (!cap) return `${CAPABILITY_LABEL[capability]}は未設定です（高度なオプションで追加・有効化してください）。`;
   const key = await capKey(env, cap.id);
   if (!key) return `${CAPABILITY_LABEL[capability]}のAPIキーが未設定です。`;
+  await recordUsage(env, capability);
 
   try {
     if (capability === "image_gen") {

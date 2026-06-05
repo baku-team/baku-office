@@ -1,0 +1,104 @@
+---
+export const prerender = false;
+import App from "../layouts/App.astro";
+import { atLeast } from "@baku-office/shared";
+const env = Astro.locals.runtime.env;
+const { getSession } = await import("../lib/auth.ts");
+const ses = await getSession(env, Astro.request);
+if (!ses) return Astro.redirect("/login", 302);
+const { cachedEntitlement } = await import("../lib/client.ts");
+const hasPlus = atLeast(await cachedEntitlement(env), "plus");
+const isAdmin = ses.role === "admin" && ses.ctx === "org";
+
+const { dailyTotals, monthTotals, todayTotals, getLimits, resetTimes, PROVIDER_LABEL, USAGE_PROVIDERS } = await import("../lib/usage.ts");
+let daily: { day: string; count: number }[] = [];
+let month: Record<string, number> = {};
+let today: Record<string, number> = {};
+let limits: Record<string, { freeQuota?: number; monthlyCap?: number; onExceed?: string }> = {};
+let reset = { daily: "", monthly: "" };
+if (hasPlus) {
+  daily = await dailyTotals(env, 14);
+  month = await monthTotals(env);
+  today = await todayTotals(env);
+  limits = await getLimits(env);
+  reset = resetTimes();
+}
+const maxDay = Math.max(1, ...daily.map((d) => d.count));
+const rows = USAGE_PROVIDERS.map((p) => ({ p, label: PROVIDER_LABEL[p] ?? p, today: today[p] ?? 0, month: month[p] ?? 0, lim: limits[p] ?? {} }));
+const overs = rows.filter((r) => r.lim.monthlyCap && r.month >= (r.lim.monthlyCap ?? 0));
+const warns = rows.filter((r) => r.lim.freeQuota && r.today >= (r.lim.freeQuota ?? 0) * 0.8 && r.today < (r.lim.monthlyCap ?? Infinity));
+---
+<App title="API使用量" active="/usage">
+  <h1>API使用量</h1>
+  {!hasPlus && (
+    <div class="card">
+      <div class="banner banner-warn">この機能は <strong>Plus 以上</strong>のプランで利用できます。</div>
+      <p class="muted">AI機能・各APIの利用回数を数値とグラフで確認し、無料枠アラートや従量上限を設定できます。</p>
+      <a class="btn btn-primary" href="/billing">プラン・課金へ</a>
+    </div>
+  )}
+  {hasPlus && (
+    <Fragment>
+      <p class="muted">AI機能・各APIの利用回数（リクエスト単位）。無料枠の目安・従量上限を設定できます（カウントはUTC日次）。</p>
+
+      {overs.map((r) => (<div class="banner banner-danger">⛔ <strong>{r.label}</strong> が当月の上限（{r.lim.monthlyCap}）に達しました。{r.lim.onExceed === "switch_free" ? "無料エンジン（Gemini）へ自動切替されます。" : "該当APIの利用を一時停止します。"} リセット：{reset.monthly}</div>))}
+      {warns.map((r) => (<div class="banner banner-warn">⚠️ <strong>{r.label}</strong> が本日の無料枠（{r.lim.freeQuota}）に近づいています（本日 {r.today}）。リセット：{reset.daily}</div>))}
+
+      <h2>直近14日の利用</h2>
+      <div class="card">
+        <div class="bars">
+          {daily.map((d) => (
+            <div class="bar" title={`${d.day}: ${d.count}`}>
+              <div class="fill" style={`height:${Math.round((d.count / maxDay) * 100)}%`}></div>
+              <div class="bl">{d.day.slice(5)}</div>
+            </div>
+          ))}
+        </div>
+        <p class="muted" style="margin:.4rem 0 0">14日合計：{daily.reduce((a, d) => a + d.count, 0)} 回</p>
+      </div>
+
+      <h2>プロバイダ別</h2>
+      <div class="banner banner-info">リセット：無料枠＝<strong>{reset.daily}</strong>（日次）／上限＝<strong>{reset.monthly}</strong>（月次）</div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>API</th><th>本日</th><th>当月</th><th>無料枠/日</th><th>当月上限</th><th>超過時</th></tr></thead>
+        <tbody>
+          {rows.map((r) => (
+            <tr data-prov={r.p}>
+              <td>{r.label}</td>
+              <td class={r.lim.freeQuota && r.today >= (r.lim.freeQuota ?? 0) * 0.8 ? "u-warn" : ""}>{r.today}{r.lim.freeQuota ? ` / ${r.lim.freeQuota}` : ""}</td>
+              <td class={r.lim.monthlyCap && r.month >= (r.lim.monthlyCap ?? 0) ? "u-over" : ""}>{r.month}{r.lim.monthlyCap ? ` / ${r.lim.monthlyCap}` : ""}</td>
+              <td><input class="lim-fq" type="number" min="0" value={r.lim.freeQuota ?? ""} placeholder="—" disabled={!isAdmin} style="width:90px" /></td>
+              <td><input class="lim-mc" type="number" min="0" value={r.lim.monthlyCap ?? ""} placeholder="—" disabled={!isAdmin} style="width:90px" /></td>
+              <td><select class="lim-oe" disabled={!isAdmin}><option value="pause" selected={r.lim.onExceed !== "switch_free"}>一時停止</option><option value="switch_free" selected={r.lim.onExceed === "switch_free"}>無料(Gemini)へ</option></select></td>
+            </tr>
+          ))}
+        </tbody>
+      </table></div>
+      {isAdmin && (<button class="btn btn-primary" id="saveLimits">上限を保存</button>)}
+      {!isAdmin && (<p class="muted">上限の変更は管理者のみ可能です。</p>)}
+
+      <script slot="scripts" is:inline>
+        const btn = document.getElementById("saveLimits");
+        if (btn) btn.addEventListener("click", async (e) => {
+          const limits = {};
+          document.querySelectorAll("tr[data-prov]").forEach((tr) => {
+            const fq = tr.querySelector(".lim-fq").value;
+            const mc = tr.querySelector(".lim-mc").value;
+            limits[tr.dataset.prov] = { freeQuota: fq ? Number(fq) : 0, monthlyCap: mc ? Number(mc) : 0, onExceed: tr.querySelector(".lim-oe").value };
+          });
+          const r = await window.bo.api("/api/usage", { limits }, { btn: e.currentTarget, successMsg: "上限を保存しました" });
+          if (r.ok) setTimeout(() => location.reload(), 600);
+        });
+      </script>
+    </Fragment>
+  )}
+</App>
+
+<style>
+  .bars { display: flex; align-items: flex-end; gap: 4px; height: 140px; }
+  .bar { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; height: 100%; }
+  .bar .fill { width: 64%; background: #14365c; border-radius: 3px 3px 0 0; min-height: 2px; transition: height .2s; }
+  .bar .bl { font-size: .55rem; color: #6b7785; margin-top: 3px; white-space: nowrap; }
+  .u-warn { color: #b4541a; font-weight: 700; }
+  .u-over { color: #c0392b; font-weight: 700; }
+</style>

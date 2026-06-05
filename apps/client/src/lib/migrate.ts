@@ -9,6 +9,7 @@ import m0004 from "../../migrations/0004_summary_jobs.sql?raw";
 import m0005 from "../../migrations/0005_skills.sql?raw";
 import m0006 from "../../migrations/0006_capabilities_diag.sql?raw";
 import m0007 from "../../migrations/0007_video_jobs.sql?raw";
+import m0008 from "../../migrations/0008_api_usage.sql?raw";
 
 // 並び順＝適用順。新しいマイグレーションはここに追記するだけ。
 const MIGRATIONS: { id: string; sql: string }[] = [
@@ -19,6 +20,7 @@ const MIGRATIONS: { id: string; sql: string }[] = [
   { id: "0005_skills", sql: m0005 },
   { id: "0006_capabilities_diag", sql: m0006 },
   { id: "0007_video_jobs", sql: m0007 },
+  { id: "0008_api_usage", sql: m0008 },
 ];
 
 export const SCHEMA_VERSION = MIGRATIONS.length;

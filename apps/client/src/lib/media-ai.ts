@@ -4,6 +4,7 @@ import { randomId } from "@baku-office/shared";
 import { getApiKey } from "./client.ts";
 import { getFile, saveFile } from "./storage.ts";
 import { nowSec } from "./accounting.ts";
+import { recordUsage } from "./usage.ts";
 
 const GEMINI = "gemini-2.5-flash";
 
@@ -35,6 +36,7 @@ async function geminiGenerate(key: string, parts: unknown[], tools?: unknown[]):
 export async function transcribeAudio(env: Env, buf: ArrayBuffer, mime: string): Promise<string | null> {
   const key = await getApiKey(env, "gemini");
   if (!key) return null;
+  await recordUsage(env, "gemini");
   const prompt = "この音声を日本語で文字起こしし、会議なら話者を区別して要点・決定事項を議事録形式でまとめてください。";
   if (buf.byteLength <= 18 * 1024 * 1024) {
     const b64 = btoa(String.fromCharCode(...new Uint8Array(buf)));
@@ -49,6 +51,7 @@ export async function transcribeAudio(env: Env, buf: ArrayBuffer, mime: string):
 export async function webSearch(env: Env, query: string): Promise<string | null> {
   const key = await getApiKey(env, "gemini");
   if (!key) return null;
+  await recordUsage(env, "web_search");
   const text = await geminiGenerate(key, [{ text: query }], [{ googleSearch: {} }]);
   return text || "（検索結果が得られませんでした）";
 }
@@ -67,6 +70,7 @@ export async function processSummaryJobs(env: Env, limit = 3): Promise<number> {
   for (const job of results) {
     const f = await getFile(env, job.file_id);
     if (!f) { await env.DB.prepare("UPDATE summary_jobs SET status='error',updated_at=? WHERE id=?").bind(nowSec(), job.id).run(); continue; }
+    await recordUsage(env, "gemini");
     const uri = await geminiUpload(key, f.buf, f.mime);
     const summary = uri ? await geminiGenerate(key, [{ text: "この資料の要点・数値・結論を漏れなく日本語で要約してください。" }, { file_data: { mime_type: f.mime, file_uri: uri } }]) : "";
     if (!summary) { await env.DB.prepare("UPDATE summary_jobs SET status='error',updated_at=? WHERE id=?").bind(nowSec(), job.id).run(); continue; }
@@ -83,6 +87,7 @@ export async function processSummaryJobs(env: Env, limit = 3): Promise<number> {
 export async function makeDocument(env: Env, owner: string, baseUrl: string, a: { type: string; title: string; content: string }): Promise<string> {
   const key = await getApiKey(env, "claude");
   if (!key) return "資料生成には Claude APIキーが必要です（連携設定で登録してください）。";
+  await recordUsage(env, "claude");
   const type = ["md", "csv", "txt"].includes(a.type) ? a.type : "md";
   const sys = `あなたは資料作成アシスタント。指示に従い ${type} 形式の本文だけを出力（前置き・コードフェンス無し）。`;
   const r = await fetch("https://api.anthropic.com/v1/messages", {
