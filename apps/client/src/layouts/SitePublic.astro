@@ -1,0 +1,59 @@
+---
+// 公開HP/LPの最小レイアウト（認証不要）。body は管理者入力HTML（自己ホスト・信頼）。
+interface Props { site: { title: string; body: string | null; show_join: number } }
+const { site } = Astro.props as Props;
+---
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>{site.title}</title>
+    <style>
+      * { box-sizing: border-box; }
+      body { font-family: system-ui, "Hiragino Sans", "Noto Sans JP", Meiryo, sans-serif; margin: 0; color: #1f2933; line-height: 1.8; background: #fff; }
+      .site { max-width: 760px; margin: 0 auto; padding: 32px 18px 80px; }
+      .site h1, .site h2 { color: #14365c; }
+      .site img { max-width: 100%; height: auto; }
+      .join { border: 1px solid #dde3ea; border-radius: 12px; padding: 18px; margin-top: 32px; background: #f4f6f9; }
+      .join h2 { margin-top: 0; }
+      .join input { width: 100%; padding: 10px; border: 1px solid #dde3ea; border-radius: 8px; font: inherit; margin: 6px 0; }
+      .join button { background: #14365c; color: #fff; border: 0; border-radius: 8px; padding: 11px 22px; font-weight: 700; cursor: pointer; }
+      .join button[disabled] { opacity: .6; }
+      .jmsg { margin-top: 10px; color: #1f7a4d; font-size: .9rem; }
+    </style>
+  </head>
+  <body>
+    <main class="site">
+      <article set:html={site.body ?? ""}></article>
+
+      {site.show_join === 1 && (
+        <section class="join">
+          <h2>会員申込</h2>
+          <form id="joinForm">
+            <input id="j-name" placeholder="お名前" required />
+            <input id="j-contact" placeholder="連絡先（電話/メール）" />
+            <button type="submit">申し込む</button>
+            <div class="jmsg" id="joinMsg"></div>
+          </form>
+        </section>
+      )}
+    </main>
+
+    <script is:inline>
+      const f = document.getElementById("joinForm");
+      if (f) f.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const name = document.getElementById("j-name").value.trim();
+        const msg = document.getElementById("joinMsg");
+        if (!name) { msg.textContent = "お名前を入力してください。"; msg.style.color = "#c0392b"; return; }
+        const btn = f.querySelector("button"); btn.disabled = true;
+        try {
+          const r = await fetch("/api/site/join", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name, contact: document.getElementById("j-contact").value }) });
+          if (r.ok) { msg.style.color = "#1f7a4d"; msg.textContent = "お申し込みありがとうございます。確認のご連絡をお待ちください。"; f.reset(); }
+          else { msg.style.color = "#c0392b"; msg.textContent = "送信に失敗しました。時間をおいてお試しください。"; }
+        } catch { msg.style.color = "#c0392b"; msg.textContent = "通信に失敗しました。"; } finally { btn.disabled = false; }
+      });
+    </script>
+  </body>
+</html>

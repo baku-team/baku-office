@@ -1,0 +1,78 @@
+---
+export const prerender = false;
+import App from "../../layouts/App.astro";
+import { atLeast } from "@baku-office/shared";
+const env = Astro.locals.runtime.env;
+const { getSession } = await import("../../lib/auth.ts");
+const ses = await getSession(env, Astro.request);
+if (!ses || ses.role !== "admin" || ses.ctx !== "org") return Astro.redirect("/login", 302);
+const { cachedEntitlement } = await import("../../lib/client.ts");
+const hasPro = atLeast(await cachedEntitlement(env), "pro");
+const { listSites } = await import("../../lib/sites.ts");
+const sites = hasPro ? await listSites(env) : [];
+const origin = Astro.url.origin;
+---
+<App title="HP/LP 管理" active="/settings/site">
+  <h1>HP/LP 管理</h1>
+  {!hasPro && (
+    <div class="card">
+      <div class="banner banner-warn">この機能は <strong>Pro プラン</strong>で利用できます。</div>
+      <p class="muted">団体のHP/LPをサブパスで公開し、会員申込フォームを会員管理・Stripe と連動できます。</p>
+      <a class="btn btn-primary" href="/billing">プラン・課金へ</a>
+    </div>
+  )}
+  {hasPro && (
+    <Fragment>
+      <p class="muted">サブパス公開：トップ＝<code>{origin}/site</code>（slug=home）、各ページ＝<code>{origin}/lp/&lt;slug&gt;</code>。会員申込フォームを表示すると<strong>会員管理に連動</strong>します。</p>
+
+      <h2>ページ一覧</h2>
+      <div class="table-wrap"><table>
+        <thead><tr><th>slug</th><th>タイトル</th><th>状態</th><th>申込</th><th>操作</th></tr></thead>
+        <tbody>
+          {sites.map((s) => (
+            <tr data-slug={s.slug} data-title={s.title} data-body={s.body ?? ""} data-pub={s.published} data-join={s.show_join}>
+              <td><code>{s.slug}</code></td><td>{s.title}</td><td>{s.published ? "公開" : "下書き"}</td><td>{s.show_join ? "あり" : "—"}</td>
+              <td style="white-space:nowrap"><button class="btn btn-sm s-edit">編集</button> {s.published && (<a class="btn btn-sm" href={s.slug === "home" ? "/site" : "/lp/" + s.slug} target="_blank" rel="noreferrer">開く</a>)} <button class="btn btn-sm btn-danger s-del">削除</button></td>
+            </tr>
+          ))}
+          {sites.length === 0 && (<tr><td colspan="5" class="muted">ページがありません。下で作成してください。</td></tr>)}
+        </tbody>
+      </table></div>
+
+      <h2 id="editor">ページを作成 / 編集</h2>
+      <div class="card">
+        <div class="field"><label>slug（英数字。トップは home）</label><input id="s-slug" placeholder="home" /></div>
+        <div class="field"><label>タイトル</label><input id="s-title" /></div>
+        <div class="field"><label>本文（HTML可）</label><textarea id="s-body" rows="10" placeholder="<h1>○○会へようこそ</h1><p>……</p>"></textarea></div>
+        <label><input type="checkbox" id="s-pub" /> 公開する</label>
+        <label style="margin-left:1rem"><input type="checkbox" id="s-join" /> 会員申込フォームを表示</label>
+        <div style="margin-top:.6rem"><button class="btn btn-primary" id="s-save">保存</button></div>
+      </div>
+
+      <h2>Stripe 連携（任意）</h2>
+      <div class="banner banner-info">カード決済で会員を自動連携する場合：Stripe の Webhook 送信先に <code>{origin}/api/site/stripe-webhook</code> を設定し、連携設定で Stripe のシークレット／Webhook シークレットを登録してください。未設定でも申込は「未払い」で登録され、<strong>現金管理の団体は手動またはエージェントで会員管理</strong>できます。</div>
+
+      <script slot="scripts" is:inline>
+        const save = document.getElementById("s-save");
+        document.querySelectorAll("tr[data-slug]").forEach((tr) => {
+          tr.querySelector(".s-edit")?.addEventListener("click", () => {
+            document.getElementById("s-slug").value = tr.dataset.slug;
+            document.getElementById("s-title").value = tr.dataset.title;
+            document.getElementById("s-body").value = tr.dataset.body;
+            document.getElementById("s-pub").checked = tr.dataset.pub === "1";
+            document.getElementById("s-join").checked = tr.dataset.join === "1";
+            location.hash = "editor";
+          });
+          tr.querySelector(".s-del")?.addEventListener("click", async (e) => {
+            if (confirm("このページを削除しますか？")) { const r = await window.bo.api("/api/site", { _action: "delete", slug: tr.dataset.slug }, { btn: e.currentTarget }); if (r.ok) setTimeout(() => location.reload(), 400); }
+          });
+        });
+        save.addEventListener("click", async (e) => {
+          const slug = (document.getElementById("s-slug").value.trim() || "home");
+          const r = await window.bo.api("/api/site", { _action: "save", slug, title: document.getElementById("s-title").value, body: document.getElementById("s-body").value, published: document.getElementById("s-pub").checked, show_join: document.getElementById("s-join").checked }, { btn: e.currentTarget, successMsg: "保存しました" });
+          if (r.ok) setTimeout(() => location.reload(), 600);
+        });
+      </script>
+    </Fragment>
+  )}
+</App>

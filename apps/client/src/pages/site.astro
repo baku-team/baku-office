@@ -1,0 +1,9 @@
+---
+export const prerender = false;
+import SitePublic from "../layouts/SitePublic.astro";
+const env = Astro.locals.runtime.env;
+const { getPublishedSite } = await import("../lib/sites.ts");
+const site = await getPublishedSite(env, "home");
+if (!site) return new Response("ページは公開されていません。", { status: 404, headers: { "content-type": "text/plain; charset=utf-8" } });
+---
+<SitePublic site={site} />
