@@ -23,6 +23,7 @@ const items: Item[] = [
   { href: "/files", label: "ファイル", show: true },
   { href: "/schedule", label: "予定", show: true },
   { href: "/minutes", label: "議事録", show: true },
+  { href: "/membership", label: "会員管理", show: ses?.ctx === "org" },
   { href: "/chat", label: "AIチャット", show: hasPlus },
   { href: "/usage", label: "API使用量", show: hasPlus },
   { href: "/drive", label: "ドライブ", show: hasPlus },
