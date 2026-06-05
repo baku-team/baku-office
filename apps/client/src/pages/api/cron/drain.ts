@@ -5,6 +5,7 @@ import { dueReminders, markReminderDone } from "../../../lib/agent-tools.ts";
 import { processSummaryJobs } from "../../../lib/media-ai.ts";
 import { pollVideoJobs } from "../../../lib/capabilities.ts";
 import { guardHeavy } from "../../../lib/diag.ts";
+import { getDriveBackup, backupToDrive } from "../../../lib/drive.ts";
 
 export const prerender = false;
 const json = (o: unknown, s = 200) => new Response(JSON.stringify(o), { status: s, headers: { "content-type": "application/json" } });
@@ -30,5 +31,12 @@ export const POST: APIRoute = async ({ request, locals }) => {
       await markReminderDone(env, r.id);
     }
   }
-  return json({ ok: true, sent, summarized, video });
+  // 任意：Google ドライブへの定期バックアップ（有効時のみ）。
+  let driveBackup: { uploaded: number; error?: string } = { uploaded: 0 };
+  if ((await getDriveBackup(env)).enabled) {
+    const dr = await guardHeavy(env, "drive backup", () => backupToDrive(env, 5));
+    if (dr.ok) driveBackup = dr.value;
+  }
+
+  return json({ ok: true, sent, summarized, video, driveBackup });
 };
