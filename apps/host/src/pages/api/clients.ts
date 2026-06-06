@@ -1,5 +1,6 @@
 import type { APIRoute } from "astro";
 import { getHostSession } from "../../lib/hostauth.ts";
+import { deleteRepo } from "@baku-office/shared";
 
 export const prerender = false;
 const json = (o: unknown, s = 200) => new Response(JSON.stringify(o), { status: s, headers: { "content-type": "application/json" } });
@@ -22,6 +23,10 @@ export const POST: APIRoute = async ({ request, locals }) => {
     if (row?.customer_id) {
       const other = await env.DB.prepare("SELECT 1 FROM licenses WHERE customer_id = ? LIMIT 1").bind(row.customer_id).first();
       if (!other) await env.DB.prepare("DELETE FROM customers WHERE id = ?").bind(row.customer_id).run();
+    }
+    // throwaway リポを削除（§2.3・best-effort）。クライアントのCF内データには触れない。
+    if (env.GITHUB_TOKEN && env.GITHUB_OWNER) {
+      try { await deleteRepo({ token: env.GITHUB_TOKEN, owner: env.GITHUB_OWNER }, b.license_id); } catch { /* best-effort */ }
     }
     return json({ ok: true });
   }

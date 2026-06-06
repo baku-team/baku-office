@@ -4,10 +4,15 @@ import App from "../layouts/App.astro";
 import { planLabel } from "@baku-office/shared";
 const env = Astro.locals.runtime.env;
 const { getSession } = await import("../lib/auth.ts");
-if (!(await getSession(env, Astro.request))) return Astro.redirect("/login", 302);
-const { pollHost, cachedEntitlement } = await import("../lib/client.ts");
+const ses = await getSession(env, Astro.request);
+if (!ses) return Astro.redirect("/login", 302);
+const { pollHost, cachedEntitlement, APP_VERSION } = await import("../lib/client.ts");
+const { cmpVersion } = await import("../lib/update.ts");
 const check = await pollHost(env, Astro.url.origin);
 const entitlement = check?.entitlement ?? (await cachedEntitlement(env));
+// 第2層更新：最新版が同梱版より新しければ更新を案内（管理者のみ操作可）。
+const updateAvailable = !!check && cmpVersion(check.latestVersion, APP_VERSION) > 0;
+const isOrgAdmin = ses.role === "admin" && ses.ctx === "org";
 const { getStorageUsage, fmtBytes } = await import("../lib/storage-usage.ts");
 const storage = await getStorageUsage(env);
 const pct = (u: number, l: number) => (u < 0 || l <= 0 ? 0 : Math.min(100, Math.round((u / l) * 100)));
@@ -23,6 +28,10 @@ const yen = (n: number) => "¥" + n.toLocaleString("ja-JP");
   <p class="muted">プラン：<span class="pill">{planLabel(entitlement)}</span> ／ {check ? "ホスト疎通OK" : "オフライン（キャッシュ表示）"}</p>
 
   {notices.map((n) => (<div class={`banner ${n.severity === "critical" ? "banner-danger" : n.severity === "important" ? "banner-warn" : "banner-info"}`} data-sev={n.severity} data-id={n.id}>{n.body}</div>))}
+
+  {updateAvailable && (
+    <div class="banner banner-warn">🔔 新しいバージョン <strong>{check?.latestVersion}</strong> があります（現在 {APP_VERSION}）。{isOrgAdmin ? <a href="/settings/update">更新する</a> : "管理者にアプリの更新をご依頼ください。"}</div>
+  )}
 
   <div class="grid">
     <div class="card"><div class="label">口座残高（期首合計）</div><div class="num">{yen(balance)}</div></div>

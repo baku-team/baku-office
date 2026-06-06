@@ -3,12 +3,14 @@
 //   配布リポジトリ用の release/ を組み立てる（dist + wrangler.jsonc + migrations + README）。
 //   ※ 真の難読化（変数名mangle等）を強化する場合はここに難読化ツールを挟む。
 import { execSync } from "node:child_process";
-import { cpSync, rmSync, mkdirSync, copyFileSync, existsSync, readdirSync } from "node:fs";
+import { cpSync, rmSync, mkdirSync, copyFileSync, existsSync, readdirSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const out = join(root, "release");
+// 配布バージョン（第2層更新の日和見ローダが同梱 VERSION として比較・§3.2）。
+const VERSION = "0.1.0";
 
 console.log("1) Astro 本番ビルド（minify）…");
 execSync("npx astro build", { cwd: root, stdio: "inherit" });
@@ -32,6 +34,24 @@ copyFileSync(join(root, "deploy", "README.template.md"), join(out, "README.md"))
 if (existsSync(join(root, "public", ".assetsignore"))) {
   copyFileSync(join(root, "public", ".assetsignore"), join(out, ".assetsignore"));
 }
+
+// deploy スクリプト群（§2.4・§3.2）：
+//   deploy = prebuild-update（日和見ローダ）→ wrangler deploy（deploy.log へ出力）→ postdeploy（初回URL報告）。
+//   report.json は焼き込まない＝ホストが個別リポ生成時に注入する（共有リポでは無し＝初回ログイン捕捉に委ねる）。
+writeFileSync(
+  join(out, "package.json"),
+  JSON.stringify(
+    {
+      private: true,
+      scripts: { deploy: "node prebuild-update.mjs; npx wrangler deploy 2>&1 | tee deploy.log; node postdeploy.mjs" },
+    },
+    null,
+    2,
+  ) + "\n",
+);
+copyFileSync(join(root, "deploy", "prebuild-update.mjs"), join(out, "prebuild-update.mjs"));
+copyFileSync(join(root, "deploy", "postdeploy.mjs"), join(out, "postdeploy.mjs"));
+writeFileSync(join(out, "VERSION"), VERSION + "\n");
 
 console.log(`完了：${out}`);
 console.log("→ この release/ の内容を 公開配布リポジトリ（例 baku-team/baku-office-app）へ push すると Deploy ボタンが機能します。");

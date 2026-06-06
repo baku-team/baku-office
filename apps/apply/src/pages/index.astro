@@ -101,28 +101,33 @@ const deployUrl = "https://deploy.workers.cloudflare.com/?url=https://github.com
         const out = document.getElementById("out");
         out.hidden = false;
         const planLabel = { free: "Free", plus: "Plus", pro: "Pro" }[j.plan] || j.plan;
+        // API が返した個別リポの Deploy ボタン（入力ゼロ）。生成失敗時は共有リポURLにフォールバック済み。
+        const durl = j.deployUrl || deployUrl;
         out.innerHTML =
           '<h2><span class="ok">✅ 申込が完了しました</span></h2>' +
-          '<p class="muted">プラン：<strong>' + planLabel + '</strong>／ライセンスID：<code>' + j.licenseId + '</code></p>' +
-          '<h2>③ アプリを導入（このまま進めてください）</h2>' +
+          '<p class="muted">プラン：<strong>' + planLabel + '</strong></p>' +
+          '<h2>③ アプリを導入（下のボタンを押すだけ）</h2>' +
           '<ol class="steps">' +
-          '<li><strong>下のボタンでデプロイ</strong><br><span class="muted">Cloudflare と GitHub にログインすると、あなたの Cloudflare にアプリが作られます（鍵などの設定は不要）。</span><br><br>' +
-          '<a href="' + deployUrl + '" target="_blank" rel="noreferrer"><img src="https://deploy.workers.cloudflare.com/button" alt="Deploy to Cloudflare" height="36"></a></li>' +
-          '<li><strong>アプリのURLを確認</strong><br><span class="muted">デプロイ完了後、<a href="https://dash.cloudflare.com/?to=/:account/workers-and-pages" target="_blank" rel="noreferrer">Cloudflare の「Workers &amp; Pages」</a> を開き、一覧の <code>baku-office</code> をクリックします。ページ上部に <strong>あなたのアプリのURL</strong>（<code>https://baku-office.◯◯◯.workers.dev</code>）が表示されるので、それを下に貼り付けてください（<code>◯◯◯</code> のサブドメインだけでもOK）。</span>' +
-          '<div style="display:flex;gap:6px;margin-top:6px"><input id="appurl" placeholder="https://baku-office.◯◯◯.workers.dev または ◯◯◯" style="flex:1;min-width:0;padding:8px;border:1px solid #dde3ea;border-radius:6px;font:inherit" /><button class="btn" id="openapp" style="flex:0 0 auto">アプリを開く</button></div>' +
-          '<div id="openhint" style="margin-top:6px"></div></li>' +
-          '<li><strong>Google でログイン</strong><br><span class="muted">アプリが開いたら「<strong>Google でログイン</strong>」を押し、<strong>申込時に入力したメール（' + (body.contactEmail || "申込メール") + '）の Google アカウント</strong>でログインしてください。自動でアクティベートされて利用開始です（ライセンスIDの入力は不要）。</span></li>' +
-          '</ol>' +
-          '<p class="muted" style="font-size:.85em">（手動が必要な場合のライセンスID：<code>' + j.licenseId + '</code>）</p>';
+          '<li><strong>デプロイ（入力は不要です）</strong><br><span class="muted">Cloudflare と GitHub にログインすると、あなたの Cloudflare にアプリが作られます（鍵やURLの入力は不要）。</span><br><br>' +
+          '<a href="' + durl + '" target="_blank" rel="noreferrer"><img src="https://deploy.workers.cloudflare.com/button" alt="Deploy to Cloudflare" height="36"></a></li>' +
+          '<li><strong>設置の完了を待つ</strong><br><div id="appbox" style="margin-top:6px"><span class="spin"></span> 設置中…（通常1〜3分）</div>' +
+          '<details style="margin-top:6px"><summary class="muted">1分以上「あなたのアプリを開く」が出ないとき</summary><span class="muted">Cloudflare のデプロイ完了画面に表示される <code>…workers.dev</code> のリンクを押すと、そのままアプリが開きます。</span></details></li>' +
+          '<li><strong>Google でログイン</strong><br><span class="muted">アプリが開いたら「<strong>Google でログイン</strong>」を押し、<strong>申込時に入力したメール（' + (body.contactEmail || "申込メール") + '）の Google アカウント</strong>でログインしてください。自動でアクティベートされて利用開始です（ライセンスID等の入力は不要）。</span></li>' +
+          '</ol>';
         out.scrollIntoView({ behavior: "smooth" });
-        document.getElementById("openapp").addEventListener("click", () => {
-          let s = document.getElementById("appurl").value.trim();
-          if (!s) { toast("アプリのURL（またはサブドメイン）を貼ってください", "err"); return; }
-          s = s.replace(/^https?:\/\//, "").replace(/\/.*$/, "");
-          const host = s.includes(".workers.dev") ? "https://" + s : "https://baku-office." + s + ".workers.dev";
-          document.getElementById("openhint").innerHTML = '開けない場合はこちら：<a href="' + host + '/" target="_blank" rel="noreferrer">' + host + '</a>';
-          window.open(host + "/", "_blank");
-        });
+        // 自動点灯：クライアントの初回デプロイが当社へURLを報告したら、開くボタンに差し替える（§2.6）。
+        const tick = async () => {
+          try {
+            const s = await (await fetch("/api/deploy-status?license=" + encodeURIComponent(j.licenseId))).json();
+            if (s.ready && s.url) {
+              document.getElementById("appbox").innerHTML =
+                '<a class="btn" href="' + s.url + '/" target="_blank" rel="noreferrer">▶ あなたのアプリを開く</a>';
+              return;
+            }
+          } catch {}
+          setTimeout(tick, 5000);
+        };
+        setTimeout(tick, 8000);
       });
     </script>
   </body>

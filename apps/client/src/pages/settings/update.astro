@@ -1,0 +1,92 @@
+---
+export const prerender = false;
+import App from "../../layouts/App.astro";
+const env = Astro.locals.runtime.env;
+const { getSession } = await import("../../lib/auth.ts");
+const ses = await getSession(env, Astro.request);
+if (!ses || ses.role !== "admin" || ses.ctx !== "org") return Astro.redirect("/login", 302);
+
+const { pollHost, APP_VERSION } = await import("../../lib/client.ts");
+const { hasDeployHook, cmpVersion } = await import("../../lib/update.ts");
+const check = await pollHost(env, Astro.url.origin);
+const latest = check?.latestVersion ?? APP_VERSION;
+const updateAvailable = cmpVersion(latest, APP_VERSION) > 0;
+const configured = await hasDeployHook(env);
+
+// CFダッシュボードへの深いリンク（着地フォールバックも併置）。
+const SETTINGS = "https://dash.cloudflare.com/?to=/:account/workers/services/view/baku-office/production/settings";
+const DEPLOYMENTS = "https://dash.cloudflare.com/?to=/:account/workers/services/view/baku-office/production/deployments";
+const FALLBACK = "https://dash.cloudflare.com/?to=/:account/workers-and-pages";
+---
+<App title="アプリの更新" active="/settings/update">
+  <h1>アプリの更新</h1>
+  <p class="muted">現在のバージョン：<span class="pill">{APP_VERSION}</span> ／ 最新：<span class="pill">{latest}</span> ／ 自動更新：<strong>{configured ? "設定済み（案①）" : "未設定"}</strong></p>
+
+  {updateAvailable
+    ? <div class="banner banner-warn">🔔 新しいバージョン <strong>{latest}</strong> があります。下の手順で更新してください（データ・設定は保持されます）。</div>
+    : <div class="banner banner-info">✅ 最新の状態です。更新があるとここに表示されます。</div>}
+
+  <div class="banner banner-info" style="font-size:.86rem">更新は<strong>同じプロジェクトの再ビルド</strong>です。Deploy ボタンの押し直し（最初からやり直し）は行わないでください（データが切り離されます）。</div>
+
+  {configured ? (
+    <div class="card">
+      <h2 style="margin-top:0;border:0">案①：アプリ内ボタンで更新（設定済み）</h2>
+      <p class="muted">登録済みの再ビルド用フックで、このアプリを最新に更新します。数分で反映されます。</p>
+      <button class="btn btn-primary" id="trigger">今すぐ更新する</button>
+      <div id="trigmsg" style="margin-top:.5rem"></div>
+      <details style="margin-top:.75rem"><summary class="muted">自動更新の設定を解除する</summary>
+        <p class="muted">解除すると、次回からは案②（手動の再ビルド）になります。</p>
+        <button class="btn btn-warn" id="clearhook">自動更新を解除</button>
+      </details>
+    </div>
+  ) : (
+    <>
+      <div class="card">
+        <h2 style="margin-top:0;border:0">案②：手動で再ビルド（設定不要・いますぐ）</h2>
+        <ol class="muted" style="padding-left:1.2rem">
+          <li><a href={DEPLOYMENTS} target="_blank" rel="noreferrer">Cloudflare の「Deployments」を開く</a>（開けない場合は <a href={FALLBACK} target="_blank" rel="noreferrer">Workers &amp; Pages</a> → <code>baku-office</code> → Deployments）。</li>
+          <li>「<strong>Create deployment</strong>」または直近の失敗を「<strong>Retry</strong>」を1回押す。</li>
+          <li>数分で最新版に再ビルドされます（データ・設定は保持）。</li>
+        </ol>
+      </div>
+
+      <div class="card">
+        <h2 style="margin-top:0;border:0">案①：次回から1タップにする（任意・一度きり）</h2>
+        <p class="muted">一度だけ Cloudflare で「再ビルド用のフックURL」を作って貼り付けると、次回からはこの画面のボタン1つで更新できます（2〜3分）。</p>
+        <ol class="muted" style="padding-left:1.2rem">
+          <li><a href={SETTINGS} target="_blank" rel="noreferrer">自分の Worker 設定を開く</a>（開けない場合は <a href={FALLBACK} target="_blank" rel="noreferrer">Workers &amp; Pages</a> → <code>baku-office</code> → Settings）。複数アカウント時は最初に選択。</li>
+          <li>「設定 → ビルド(Builds) → Deploy Hooks」→「<strong>作成</strong>」。名前は任意、ブランチは <strong>本番(main)</strong>。</li>
+          <li>生成された <strong>フックURL</strong>をコピーして下に貼り付け。</li>
+        </ol>
+        <div class="field"><input id="hookurl" placeholder="https://api.cloudflare.com/.../deploy_hooks/... または CF が表示したフックURL" /></div>
+        <button class="btn btn-primary" id="savehook">自動更新を有効にする</button>
+        <p class="muted" style="font-size:.78rem;margin-top:.5rem">🔒 フックURLはこのアプリ内（あなたのCF）にのみ暗号化保存され、当社へは送信されません。</p>
+      </div>
+    </>
+  )}
+
+  <script slot="scripts" is:inline>
+    const trig = document.getElementById("trigger");
+    if (trig) trig.addEventListener("click", async (e) => {
+      const r = await window.bo.api("/api/update", { _action: "trigger" }, { btn: e.currentTarget, successMsg: null });
+      const box = document.getElementById("trigmsg");
+      if (r.ok && r.data.ok) box.innerHTML = '<div class="banner banner-info">更新中です。数分で反映されます。反映後にこのページを再読み込みしてください。</div>';
+      else if (r.ok && r.data.needGuide) box.innerHTML = '<div class="banner banner-warn">自動更新が未設定です。ページを再読み込みして案②の手順をご利用ください。</div>';
+      else window.bo.toast("更新の発火に失敗しました：" + ((r.data && r.data.error) || ""), "err");
+    });
+    const clr = document.getElementById("clearhook");
+    if (clr) clr.addEventListener("click", async (e) => {
+      if (!confirm("自動更新の設定を解除しますか？")) return;
+      const r = await window.bo.api("/api/update", { _action: "delete" }, { btn: e.currentTarget, successMsg: "解除しました" });
+      if (r.ok) setTimeout(() => location.reload(), 600);
+    });
+    const save = document.getElementById("savehook");
+    if (save) save.addEventListener("click", async (e) => {
+      const hookUrl = document.getElementById("hookurl").value.trim();
+      if (!hookUrl) { window.bo.toast("フックURLを貼り付けてください", "err"); return; }
+      const r = await window.bo.api("/api/update", { hookUrl }, { btn: e.currentTarget, successMsg: null });
+      if (r.ok && r.data.ok) { window.bo.toast("✅ 自動更新を有効にしました"); setTimeout(() => location.reload(), 800); }
+      else window.bo.toast((r.data && r.data.error) || "保存に失敗しました", "err");
+    });
+  </script>
+</App>

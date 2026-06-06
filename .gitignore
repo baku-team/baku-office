@@ -5,6 +5,9 @@ node_modules/
 **/.astro/
 **/.wrangler/
 **/release/
+# ただしソースの API ルート（apps/host の /api/release/*）は除外しない。
+!**/pages/api/release/
+!**/pages/api/release/**
 worker/node_modules/
 worker/.wrangler/
 

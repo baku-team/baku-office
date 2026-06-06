@@ -8,7 +8,15 @@ interface Env {
   LATEST_VERSION: string;
   // 申込専用Worker（baku-office-apply）のURL。ポータルから案内リンクを出す。
   APPLY_URL?: string;
+  // 第2層更新（日和見ローダ）の配布先と署名。リリース運用で設定（§7 残課題）。
+  RELEASE_TARBALL_URL?: string;
+  RELEASE_SIG?: string;
+  // 団体ごと公開リポの自動生成／削除（throwaway・§2.2-2.3）。
+  GITHUB_OWNER?: string;         // 例 "baku-team"
+  GITHUB_TEMPLATE_REPO?: string; // 例 "baku-office-app"
+  HOST_BASE_URL?: string;        // report.json に焼く当社ホストURL
   // secrets（wrangler secret put）
+  GITHUB_TOKEN?: string; // repo 作成（Administration:write）＋Contents:write
   SIGNING_JWK?: string; // ライセンス署名（Ed25519秘密鍵JWK）
   GOOGLE_CLIENT_ID?: string;
   GOOGLE_CLIENT_SECRET?: string;

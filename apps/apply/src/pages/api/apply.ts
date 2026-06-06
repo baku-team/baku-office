@@ -1,5 +1,5 @@
 import type { APIRoute } from "astro";
-import { initialEntitlement, randomId, type Plan } from "@baku-office/shared";
+import { initialEntitlement, randomId, provisionRepo, type Plan } from "@baku-office/shared";
 
 export const prerender = false;
 const nowSec = (): number => Math.floor(Date.now() / 1000);
@@ -24,12 +24,31 @@ export const POST: APIRoute = async ({ request, locals }) => {
   await env.DB.prepare("INSERT INTO customers (id, org_name, contact_name, contact_email, created_at) VALUES (?,?,?,?,?)")
     .bind(customerId, b.orgName, b.contactName ?? null, b.contactEmail ?? null, now)
     .run();
+  // 使い捨て deploy_code（nonce）。団体ごとリポに焼き込み、初回デプロイの自動点灯に使う（§2.2）。
+  const deployCode = randomId();
   await env.DB.prepare(
-    "INSERT INTO licenses (license_id, customer_id, plan, entitlement, status, google_sub, created_at) VALUES (?,?,?,?,?,?,?)",
+    "INSERT INTO licenses (license_id, customer_id, plan, entitlement, status, google_sub, deploy_code, created_at) VALUES (?,?,?,?,?,?,?,?)",
   )
-    .bind(licenseId, customerId, b.plan, initialEntitlement(b.plan), "active", b.googleSub ?? null, now)
+    .bind(licenseId, customerId, b.plan, initialEntitlement(b.plan), "active", b.googleSub ?? null, deployCode, now)
     .run();
-  return json({ ok: true, licenseId, plan: b.plan, entitlement: initialEntitlement(b.plan) });
+
+  // 入力ゼロの初回デプロイ：団体ごと公開リポ（throwaway）を生成し report.json を焼き込む（§2.2）。
+  // 失敗時は共有リポにフォールバック（自動点灯なしでも導入は完了＝§2.7）。
+  let deployRepo = `${env.GITHUB_OWNER ?? "baku-team"}/${env.GITHUB_TEMPLATE_REPO ?? "baku-office-app"}`;
+  if (env.GITHUB_TOKEN && env.GITHUB_OWNER && env.GITHUB_TEMPLATE_REPO && env.HOST_BASE_URL) {
+    try {
+      deployRepo = await provisionRepo(
+        { token: env.GITHUB_TOKEN, owner: env.GITHUB_OWNER, templateRepo: env.GITHUB_TEMPLATE_REPO, hostBaseUrl: env.HOST_BASE_URL },
+        licenseId,
+        deployCode,
+      );
+    } catch (e) {
+      console.error("provision failed, fallback to shared repo", e);
+    }
+  }
+  const deployUrl = "https://deploy.workers.cloudflare.com/?url=https://github.com/" + deployRepo;
+
+  return json({ ok: true, licenseId, plan: b.plan, entitlement: initialEntitlement(b.plan), deployUrl });
 };
 
 const json = (o: unknown, status = 200) =>

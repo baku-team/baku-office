@@ -23,7 +23,8 @@ export async function saveToken(env: Env, token: string): Promise<void> {
 }
 
 // 統合チェック（§13.1）：ホストへトークン＋deploy_url/version を送り {entitlement,latestVersion,notices}。
-const APP_VERSION = "0.1.0";
+// 稼働中バンドルのバージョン（リリース時に build-release.mjs の VERSION と揃えて更新）。
+export const APP_VERSION = "0.1.0";
 export async function pollHost(env: Env, deployUrl?: string): Promise<CheckResponse | null> {
   const token = await getToken(env);
   if (!token) return null;

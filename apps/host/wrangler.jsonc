@@ -25,8 +25,13 @@
     // 配布の最新バージョン（クライアントの統合チェックに返す）。
     "LATEST_VERSION": "0.1.0",
     // 申込専用Worker（baku-office-apply）のURL。
-    "APPLY_URL": "https://baku-office-apply.baku-027.workers.dev"
+    "APPLY_URL": "https://baku-office-apply.baku-027.workers.dev",
+    // 団体ごと公開リポの自動生成（throwaway・§2.2-2.3）。
+    "GITHUB_OWNER": "baku-team",
+    "GITHUB_TEMPLATE_REPO": "baku-office-app",
+    "HOST_BASE_URL": "https://baku-office-portal.baku-027.workers.dev"
   }
   // secret（wrangler secret put）：SIGNING_JWK（ライセンス署名）/ GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET / ADMIN_KEY
+  //   GITHUB_TOKEN（団体リポの自動生成・削除）/（任意）RELEASE_TARBALL_URL・RELEASE_SIG（第2層更新）
   //   （Stripe は Phase 5：STRIPE_SECRET_KEY / STRIPE_WEBHOOK_SECRET）
 }
