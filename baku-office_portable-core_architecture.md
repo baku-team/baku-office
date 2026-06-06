@@ -110,8 +110,9 @@
 パーツ＝「データスキーマ＋業務ロジック＋UI＋エージェント道具＋（任意）外部API」をひとまとめにした部品。
 
 ```ts
-interface Part {
-  id: string; name: string; version: string;
+interface Part { // ＝再利用可能な「アプリ（業務モジュール）」（§14-7）
+  id: string; name: string; version: string;   // version＝アプリ版（更新識別・互換管理）
+  derivedFrom?: string;              // 派生元アプリの id（派生で新アプリを作った場合）
   migrations?: Migration[];          // 自分のテーブル（追加のみ・冪等）。id は `<partId>_<seq>` で名前空間化（§14-4）
   routes?: Route[];                  // 画面/APIエンドポイント
   agentTools?: AgentTool[];          // コアのエージェントに登録する道具（認可メタ必須・§14-1）
@@ -294,6 +295,17 @@ interface AgentTool {
   `src/pages/<page>.astro` を同梱（ファイル上書き）。ベース未編集のまま上流更新を取り込める。
 - 管理は `api/settings.ts`（`ui_theme`/`nav_overrides`/`enabled_parts`）＋`settings/advanced.astro` のフォーム。
 - 線引きは Profile A/B/C と同じ：**第1・2層は単一バイナリで実行時上書き可**、第3層の画面構造置換は配布時構成。
+
+### 14-7. パーツ＝再利用可能アプリ（共有・更新波及・派生）
+
+`Part` を「アプリ（業務モジュール）」として扱い、次の3性質を満たす。
+
+- **再利用（複数団体で共有）**：パーツは特定団体専用に作らない。コア正本（`apps/client`）に同梱されたパーツは全配布先に存在し、各団体は「有効パーツ」（`enabled_parts`）で ON/OFF する。＝同じアプリを多数の団体で使い回せる。
+- **更新の波及**：アプリを更新（`version` を上げてコア正本にマージ）すると、CI が配布バンドルを公開 → 各団体が upstream 同期/再Deploy → **導入している全団体に反映**（DBは自動マイグレーション）。個別団体ごとの手当ては不要。
+- **派生で新アプリ**：既存パーツを `src/parts/<newid>.ts` にコピーし `id` を変えて改変＝新アプリ（`derivedFrom` に派生元を記録）。派生は別アプリなので元アプリの更新とは独立に進化する。深い改変や団体専用は、配布バンドルへ追加同梱（コア未編集）でも提供できる。
+- 単一団体だけに出したいアプリは、その団体の配布バンドル（throwaway リポ）にのみ同梱すればよい（コアは共通のまま）。
+
+> 将来拡張（任意）：パーツを独立リポ/パッケージ化した「アプリレジストリ（マーケット）」。本リビジョンでは未実装（コア同梱＋有効パーツ選択で再利用・更新波及・派生を満たす）。
 
 ### 14-5. SqlStore Port は SQL 方言サブセットを固定
 - 問題：SqlStore は SQL 素通し前提だが、D1 ↔ libSQL/Turso/SQLite は `batch` セマンティクスや一部関数に差がある。

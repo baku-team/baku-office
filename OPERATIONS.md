@@ -29,14 +29,14 @@
 
 | # | 主体 | 操作 |
 | --- | --- | --- |
-| 1 | クライアント | `/apply`（申込専用Worker）で団体名・連絡先・プラン（Free/Plus/Pro）を入力→送信（IPレート制限あり）。 |
-| 2 | ホスト（自動） | customers/licenses を作成（`status=active`・`deploy_code`=nonce）。GitHub連携時は**団体ごとの throwaway 公開リポ**を生成し `report.json`（licenseId/deployCode/host URL）を焼き込み。失敗時は共有リポにフォールバック。 |
+| 1 | クライアント | `/apply`（申込専用Worker）で団体名・連絡先を入力→送信（**プラン選択はなし＝全員 Free で開始**・IPレート制限あり）。 |
+| 2 | ホスト（自動） | customers/licenses を作成（**`plan=free`・`status=active`**・`deploy_code`=nonce）。GitHub連携時は**団体ごとの throwaway 公開リポ**を生成し `report.json`（licenseId/deployCode/host URL）を焼き込み。失敗時は共有リポにフォールバック。 |
 | 3 | ホスト（自動） | **Deploy to Cloudflare リンク**（`deploy.workers.cloudflare.com/?url=<repo>`）を返す。 |
 | 4 | クライアント | Deployボタンで**自分のCFアカウント**へ展開（D1/KV/Worker は顧客保有）。以後 push で自動再ビルド。 |
 | 5 | クライアント | 初回起動でライセンス未保持を検知→当社アクティベート画面へ。**申込時と同じGoogleアカウント**でログイン。 |
 | 6 | ホスト⇄クライアント（自動） | ホストが Ed25519 **署名relay**（`{sub,email,name,exp}`）を返却→クライアントが公開鍵で検証→`activate-by-email` が署名を**再検証**しライセンストークン発行→KV保存＋`deploy_url`記録。**認証キーの手入力は不要**。 |
-| 7 | クライアント | 初回ログイン者＝**組織最上位管理者**として束縛。会計/名簿/ファイル等を利用開始。連携設定で Gemini/LINE/Claude キーを登録。 |
-| 8 | クライアント | Plus/Pro は `/billing` から Stripe Checkout。カード=即時昇格、振込/コンビニ=入金確認(Webhook署名検証)で昇格。入金前は free 相当（プロビジョナル）。 |
+| 7 | クライアント | 初回ログイン者＝**組織最上位管理者**として束縛。会計/名簿/ファイル等を **Free で利用開始**。連携設定で Gemini/LINE/Claude キーを登録。 |
+| 8 | クライアント | **アップグレードは導入後に管理画面で**：`/billing` から Plus/Pro を選び Stripe Checkout。カード=即時昇格、振込/コンビニ=入金確認(Webhook署名検証)で昇格。入金前は free 相当（プロビジョナル）。 |
 
 → 詳細手順は [A. ホスト側](#a-ホスト側の操作)／[B. クライアント側](#b-クライアント側の操作)、配備の内部仕様は [baku-office_deploy-update_spec.md](baku-office_deploy-update_spec.md)。
 
@@ -50,7 +50,12 @@
 
 - 判断指針：まず**第1・2層（管理画面の設定）**で足りるか → 足りなければ**第3層（追加ファイル）**。ベース（共通画面）は未編集のままなので上流更新を取り込んでも上書きは保たれる。
 
-### 流れ③ パーツ（業務機能）の開発・納品
+### 流れ③ パーツ（＝再利用可能アプリ）の開発・納品
+
+> **パーツ＝アプリ**。`Part` は `id`/`name`/`version` を持つ再利用可能な業務アプリで、次の3性質を満たす：
+> - **再利用**：特定団体専用ではなく、**複数団体で共有**できる（各団体は「有効パーツ」で ON/OFF）。
+> - **更新の波及**：アプリ更新（`version` 上げ）をコア正本に入れると、**CI配布→導入している全団体に波及**（upstream同期＋自動マイグレーション）。
+> - **派生**：既存アプリをコピーし `id` を変えて改変＝**新アプリ**（`derivedFrom` に派生元を記録）。元アプリの更新とは独立。
 
 **開発（開発者）**
 
