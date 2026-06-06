@@ -3,6 +3,7 @@
 // コアのエージェントは「登録された道具」を宣言・実行する＝コア/パーツ分離の実体。
 import type { Ctx } from "./ports.ts";
 import type { Role } from "@baku-office/shared";
+import type { NavItem } from "./nav.ts";
 
 export interface AgentTool {
   name: string;
@@ -16,6 +17,12 @@ export interface Part {
   id: string;
   name: string;
   agentTools?: AgentTool[];
+  menu?: NavItem[]; // 第2層：このパーツが提供するナビ項目（UIパーツ用）。
+}
+
+// 有効パーツが提供するナビ項目を集約（第2層）。
+export function partMenuItems(enabledIds: readonly string[] | null): NavItem[] {
+  return enabledParts(enabledIds).flatMap((p) => p.menu ?? []);
 }
 
 const REGISTRY = new Map<string, Part>();

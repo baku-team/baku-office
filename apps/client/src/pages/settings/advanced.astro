@@ -29,6 +29,16 @@ await import("../../parts/index.ts"); // 組み込みパーツを登録（副作
 const partCat = hasPlus ? partCatalog() : [];
 const enabledPartList = hasPlus ? await enabledPartIds(Astro.locals.ctx) : null;
 const isPartOn = (id: string) => enabledPartList === null || enabledPartList.includes(id);
+// 見た目（テーマ）＋ナビ表示（団体ごと上書き）。
+const { getTheme } = await import("../../core/theme.ts");
+const { getNavOverrides } = await import("../../core/nav.ts");
+const theme = hasPlus ? await getTheme(Astro.locals.ctx) : {};
+const navOv = hasPlus ? await getNavOverrides(Astro.locals.ctx) : null;
+const navHidden = new Set(navOv?.hidden ?? []);
+const NAV_TOGGLE = [
+  { href: "/accounting", label: "会計" }, { href: "/files", label: "ファイル" }, { href: "/schedule", label: "予定" },
+  { href: "/minutes", label: "議事録" }, { href: "/chat", label: "AIチャット" }, { href: "/drive", label: "ドライブ" }, { href: "/import", label: "資料インポート" },
+];
 ---
 <App title="高度なオプション" active="/settings/advanced">
   <h1>高度なオプション</h1>
@@ -57,6 +67,28 @@ const isPartOn = (id: string) => enabledPartList === null || enabledPartList.inc
     <p class="muted">AIへ常に追加する指示。例：「丁寧語で簡潔に」「箇条書き中心」「団体名は○○会」。安全制約（破壊操作の確認など）は変更されません。</p>
     <div class="field"><textarea id="customPrompt" rows="4" placeholder="例：回答は敬語で簡潔に。金額は¥表記。専門用語は補足を添える。">{custom}</textarea></div>
     <button class="btn btn-primary" id="savePrompt">カスタム指示を保存</button>
+  </div>
+
+  <h2>見た目（テーマ・団体ごと）</h2>
+  <div class="card">
+    <p class="muted">ブランド名・ロゴ・配色を団体ごとに上書きします（共通の画面構造はそのまま）。空欄は既定値。色は #hex 等で指定。</p>
+    <div class="field"><label>ブランド名<input id="th-brand" value={theme.brand ?? ""} placeholder="baku-office" /></label></div>
+    <div class="field"><label>ロゴURL<input id="th-logo" value={theme.logoUrl ?? ""} placeholder="https://…/logo.png" /></label></div>
+    <div class="row">
+      <label style="flex:1">ブランド色<input id="th-brand-color" value={theme.colors?.brand ?? ""} placeholder="#2563eb" /></label>
+      <label style="flex:1">背景色<input id="th-bg" value={theme.colors?.bg ?? ""} placeholder="#f5f7fb" /></label>
+      <label style="flex:1">文字色<input id="th-ink" value={theme.colors?.ink ?? ""} placeholder="#1b2430" /></label>
+    </div>
+    <button class="btn btn-primary" id="saveTheme">テーマを保存</button>
+  </div>
+
+  <h2>ナビの表示（団体ごと）</h2>
+  <div class="card">
+    <p class="muted">メニューに出す機能を選びます（外すと非表示）。権限・プランによる制御は別途適用されます。</p>
+    {NAV_TOGGLE.map((n) => (
+      <div class="field"><label><input type="checkbox" class="nav-chk" value={n.href} checked={!navHidden.has(n.href)} /> {n.label}</label></div>
+    ))}
+    <button class="btn btn-primary" id="saveNav">ナビ表示を保存</button>
   </div>
 
   <h2>有効パーツ（団体ごとの機能）</h2>
@@ -146,6 +178,8 @@ const isPartOn = (id: string) => enabledPartList === null || enabledPartList.inc
     });
     document.getElementById("saveMax").addEventListener("click",async(e)=>{const v=document.getElementById("maxmb").value;const r=await window.bo.api("/api/settings",{_action:"max_upload",mb:Number(v)},{btn:e.currentTarget,successMsg:"上限を保存しました"});if(r.ok)setTimeout(()=>location.reload(),600);});
     document.getElementById("saveParts")?.addEventListener("click",async(e)=>{const parts=[...document.querySelectorAll(".part-chk")].filter(c=>c.checked).map(c=>c.value);const r=await window.bo.api("/api/settings",{_action:"enabled_parts",parts},{btn:e.currentTarget,successMsg:"有効パーツを保存しました"});if(r.ok)setTimeout(()=>location.reload(),600);});
+    document.getElementById("saveTheme")?.addEventListener("click",async(e)=>{const theme={brand:document.getElementById("th-brand").value,logoUrl:document.getElementById("th-logo").value,colors:{brand:document.getElementById("th-brand-color").value,bg:document.getElementById("th-bg").value,ink:document.getElementById("th-ink").value}};const r=await window.bo.api("/api/settings",{_action:"ui_theme",theme},{btn:e.currentTarget,successMsg:"テーマを保存しました"});if(r.ok)setTimeout(()=>location.reload(),700);});
+    document.getElementById("saveNav")?.addEventListener("click",async(e)=>{const hidden=[...document.querySelectorAll(".nav-chk")].filter(c=>!c.checked).map(c=>c.value);const r=await window.bo.api("/api/settings",{_action:"nav_overrides",nav:{hidden}},{btn:e.currentTarget,successMsg:"ナビ表示を保存しました"});if(r.ok)setTimeout(()=>location.reload(),700);});
     document.getElementById("capadd").addEventListener("click",async(e)=>{const r=await cap({_action:"create",capability:document.getElementById("cap").value,provider:document.getElementById("cprov").value,model:document.getElementById("cmodel").value,endpoint:document.getElementById("cendpoint").value,api_key:document.getElementById("ckey").value},e.currentTarget);if(r.ok){window.bo.toast("登録しました（無効状態）");setTimeout(()=>location.reload(),600);}});
     document.querySelectorAll("tr[data-cid]").forEach(tr=>{const id=tr.dataset.cid;
       tr.querySelector(".cen")?.addEventListener("click",async(e)=>{const r=await cap({_action:"enable",id,enabled:true},e.target);if(r.ok)setTimeout(()=>location.reload(),500);});

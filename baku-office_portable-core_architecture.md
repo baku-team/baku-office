@@ -281,6 +281,20 @@ interface AgentTool {
 - 対策：マイグレーション id を **`<partId>_<seq>`** で名前空間化し、`schema_migrations` に Part 単位で記録。適用順は
   「コア → 有効 Part（依存順）」。`ignorable` は限定列挙のまま、失敗は診断記録（既存方針を踏襲）。
 
+### 14-6. UI も「共通ベース＋上書き」で環境・団体ごとに分離（3層）
+
+コア/パーツと同じ思想を UI に適用。共通の画面はそのまま、団体/環境ごとに上書きできる。
+
+- **第1層 テーマ（実行時・団体ごと・コード不要）**：`core/theme.ts`。ブランド名/ロゴ/配色を `ctx.storage.kv` に保存し、
+  `App.astro` が head に `:root` 上書きCSSを注入（CSSは既に変数化済み）。色値はサニタイズ（CSSインジェクション防止）。
+- **第2層 構成（実行時・団体ごと）**：`core/nav.ts buildNav()`＝共通ナビ＋有効パーツの `Part.menu`＋団体ごと上書き
+  （非表示/ラベル/並び替え）を合成。Phase5 の有効パーツ選択と連動。
+- **第3層 画面・部品の上書き（配布時・デプロイごと）**：`core/overrides.ts`＋`components/Slot.astro`。
+  `src/overrides/<name>.astro` があればベースの `<Slot name="…">` を差し替え（部分上書き）。全面置換は配布バンドルに
+  `src/pages/<page>.astro` を同梱（ファイル上書き）。ベース未編集のまま上流更新を取り込める。
+- 管理は `api/settings.ts`（`ui_theme`/`nav_overrides`/`enabled_parts`）＋`settings/advanced.astro` のフォーム。
+- 線引きは Profile A/B/C と同じ：**第1・2層は単一バイナリで実行時上書き可**、第3層の画面構造置換は配布時構成。
+
 ### 14-5. SqlStore Port は SQL 方言サブセットを固定
 - 問題：SqlStore は SQL 素通し前提だが、D1 ↔ libSQL/Turso/SQLite は `batch` セマンティクスや一部関数に差がある。
 - 対策：Port 契約で**使用してよい SQL サブセット**（標準的な DDL/DML・バインド変数・`INSERT OR IGNORE` 等）を固定するか、

@@ -4,6 +4,8 @@ import { setMaxUploadMb } from "../../lib/storage.ts";
 import { setAiEngine, setCustomPrompt } from "../../lib/settings.ts";
 import { setStorageLimits } from "../../lib/storage-usage.ts";
 import { partCatalog, enabledPartIds, setEnabledPartIds } from "../../core/parts.ts";
+import { setTheme } from "../../core/theme.ts";
+import { setNavOverrides } from "../../core/nav.ts";
 
 export const prerender = false;
 const json = (o: unknown, s = 200) => new Response(JSON.stringify(o), { status: s, headers: { "content-type": "application/json" } });
@@ -13,7 +15,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
   const env = locals.runtime.env;
   const ses = await getSession(env, request);
   if (!ses || ses.role !== "admin" || ses.ctx !== "org") return json({ error: "管理者のみ" }, 403);
-  const b = (await request.json().catch(() => ({}))) as { _action?: string; mb?: number; engine?: string; prompt?: string; limits?: Record<string, number>; parts?: string[] };
+  const b = (await request.json().catch(() => ({}))) as { _action?: string; mb?: number; engine?: string; prompt?: string; limits?: Record<string, number>; parts?: string[]; theme?: unknown; nav?: { hidden?: string[]; labels?: Record<string, string>; order?: string[] } };
   if (b._action === "max_upload") {
     const v = await setMaxUploadMb(env, Number(b.mb));
     return json({ ok: true, mb: v });
@@ -43,6 +45,16 @@ export const POST: APIRoute = async ({ request, locals }) => {
   }
   if (b._action === "list_parts") {
     return json({ ok: true, enabled: await enabledPartIds(locals.ctx), catalog: partCatalog() });
+  }
+  // UIテーマ（第1層）。
+  if (b._action === "ui_theme") {
+    const v = await setTheme(locals.ctx, b.theme);
+    return json({ ok: true, theme: v });
+  }
+  // ナビ上書き（第2層）。
+  if (b._action === "nav_overrides") {
+    const v = await setNavOverrides(locals.ctx, b.nav ?? {});
+    return json({ ok: true, nav: v });
   }
   return json({ error: "不明な操作" }, 400);
 };
