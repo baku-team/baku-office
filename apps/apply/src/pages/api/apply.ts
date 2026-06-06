@@ -23,12 +23,13 @@ export const POST: APIRoute = async ({ request, locals }) => {
     orgName?: string;
     contactName?: string;
     contactEmail?: string;
-    plan?: Plan;
     googleSub?: string;
   };
-  if (!b.orgName || !b.contactEmail || !b.plan || !["free", "plus", "pro"].includes(b.plan)) {
-    return json({ error: "orgName・contactEmail・plan(free/plus/pro) が必要" }, 400);
+  if (!b.orgName || !b.contactEmail) {
+    return json({ error: "orgName・contactEmail が必要" }, 400);
   }
+  // 申込時はプランを選ばせない。全員 Free で開始し、後から管理画面（/billing）で Plus/Pro へアップグレードする。
+  const plan: Plan = "free";
   const now = nowSec();
   const customerId = randomId();
   const licenseId = randomId();
@@ -40,7 +41,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
   await env.DB.prepare(
     "INSERT INTO licenses (license_id, customer_id, plan, entitlement, status, google_sub, deploy_code, created_at) VALUES (?,?,?,?,?,?,?,?)",
   )
-    .bind(licenseId, customerId, b.plan, initialEntitlement(b.plan), "active", b.googleSub ?? null, deployCode, now)
+    .bind(licenseId, customerId, plan, initialEntitlement(plan), "active", b.googleSub ?? null, deployCode, now)
     .run();
 
   // 入力ゼロの初回デプロイ：団体ごと公開リポ（throwaway）を生成し report.json を焼き込む（§2.2）。
@@ -59,7 +60,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
   }
   const deployUrl = "https://deploy.workers.cloudflare.com/?url=https://github.com/" + deployRepo;
 
-  return json({ ok: true, licenseId, plan: b.plan, entitlement: initialEntitlement(b.plan), deployUrl });
+  return json({ ok: true, licenseId, plan, entitlement: initialEntitlement(plan), deployUrl });
 };
 
 const json = (o: unknown, status = 200) =>

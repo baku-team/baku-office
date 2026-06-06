@@ -21,6 +21,7 @@ export async function searchMembers(ctx: Ctx, a: { query: string }): Promise<str
 export const membersPart: Part = {
   id: "members",
   name: "庶務／名簿",
+  version: "1.0.0",
   agentTools: [
     {
       name: "search_members",

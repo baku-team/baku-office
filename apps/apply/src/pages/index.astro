@@ -56,18 +56,12 @@ const deployUrl = "https://deploy.workers.cloudflare.com/?url=https://github.com
       </div>
 
       <div class="card">
-        <h2>② 団体情報とプランを入力</h2>
+        <h2>② 団体情報を入力</h2>
         <div class="field"><label>団体名</label><input id="orgName" required /></div>
         <div class="field"><label>代表者名</label><input id="contactName" /></div>
         <div class="field"><label>連絡先メール（<strong>ログインに使う Google アカウントのメール</strong>）</label><input id="contactEmail" type="email" required placeholder="例：team@your-domain.com（Googleアカウント）" /></div>
-        <div class="field"><label>プラン</label>
-          <select id="plan">
-            <option value="free">Free（完全無料）</option>
-            <option value="plus">Plus（AI・Gemini）</option>
-            <option value="pro">Pro（エージェント・LINE/Claude）</option>
-          </select>
-        </div>
-        <button class="btn" id="submit">申し込む</button>
+        <p class="muted">まずは <strong>無料（Free）</strong> で開始します。AI（Plus）やエージェント（Pro）への切替は、導入後に<strong>管理画面「プラン・課金」</strong>からいつでも行えます。</p>
+        <button class="btn" id="submit">無料で申し込む</button>
       </div>
 
       <div class="card" id="out" hidden></div>
@@ -86,7 +80,7 @@ const deployUrl = "https://deploy.workers.cloudflare.com/?url=https://github.com
       function busy(btn, on) { if (!btn) return; if (on) { btn.disabled = true; btn.dataset.label = btn.innerHTML; btn.innerHTML = '<span class="spin"></span>処理中…'; } else { btn.disabled = false; if (btn.dataset.label) btn.innerHTML = btn.dataset.label; } }
 
       document.getElementById("submit").addEventListener("click", async (e) => {
-        const body = { orgName: orgName.value, contactName: contactName.value, contactEmail: contactEmail.value, plan: plan.value };
+        const body = { orgName: orgName.value, contactName: contactName.value, contactEmail: contactEmail.value };
         if (!body.orgName) { toast("団体名を入力してください", "err"); return; }
         if (!body.contactEmail) { toast("連絡先メール（ログインに使う Google アカウント）を入力してください", "err"); return; }
         const btn = e.currentTarget; busy(btn, true);
@@ -100,12 +94,11 @@ const deployUrl = "https://deploy.workers.cloudflare.com/?url=https://github.com
         toast("申込が完了しました");
         const out = document.getElementById("out");
         out.hidden = false;
-        const planLabel = { free: "Free", plus: "Plus", pro: "Pro" }[j.plan] || j.plan;
         // API が返した個別リポの Deploy ボタン（入力ゼロ）。生成失敗時は共有リポURLにフォールバック済み。
         const durl = j.deployUrl || deployUrl;
         out.innerHTML =
           '<h2><span class="ok">✅ 申込が完了しました</span></h2>' +
-          '<p class="muted">プラン：<strong>' + planLabel + '</strong></p>' +
+          '<p class="muted">プラン：<strong>Free（無料）</strong>で開始（後から管理画面でアップグレード可）</p>' +
           '<h2>③ アプリを導入（下のボタンを押すだけ）</h2>' +
           '<ol class="steps">' +
           '<li><strong>デプロイ（入力は不要です）</strong><br><span class="muted">Cloudflare と GitHub にログインすると、あなたの Cloudflare にアプリが作られます（鍵やURLの入力は不要）。</span><br><br>' +

@@ -13,9 +13,14 @@ export interface AgentTool {
   run(ctx: Ctx, owner: string, baseUrl: string, args: Record<string, unknown>): Promise<string>;
 }
 
+// Part ＝再利用可能な「アプリ（業務モジュール）」。複数団体で共有・再利用でき、
+// コア更新（CI配布）で全導入先に波及する。派生は id を変えてコピー＝新アプリ（§移植性アーキ）。
 export interface Part {
-  id: string;
+  id: string;            // アプリの一意キー（派生時は新IDにする）
   name: string;
+  version: string;       // アプリ版（semver推奨）。更新の識別・互換管理に使う
+  description?: string;
+  derivedFrom?: string;  // 派生元アプリの id（派生で新アプリを作った場合）
   agentTools?: AgentTool[];
   menu?: NavItem[]; // 第2層：このパーツが提供するナビ項目（UIパーツ用）。
 }
@@ -41,9 +46,9 @@ export function findAgentTool(name: string): AgentTool | undefined {
 
 // ---- Phase 5：団体ごとの「有効パーツ集合」（移植性アーキ §5/§13.5）----
 
-// 全パーツのカタログ（管理UI/設定用）。
-export function partCatalog(): { id: string; name: string }[] {
-  return registeredParts().map((p) => ({ id: p.id, name: p.name }));
+// 全パーツ（アプリ）のカタログ（管理UI/設定用）。
+export function partCatalog(): { id: string; name: string; version: string }[] {
+  return registeredParts().map((p) => ({ id: p.id, name: p.name, version: p.version }));
 }
 // 有効 id 集合で絞り込む（null=全有効＝既定）。
 export function enabledParts(enabledIds: readonly string[] | null): Part[] {

@@ -19,6 +19,7 @@ export async function searchKnowledge(ctx: Ctx, a: { query: string }): Promise<s
 export const knowledgePart: Part = {
   id: "knowledge",
   name: "組織ナレッジ",
+  version: "1.0.0",
   agentTools: [
     {
       name: "save_knowledge",
