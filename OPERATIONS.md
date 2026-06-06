@@ -15,11 +15,58 @@
                                    │
 [クライアント] Deployボタンで自分のCFへ展開 → 初回起動で自動アクティベート
                                    │
-        無料(X)で利用開始 → 連携設定(Gemini/LINE/Claude) → 必要ならY/Zへ課金
+        無料(Free)で利用開始 → 連携設定(Gemini/LINE/Claude) → 必要ならPlus/Proへ課金
                                    │
         会計・名簿・ファイル・議事録・LINEエージェント・高度なオプション
 [ホスト] クライアント管理で稼働監視 / お知らせ配信 / 入金確認(課金)
 ```
+
+---
+
+## クライアントの3つの流れ（明確化）
+
+### 流れ① 申込 → 開始（オンボーディング）
+
+| # | 主体 | 操作 |
+| --- | --- | --- |
+| 1 | クライアント | `/apply`（申込専用Worker）で団体名・連絡先・プラン（Free/Plus/Pro）を入力→送信（IPレート制限あり）。 |
+| 2 | ホスト（自動） | customers/licenses を作成（`status=active`・`deploy_code`=nonce）。GitHub連携時は**団体ごとの throwaway 公開リポ**を生成し `report.json`（licenseId/deployCode/host URL）を焼き込み。失敗時は共有リポにフォールバック。 |
+| 3 | ホスト（自動） | **Deploy to Cloudflare リンク**（`deploy.workers.cloudflare.com/?url=<repo>`）を返す。 |
+| 4 | クライアント | Deployボタンで**自分のCFアカウント**へ展開（D1/KV/Worker は顧客保有）。以後 push で自動再ビルド。 |
+| 5 | クライアント | 初回起動でライセンス未保持を検知→当社アクティベート画面へ。**申込時と同じGoogleアカウント**でログイン。 |
+| 6 | ホスト⇄クライアント（自動） | ホストが Ed25519 **署名relay**（`{sub,email,name,exp}`）を返却→クライアントが公開鍵で検証→`activate-by-email` が署名を**再検証**しライセンストークン発行→KV保存＋`deploy_url`記録。**認証キーの手入力は不要**。 |
+| 7 | クライアント | 初回ログイン者＝**組織最上位管理者**として束縛。会計/名簿/ファイル等を利用開始。連携設定で Gemini/LINE/Claude キーを登録。 |
+| 8 | クライアント | Plus/Pro は `/billing` から Stripe Checkout。カード=即時昇格、振込/コンビニ=入金確認(Webhook署名検証)で昇格。入金前は free 相当（プロビジョナル）。 |
+
+→ 詳細手順は [A. ホスト側](#a-ホスト側の操作)／[B. クライアント側](#b-クライアント側の操作)、配備の内部仕様は [baku-office_deploy-update_spec.md](baku-office_deploy-update_spec.md)。
+
+### 流れ② UI変更（共通ベース＋上書き・3層）
+
+| 層 | 変えるもの | 誰が・いつ | どこで |
+| --- | --- | --- | --- |
+| 第1層 テーマ | ブランド名・ロゴ・配色 | 管理者・実行時（コード不要） | 高度なオプション →「見た目（テーマ）」（`ui_theme`） |
+| 第2層 構成 | ナビ表示/ラベル/並び・**有効パーツ** | 管理者・実行時（コード不要） | 高度なオプション →「ナビ表示」「有効パーツ」（`nav_overrides`/`enabled_parts`）。無効パーツは画面・道具ごと消える |
+| 第3層 画面・部品 | 画面の差し替え・部分注入 | 開発/納品・配布時 | 配布バンドルに `src/overrides/<slot>.astro`（部分＝Slot注入）／`src/pages/<page>.astro`（全面置換）を同梱→デプロイ |
+
+- 判断指針：まず**第1・2層（管理画面の設定）**で足りるか → 足りなければ**第3層（追加ファイル）**。ベース（共通画面）は未編集のままなので上流更新を取り込んでも上書きは保たれる。
+
+### 流れ③ パーツ（業務機能）の開発・納品
+
+**開発（開発者）**
+
+1. **設計**：機能を Part 単位に分解（道具 `agentTools`／ナビ `menu`／データ操作）。コアは編集しない。
+2. **実装**：`src/parts/<id>.ts` に `Part` を定義。データは必ず **`ctx.db`（SqlStore）経由**＝CF/Node 両対応。認可は `requiredRole`。画面が要れば `src/pages/<id>.astro`。
+3. **登録**：`src/parts/index.ts` に `registerPart(<id>Part)` を**1行追加**（コア未編集）。
+4. **スキーマ**：新テーブルは `apps/client/migrations/NNNN_*.sql` を追記（前進・追加のみ・冪等／初回リクエストで自動適用）。id は衝突回避で命名。
+5. **テスト**：`apps/client/test/<id>.contract.test.ts` に **Node+SQLite 契約テスト**を追加（道具/データが CF非依存で動くこと）。`npm -w apps/client run test`。
+
+**納品（配布）**
+
+- **標準（全顧客共通）**：コア正本（`apps/client`）にマージ → CI が配布バンドルを公開 → 顧客は upstream 同期/再Deploy で受領 → **自動マイグレーション**。各顧客は「有効パーツ」で ON/OFF。
+- **個別（特定団体のみ）**：当該団体の配布バンドル（throwaway リポ）にそのパーツ＋必要画面/override を**追加同梱**して納品。コア本体は触らないため共通更新と両立。
+- **検収**：`npm -w apps/client run typecheck` / `test` / `build` を通す。プラン・ロールゲートと有効パーツ設定の反映を確認。
+
+→ 開発の設計指針は [ARCHITECTURE.md](ARCHITECTURE.md)／[baku-office_portable-core_architecture.md](baku-office_portable-core_architecture.md)。
 
 ---
 
