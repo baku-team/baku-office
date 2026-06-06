@@ -1,6 +1,6 @@
 import type { APIRoute } from "astro";
 import { exchange, type Provider } from "../../../../lib/oauth.ts";
-import { makeSessionCookie, sessionExp } from "../../../../lib/auth.ts";
+import { makeSessionCookie, sessionExp, signPending } from "../../../../lib/auth.ts";
 import type { Role } from "@baku-office/shared";
 
 export const prerender = false;
@@ -38,7 +38,7 @@ export const GET: APIRoute = async ({ params, url, request, locals }) => {
     }
     return redir("/login?e=pending");
   }
-  // 未登録 → 招待コードでの参加へ（OAuth identity を一時Cookieで引き継ぐ）。
-  const pend = btoa(JSON.stringify({ provider: p, externalId: prof.externalId, name: prof.name }));
+  // 未登録 → 招待コードでの参加へ（OAuth identity を署名付き一時Cookieで引き継ぐ＝改竄不可）。
+  const pend = await signPending(env, { provider: p, externalId: prof.externalId, name: prof.name });
   return redir("/join", `pending_oauth=${pend}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=600`);
 };

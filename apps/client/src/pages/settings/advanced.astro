@@ -23,6 +23,12 @@ const skills = hasPlus ? await listSkills(env) : [];
 const caps = hasPlus ? await listCapabilities(env) : [];
 const mode = storageMode(env);
 const curMax = hasPlus ? await maxUploadMb(env) : 5;
+// 有効パーツ（団体ごとの機能・§5）。
+const { partCatalog, enabledPartIds } = await import("../../core/parts.ts");
+await import("../../parts/index.ts"); // 組み込みパーツを登録（副作用）
+const partCat = hasPlus ? partCatalog() : [];
+const enabledPartList = hasPlus ? await enabledPartIds(Astro.locals.ctx) : null;
+const isPartOn = (id: string) => enabledPartList === null || enabledPartList.includes(id);
 ---
 <App title="高度なオプション" active="/settings/advanced">
   <h1>高度なオプション</h1>
@@ -51,6 +57,15 @@ const curMax = hasPlus ? await maxUploadMb(env) : 5;
     <p class="muted">AIへ常に追加する指示。例：「丁寧語で簡潔に」「箇条書き中心」「団体名は○○会」。安全制約（破壊操作の確認など）は変更されません。</p>
     <div class="field"><textarea id="customPrompt" rows="4" placeholder="例：回答は敬語で簡潔に。金額は¥表記。専門用語は補足を添える。">{custom}</textarea></div>
     <button class="btn btn-primary" id="savePrompt">カスタム指示を保存</button>
+  </div>
+
+  <h2>有効パーツ（団体ごとの機能）</h2>
+  <div class="card">
+    <p class="muted">このアシスタントで使う業務機能（パーツ）を選びます。チェックを外すと、その道具はAIに提示されず実行もされません。未選択時は全て有効。</p>
+    {partCat.map((p) => (
+      <div class="field"><label><input type="checkbox" class="part-chk" value={p.id} checked={isPartOn(p.id)} /> {p.name}</label></div>
+    ))}
+    <button class="btn btn-primary" id="saveParts">有効パーツを保存</button>
   </div>
 
   <h2>ストレージ上限（標準モード・KV）</h2>
@@ -130,6 +145,7 @@ const curMax = hasPlus ? await maxUploadMb(env) : 5;
       if(r.ok){window.bo.toast("スキル「"+(r.data.name||"")+"」を作成しました（無効状態）");setTimeout(()=>location.reload(),900);}
     });
     document.getElementById("saveMax").addEventListener("click",async(e)=>{const v=document.getElementById("maxmb").value;const r=await window.bo.api("/api/settings",{_action:"max_upload",mb:Number(v)},{btn:e.currentTarget,successMsg:"上限を保存しました"});if(r.ok)setTimeout(()=>location.reload(),600);});
+    document.getElementById("saveParts")?.addEventListener("click",async(e)=>{const parts=[...document.querySelectorAll(".part-chk")].filter(c=>c.checked).map(c=>c.value);const r=await window.bo.api("/api/settings",{_action:"enabled_parts",parts},{btn:e.currentTarget,successMsg:"有効パーツを保存しました"});if(r.ok)setTimeout(()=>location.reload(),600);});
     document.getElementById("capadd").addEventListener("click",async(e)=>{const r=await cap({_action:"create",capability:document.getElementById("cap").value,provider:document.getElementById("cprov").value,model:document.getElementById("cmodel").value,endpoint:document.getElementById("cendpoint").value,api_key:document.getElementById("ckey").value},e.currentTarget);if(r.ok){window.bo.toast("登録しました（無効状態）");setTimeout(()=>location.reload(),600);}});
     document.querySelectorAll("tr[data-cid]").forEach(tr=>{const id=tr.dataset.cid;
       tr.querySelector(".cen")?.addEventListener("click",async(e)=>{const r=await cap({_action:"enable",id,enabled:true},e.target);if(r.ok)setTimeout(()=>location.reload(),500);});

@@ -3,6 +3,7 @@ import { getSession } from "../../lib/auth.ts";
 import { setMaxUploadMb } from "../../lib/storage.ts";
 import { setAiEngine, setCustomPrompt } from "../../lib/settings.ts";
 import { setStorageLimits } from "../../lib/storage-usage.ts";
+import { partCatalog, enabledPartIds, setEnabledPartIds } from "../../core/parts.ts";
 
 export const prerender = false;
 const json = (o: unknown, s = 200) => new Response(JSON.stringify(o), { status: s, headers: { "content-type": "application/json" } });
@@ -12,7 +13,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
   const env = locals.runtime.env;
   const ses = await getSession(env, request);
   if (!ses || ses.role !== "admin" || ses.ctx !== "org") return json({ error: "管理者のみ" }, 403);
-  const b = (await request.json().catch(() => ({}))) as { _action?: string; mb?: number; engine?: string; prompt?: string; limits?: Record<string, number> };
+  const b = (await request.json().catch(() => ({}))) as { _action?: string; mb?: number; engine?: string; prompt?: string; limits?: Record<string, number>; parts?: string[] };
   if (b._action === "max_upload") {
     const v = await setMaxUploadMb(env, Number(b.mb));
     return json({ ok: true, mb: v });
@@ -34,6 +35,14 @@ export const POST: APIRoute = async ({ request, locals }) => {
     }
     await setStorageLimits(env, clean);
     return json({ ok: true });
+  }
+  // 有効パーツの選択（団体ごとの組み立て・§5）。
+  if (b._action === "enabled_parts") {
+    const v = await setEnabledPartIds(locals.ctx, Array.isArray(b.parts) ? b.parts : []);
+    return json({ ok: true, enabled: v, catalog: partCatalog() });
+  }
+  if (b._action === "list_parts") {
+    return json({ ok: true, enabled: await enabledPartIds(locals.ctx), catalog: partCatalog() });
   }
   return json({ error: "不明な操作" }, 400);
 };

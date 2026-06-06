@@ -1,7 +1,6 @@
 import type { APIRoute } from "astro";
 import { getSession } from "../../lib/auth.ts";
 import { cachedEntitlement } from "../../lib/client.ts";
-import { runAgent } from "../../lib/agent.ts";
 import { atLeast } from "@baku-office/shared";
 
 export const prerender = false;
@@ -11,6 +10,7 @@ const json = (o: unknown, s = 200) => new Response(JSON.stringify(o), { status: 
 // owner=session.uid＝Webユーザーの個人スコープ。Gemini未設定時は runAgent が案内文を返す。
 export const POST: APIRoute = async ({ request, locals }) => {
   const env = locals.runtime.env;
+  const ctx = locals.ctx;
   const ses = await getSession(env, request);
   if (!ses) return json({ error: "ログインが必要" }, 401);
   if (!atLeast(await cachedEntitlement(env), "plus")) return json({ error: "AIチャットは Plus 以上のプランで利用できます" }, 403);
@@ -19,6 +19,6 @@ export const POST: APIRoute = async ({ request, locals }) => {
   const message = (b.message ?? "").trim();
   if (!message) return json({ error: "メッセージが必要" }, 400);
 
-  const reply = await runAgent(env, ses.uid, message, undefined, new URL(request.url).origin);
+  const reply = await ctx.agent.run({ owner: ses.uid, text: message, role: ses.role, baseUrl: new URL(request.url).origin });
   return json({ ok: true, reply });
 };

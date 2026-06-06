@@ -26,9 +26,10 @@ export const GET: APIRoute = async ({ url, request, locals }) => {
   if (!p.sub || !p.exp || p.exp < Math.floor(Date.now() / 1000)) return redir("/login?e=state");
 
   // 未アクティベートなら、Googleのメールと申込メールを突合してライセンスを取得（§4・アプリを開いてログインするだけ）。
+  // 生メールではなく、検証済みのホスト署名 relay エンベロープをそのまま中継する（ホスト側で再検証＝なりすまし防止）。
   if (!(await getToken(env)) && p.email) {
     try {
-      const r = await hostFetch(env, "/api/activate-by-email", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email: p.email, deployUrl: url.origin }) });
+      const r = await hostFetch(env, "/api/activate-by-email", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ relay: token, deployUrl: url.origin }) });
       const j = (await r.json().catch(() => ({}))) as { ok?: boolean; token?: string };
       if (j.ok && j.token) await saveToken(env, j.token);
       else return redir("/login?e=noapply");

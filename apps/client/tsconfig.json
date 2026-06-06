@@ -5,5 +5,5 @@
     "strictNullChecks": true
   },
   "include": [".astro/types.d.ts", "**/*.ts", "**/*.astro", "src/env.d.ts"],
-  "exclude": ["dist"]
+  "exclude": ["dist", "test"]
 }

@@ -50,7 +50,7 @@ export async function joinWithInvite(
     .run();
   let passwordHash: string | null = null;
   if (identity.type === "local" && identity.password) {
-    passwordHash = await sha256(identity.password);
+    passwordHash = await pbkdf2Hash(identity.password);
   }
   await env.DB.prepare("INSERT INTO identities (id,user_id,type,external_id,password_hash,created_at) VALUES (?,?,?,?,?,?)")
     .bind(randomId(), uid, identity.type, identity.externalId ?? name, passwordHash, nowSec())
@@ -80,11 +80,15 @@ export async function setRole(env: Env, id: string, role: Role): Promise<void> {
 
 // local 認証（個人ログイン・dev）。
 export async function authLocal(env: Env, loginId: string, password: string): Promise<UserRow | null> {
-  const idn = await env.DB.prepare("SELECT user_id, password_hash FROM identities WHERE type='local' AND external_id=?")
+  const idn = await env.DB.prepare("SELECT id, user_id, password_hash FROM identities WHERE type='local' AND external_id=?")
     .bind(loginId)
-    .first<{ user_id: string; password_hash: string | null }>();
+    .first<{ id: string; user_id: string; password_hash: string | null }>();
   if (!idn || !idn.password_hash) return null;
-  if (idn.password_hash !== (await sha256(password))) return null;
+  if (!(await verifyPassword(idn.password_hash, password))) return null;
+  // 旧ハッシュ（無塩SHA-256）でログインできたら PBKDF2 へ透過的に再ハッシュ。
+  if (!idn.password_hash.startsWith("pbkdf2$")) {
+    await env.DB.prepare("UPDATE identities SET password_hash=? WHERE id=?").bind(await pbkdf2Hash(password), idn.id).run();
+  }
   const u = await env.DB.prepare("SELECT * FROM users WHERE id=? AND status='active'").bind(idn.user_id).first<UserRow>();
   return u ?? null;
 }
@@ -154,6 +158,35 @@ export async function listMyItems(env: Env, ownerId: string): Promise<{ id: stri
     "SELECT id,type,title,amount,share_scope,review_status FROM personal_items WHERE owner_user_id=? ORDER BY created_at DESC",
   ).bind(ownerId).all<{ id: string; type: string; title: string | null; amount: number | null; share_scope: string; review_status: string }>();
   return results.map((r) => ({ ...r, title: r.title ?? "" }));
+}
+
+// パスワードハッシュ：PBKDF2-SHA256（塩あり・ストレッチあり）。形式 "pbkdf2$<iter>$<saltB64>$<hashB64>"。
+const PBKDF2_ITER = 210000;
+export async function pbkdf2Hash(password: string, saltB64?: string): Promise<string> {
+  const salt = saltB64 ? Uint8Array.from(atob(saltB64), (c) => c.charCodeAt(0)) : crypto.getRandomValues(new Uint8Array(16));
+  const base = await crypto.subtle.importKey("raw", new TextEncoder().encode(password), "PBKDF2", false, ["deriveBits"]);
+  const bits = await crypto.subtle.deriveBits({ name: "PBKDF2", hash: "SHA-256", salt, iterations: PBKDF2_ITER }, base, 256);
+  const hashB64 = btoa(String.fromCharCode(...new Uint8Array(bits)));
+  const sB64 = btoa(String.fromCharCode(...salt));
+  return `pbkdf2$${PBKDF2_ITER}$${sB64}$${hashB64}`;
+}
+
+// 定数時間比較（タイミング攻撃対策）。
+function timingSafeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let r = 0;
+  for (let i = 0; i < a.length; i++) r |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return r === 0;
+}
+
+export async function verifyPassword(stored: string, password: string): Promise<boolean> {
+  if (stored.startsWith("pbkdf2$")) {
+    const saltB64 = stored.split("$")[2];
+    if (!saltB64) return false;
+    return timingSafeEqual(await pbkdf2Hash(password, saltB64), stored);
+  }
+  // 旧形式（無塩SHA-256）。移行のため検証のみ許可（成功時 authLocal が再ハッシュ）。
+  return timingSafeEqual(stored, await sha256(password));
 }
 
 async function sha256(s: string): Promise<string> {

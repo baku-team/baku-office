@@ -14,6 +14,7 @@ import m0009 from "../../migrations/0009_drive.sql?raw";
 import m0010 from "../../migrations/0010_membership.sql?raw";
 import m0011 from "../../migrations/0011_sites.sql?raw";
 import m0012 from "../../migrations/0012_imports.sql?raw";
+import { logDiag } from "./diag.ts";
 
 // 並び順＝適用順。新しいマイグレーションはここに追記するだけ。
 const MIGRATIONS: { id: string; sql: string }[] = [
@@ -39,7 +40,9 @@ function statements(sql: string): string[] {
     .split("\n").filter((l) => !l.trim().startsWith("--")).join("\n")
     .split(";").map((s) => s.trim()).filter(Boolean);
 }
-const ignorable = (msg: string) => /already exists|duplicate column|duplicate/i.test(msg);
+// 既存環境への再適用で安全に無視できるエラーのみを限定列挙。WHY: 以前は bare "duplicate" も無視しており、
+// 部分適用や想定外の重複を隠蔽し得た（2026-06-04 の Cron 全停止の温床）。
+const ignorable = (msg: string) => /already exists|duplicate column name/i.test(msg);
 
 export async function applyMigrations(env: Env): Promise<{ applied: string[] }> {
   await env.DB.prepare("CREATE TABLE IF NOT EXISTS schema_migrations (id TEXT PRIMARY KEY, applied_at INTEGER)").run();
@@ -51,7 +54,12 @@ export async function applyMigrations(env: Env): Promise<{ applied: string[] }> 
       try {
         await env.DB.prepare(stmt).run();
       } catch (e) {
-        if (!ignorable((e as Error).message)) throw e; // 既存環境への再適用は無視、想定外は中断
+        const msg = (e as Error).message ?? String(e);
+        if (!ignorable(msg)) {
+          // 想定外の失敗は診断に残してから中断（部分適用を隠蔽しない）。
+          await logDiag(env, "error", "migration", `migration ${m.id} 失敗: ${msg}`, stmt.slice(0, 200));
+          throw e;
+        }
       }
     }
     await env.DB.prepare("INSERT OR IGNORE INTO schema_migrations (id, applied_at) VALUES (?, ?)").bind(m.id, Math.floor(Date.now() / 1000)).run();
@@ -67,7 +75,8 @@ export async function ensureSchema(env: Env): Promise<void> {
     if ((await env.LICENSE.get(KV_VER)) === String(SCHEMA_VERSION)) return;
     await applyMigrations(env);
     await env.LICENSE.put(KV_VER, String(SCHEMA_VERSION));
-  } catch {
-    // 失敗時も次リクエストで再試行（フラグは立てない）。
+  } catch (e) {
+    // 失敗時も次リクエストで再試行（フラグは立てない）。原因は診断に残す（無言の全停止を避ける）。
+    await logDiag(env, "error", "migration", `ensureSchema 失敗: ${(e as Error).message ?? String(e)}`);
   }
 }

@@ -1,17 +1,32 @@
 import type { APIRoute } from "astro";
-import { issueLicenseToken, nowSec } from "../../lib/host.ts";
+import { issueLicenseToken, nowSec, signingJwk } from "../../lib/host.ts";
+import { importVerifyKey, verifyEnvelope, payloadOf } from "@baku-office/shared";
 import type { Entitlement } from "@baku-office/shared";
 
 export const prerender = false;
 const json = (o: unknown, s = 200) => new Response(JSON.stringify(o), { status: s, headers: { "content-type": "application/json" } });
 
-// Googleログインによるアクティベート（§4）：ログインした Google のメールと申込メールを突合し、
-// 一致すればライセンストークンを発行＋deploy_url を記録（＝当社が団体URLを把握＝初回完了の通知）。
+// Googleログインによるアクティベート（§4）：クライアントが中継してきた「ホスト自身が署名した relay エンベロープ」
+// （/api/relay/google/callback で {sub,email,name,exp} を Ed25519 署名）のみを信頼する。
+// WHY: 以前は生の email を信頼していたため、申込メールを知る第三者が POST だけで署名トークンを取得し
+// 被害者の deploy_url/last_seen を上書きできた。ホスト署名の検証で「実際のGoogleログイン経由」を必須化する。
 export const POST: APIRoute = async ({ request, locals }) => {
   const env = locals.runtime.env;
-  const b = (await request.json().catch(() => ({}))) as { email?: string; deployUrl?: string };
-  const email = (b.email ?? "").trim().toLowerCase();
-  if (!email) return json({ error: "email が必要" }, 400);
+  const b = (await request.json().catch(() => ({}))) as { relay?: string; deployUrl?: string };
+  if (!b.relay) return json({ error: "認証情報（relay）が必要" }, 401);
+
+  let email = "";
+  try {
+    const envlp = JSON.parse(atob(b.relay)) as { body: string; sig: string };
+    const pub = await importVerifyKey(signingJwk(env)); // 自分の署名鍵の公開部で検証
+    if (!(await verifyEnvelope(pub, envlp))) return json({ error: "署名検証に失敗" }, 401);
+    const p = payloadOf(envlp) as { email?: string; exp?: number };
+    if (!p.exp || p.exp < nowSec()) return json({ error: "認証情報の有効期限切れ" }, 401);
+    email = (p.email ?? "").trim().toLowerCase();
+  } catch {
+    return json({ error: "認証情報が不正" }, 401);
+  }
+  if (!email) return json({ error: "メールアドレスを取得できません" }, 400);
 
   const lic = await env.DB.prepare(
     "SELECT l.license_id AS id, l.entitlement AS ent FROM licenses l JOIN customers c ON c.id = l.customer_id WHERE lower(c.contact_email) = ? AND l.status = 'active' ORDER BY l.created_at DESC LIMIT 1",

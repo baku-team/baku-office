@@ -1,5 +1,6 @@
 import type { APIRoute } from "astro";
 import { joinWithInvite } from "../../lib/users.ts";
+import { verifyPending } from "../../lib/auth.ts";
 
 export const prerender = false;
 const json = (o: unknown, s = 200, headers: Record<string, string> = {}) =>
@@ -11,16 +12,15 @@ export const POST: APIRoute = async ({ request, locals }) => {
   const b = (await request.json().catch(() => ({}))) as { code?: string; name?: string; loginId?: string; password?: string };
   if (!b.code || !b.name) return json({ error: "code と name が必要" }, 400);
 
-  // OAuth identity の引き継ぎ。
+  // OAuth identity の引き継ぎ（署名検証必須＝改竄された pending は拒否）。
   const pendRaw = /pending_oauth=([^;]+)/.exec(request.headers.get("cookie") ?? "")?.[1];
   if (pendRaw) {
-    try {
-      const pend = JSON.parse(atob(pendRaw)) as { provider: "line" | "discord"; externalId: string };
+    const pend = await verifyPending<{ provider: "line" | "discord"; externalId: string }>(env, pendRaw);
+    if (pend) {
       const r = await joinWithInvite(env, b.code, b.name, { type: pend.provider, externalId: pend.externalId });
       return json(r, r.ok ? 200 : 400, { "set-cookie": "pending_oauth=; Path=/; Max-Age=0" });
-    } catch {
-      /* fallthrough to local */
     }
+    /* 署名不正なら local フォールバックへ */
   }
 
   if (!b.loginId || !b.password) return json({ error: "loginId と password が必要（または LINE/Discord でログインしてから参加）" }, 400);
