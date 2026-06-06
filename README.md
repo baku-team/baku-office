@@ -1,12 +1,23 @@
 # baku-office
 
-**クラウド会計・庶務補助システム**（LINEエージェント内蔵）。Cloudflare 上で動き、
-**業務データは利用団体（クライアント）自身のCloudflare内に保管**、当社（ホスト＝株式会社貘）は
-ソフトウェアのライセンス発行・配信・課金・サポートのみを行う（**データに到達経路を持たない**自己ホスト型）。
+**「ポータブルコア＋パーツ」アプリケーション基盤。**
+コア（DB・ストレージ・AI・エージェント・認証）を **Port（インターフェース）** で抽象化し、
+業務機能は **Part（パーツ）** として後から載せ替える。コアは*環境も業務も知らない*ため、
 
-さらに、**コア（DB・ストレージ・AI・エージェント）と UI を「共通ベース＋環境・団体ごと上書き」で分離**する
-移植性アーキテクチャ（Ports & Parts）を採用。同一コードで「フルクラウド」から「完全オフライン（ローカルLLM）」まで
-組み替えられ、団体ごとに機能・見た目をカスタマイズして配布できる。
+- **同一コードでフルクラウド 〜 完全オフライン（ローカルLLM）まで**動かせる、
+- **コアの上に任意のパーツ（業務モジュール）を追加・置換**できる、
+- **UI も共通ベース＋団体ごと上書き**で配布できる
+
+——という「汎用基盤」であることが本質。
+
+> 現在の**標準同梱パーツ**は「会計・庶務（非営利団体向け／LINEエージェント連携）」だが、これは**一例**。
+> 同じコアの上に別の業務パーツ（例：在庫・予約・問合せ対応…）を載せ替えれば、別の専用ツールになる。
+
+運用は自己ホスト型：**業務データは利用団体（クライアント）自身のCloudflare内に保管**し、
+当社（ホスト＝株式会社貘）はライセンス発行・配信・課金・サポートのみ（**データに到達経路を持たない**）。
+
+> 「専用ツール（団体X）＝ 環境Profile × 有効パーツ集合 × 連動する外部API」。3軸が直交し、
+> 環境を変えてもパーツは無改変、パーツを変えても環境は無改変で動く。
 
 - 正本の仕様：[integrated_design_package_v1.0.md](integrated_design_package_v1.0.md)
 - 移植性アーキ：[baku-office_portable-core_architecture.md](baku-office_portable-core_architecture.md)
@@ -15,7 +26,10 @@
 
 ---
 
-## アーキテクチャ（配信境界：ホスト⇄クライアント）
+## 配信・運用モデル（標準提供時：ホスト⇄クライアント）
+
+> これは「標準同梱パーツを SaaS 的に配る」ときの**運用形態の一例**。コア自体は環境非依存で、
+> オフライン単体配布など他の形態でも動く（→ [ポータブルコア](#ポータブルコアports--parts)）。
 
 ```
 当社（ホスト）アカウント                         利用団体（クライアント）アカウント
@@ -56,6 +70,27 @@
 > Profile A/B/C のランタイム/ストレージ実体（D1↔SQLite・Workers↔Node）の切替は **deploy 時の構成**。
 > 単一 Workers バイナリ内では AI(クラウド/ローカル) のみ実行時に切替（`LOCAL_AI_BASE_URL` 設定時）。
 
+**新しいパーツを足す**（コアは変更しない）：
+
+```ts
+// src/parts/inventory.ts
+import type { Part } from "../core/parts.ts";
+export const inventoryPart: Part = {
+  id: "inventory", name: "在庫",
+  menu: [{ href: "/inventory", label: "在庫" }],            // 第2層：ナビに出る
+  agentTools: [{                                            // エージェントの道具
+    name: "record_stock", description: "在庫を記録",
+    parameters: { type: "object", properties: { item: { type: "string" }, qty: { type: "number" } }, required: ["item", "qty"] },
+    requiredRole: ["admin", "clerical"],                    // §14-1 認可
+    run: (ctx, owner, _b, a) => ctx.db.prepare("INSERT INTO stock(...) VALUES(...)").bind(/* ... */).run().then(() => "記録しました"),
+  }],
+};
+// src/parts/index.ts に registerPart(inventoryPart) を1行足すだけ
+```
+
+道具は `ctx.db/storage/ai` 経由なので **CF でも Node+SQLite でも無改変で動く**。
+画面は `src/pages/inventory.astro`（または `src/overrides/` で上書き）。
+
 ## UIカスタマイズ（共通ベース＋上書き・3層）
 
 基本の画面は共通のまま、団体・環境ごとに上書きできる。
@@ -69,7 +104,12 @@
 - 管理は **高度なオプション**（[`settings/advanced.astro`](apps/client/src/pages/settings/advanced.astro)）＋ `api/settings`（`ui_theme`/`nav_overrides`/`enabled_parts`）。
 - ベース（共通画面）は未編集のまま上流更新を取り込める（[`src/overrides/README.md`](apps/client/src/overrides/README.md)）。
 
-## プランと機能
+## 標準同梱パーツ（一例）と機能
+
+> 以下は**現在コアに載せている標準パーツ群**（会計・庶務・名簿・予定・議事録・リマインダー…）。
+> いずれも `src/parts/` の Part として登録され、団体ごとに**有効/無効を選択**できる。別用途なら別パーツに差し替える。
+
+プラン別ゲート（標準パーツの提供範囲）：
 
 | プラン | 内容 | AI | エージェント |
 | --- | --- | --- | --- |
