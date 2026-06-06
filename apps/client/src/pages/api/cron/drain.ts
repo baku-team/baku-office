@@ -1,7 +1,7 @@
 import type { APIRoute } from "astro";
 import { getApiKey } from "../../../lib/client.ts";
 import { linePush } from "../../../lib/agent.ts";
-import { dueReminders, markReminderDone } from "../../../lib/agent-tools.ts";
+import { dueReminders, markReminderDone } from "../../../parts/reminders.ts";
 import { processSummaryJobs } from "../../../lib/media-ai.ts";
 import { pollVideoJobs } from "../../../lib/capabilities.ts";
 import { guardHeavy } from "../../../lib/diag.ts";
@@ -25,10 +25,10 @@ export const POST: APIRoute = async ({ request, locals }) => {
   const video = vr.ok ? vr.value : { done: 0, pending: 0 };
   let sent = 0;
   if (accessToken) {
-    for (const r of await dueReminders(env)) {
+    for (const r of await dueReminders(locals.ctx)) {
       const userId = r.owner.startsWith("line:") ? r.owner.slice(5) : null;
       if (userId) { await linePush(accessToken, userId, `⏰ リマインド：${r.content}`); sent++; }
-      await markReminderDone(env, r.id);
+      await markReminderDone(locals.ctx, r.id);
     }
   }
   // 任意：Google ドライブへの定期バックアップ（有効時のみ）。

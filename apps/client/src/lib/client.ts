@@ -1,5 +1,7 @@
 // クライアント側の共通ロジック：ライセンストークンの保持・統合チェック・APIキーの暗号保存（§4/7/10）。
 import { encryptField, decryptField, generateMasterKey, type CheckResponse, type Entitlement, type Ed25519Jwk } from "@baku-office/shared";
+import { logDiag } from "./diag.ts";
+import type { Ctx, KvPort } from "../core/ports.ts";
 
 const KV_TOKEN = "license_token";
 const KV_ENTITLEMENT = "entitlement";
@@ -61,11 +63,44 @@ export async function cachedEntitlement(env: Env): Promise<Entitlement> {
 
 // MASTER_KEY：secret があれば優先、無ければ生成して LICENSE KV に保存（セルフ導入＝secret投入不要）。
 // 鍵は団体自身の CF アカウント内（KV）に保持。当社は保持しない。
+// WHY: KV自動生成は zero-config 維持のためだが、鍵が暗号文（apikey:*・PII）と同一 LICENSE KV に同居し、
+// アカウント侵害時に暗号化が無力化する（設計書§10.1の自己警告）。本番は MASTER_KEY を Worker Secret で投入推奨。
+// secret 未投入時は重大診断を残し、管理画面で警告できるようにする。
+// KVNamespace を KvPort（移植性アーキ §14-3）に薄く包む。
+function kvOf(ns: KVNamespace): KvPort {
+  return {
+    get: (k) => ns.get(k),
+    put: (k, v, o) => ns.put(k, v, o),
+    delete: (k) => ns.delete(k),
+    list: async (p) => (await ns.list({ prefix: p })).keys.map((x) => x.name),
+  };
+}
+// 鍵の「保管」を KvPort 経由に分離（§14-3）。secret(env.MASTER_KEY) 優先、無ければ kv に自動生成。
+// 演算（HKDF/AES-GCM）は shared の純粋関数のまま。保管先だけ Profile で差し替え可能。
+async function resolveMasterKey(env: Env, kv: KvPort): Promise<string> {
+  let k = await kv.get("master_key");
+  if (!k) {
+    k = generateMasterKey();
+    await kv.put("master_key", k);
+    await kv.put("master_key_source", "kv-autogen");
+    await logDiag(env, "warn", "security", "MASTER_KEY 未設定のため KV に自動生成しました。本番は Worker Secret(MASTER_KEY)の投入を推奨します（鍵と暗号文の同居を避けるため）。");
+  }
+  return k;
+}
 export async function masterKey(env: Env): Promise<string> {
   if (env.MASTER_KEY) return env.MASTER_KEY;
-  let k = await env.LICENSE.get("master_key");
-  if (!k) { k = generateMasterKey(); await env.LICENSE.put("master_key", k); }
-  return k;
+  return resolveMasterKey(env, kvOf(env.LICENSE));
+}
+// ctx 版（鍵保管 Port 経由）。パーツ/コアからは原則こちらを使う。
+export async function masterKeyCtx(ctx: Ctx): Promise<string> {
+  if (ctx.env.MASTER_KEY) return ctx.env.MASTER_KEY;
+  return resolveMasterKey(ctx.env, ctx.storage.kv);
+}
+
+// 鍵の保管状態（管理画面の診断表示用）。"secret"=Worker Secret運用（推奨）、"kv-autogen"=KV自動生成（要対応）。
+export async function masterKeySource(env: Env): Promise<"secret" | "kv-autogen" | "unknown"> {
+  if (env.MASTER_KEY) return "secret";
+  return ((await env.LICENSE.get("master_key_source")) as "kv-autogen" | null) ?? "unknown";
 }
 
 // ライセンス署名の検証鍵（公開鍵）。secret があれば優先、無ければホストの /api/pubkey から取得して KV キャッシュ。

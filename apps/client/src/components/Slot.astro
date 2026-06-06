@@ -1,0 +1,8 @@
+---
+// 上書き可能スロット（第3層）。src/overrides/<name>.astro が有ればそれを、無ければ既定の子要素を描画。
+import { overrideComponent } from "../core/overrides.ts";
+interface Props { name: string }
+const { name } = Astro.props as Props;
+const Override = overrideComponent(name) as (new () => unknown) | null;
+---
+{Override ? <Override /> : <slot />}

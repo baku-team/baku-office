@@ -39,6 +39,21 @@ const items: Item[] = [
   { href: "/settings/advanced", label: "高度なオプション", show: isAdminOrg && hasPlus },
   { href: "/settings/update", label: "アプリの更新", show: isAdminOrg },
 ];
+
+// UIカスタマイズ（共通ベース＋団体ごと上書き）。
+const ctx = Astro.locals.ctx;
+const { getTheme, themeCss, brandName } = await import("../core/theme.ts");
+const theme = await getTheme(ctx).catch(() => ({}) as import("../core/theme.ts").ThemeConfig);
+const themeStyle = themeCss(theme);
+const brand = brandName(theme);
+const logoUrl = theme.logoUrl;
+// 第2層：共通ナビ＋有効パーツの menu ＋団体ごと上書き（非表示/ラベル/並び）。
+const { buildNav, getNavOverrides } = await import("../core/nav.ts");
+const { partMenuItems, enabledPartIds } = await import("../core/parts.ts");
+await import("../parts/index.ts");
+const navOv = await getNavOverrides(ctx).catch(() => null);
+const partItems = partMenuItems(await enabledPartIds(ctx).catch(() => null));
+const navItems = buildNav(items, partItems, navOv);
 ---
 <!doctype html>
 <html lang="ja">
@@ -46,15 +61,16 @@ const items: Item[] = [
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="color-scheme" content="light" />
-    <title>{title} — baku-office</title>
+    <title>{title} — {brand}</title>
+    {themeStyle && <style set:html={themeStyle}></style>}
   </head>
   <body>
     {auth && (
       <header class="appbar">
         <div class="appbar-inner">
-          <a class="brand" href="/">baku-office</a>
+          <a class="brand" href="/">{logoUrl ? <img src={logoUrl} alt={brand} style="height:24px;vertical-align:middle" /> : brand}</a>
           <nav class="nav">
-            {items.filter((i) => i.show).map((i) => (
+            {navItems.map((i) => (
               <a href={i.href} aria-current={active === i.href ? "page" : undefined}>{i.label}</a>
             ))}
           </nav>

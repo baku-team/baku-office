@@ -6,8 +6,19 @@ const nowSec = (): number => Math.floor(Date.now() / 1000);
 
 // 申込（申込専用Worker）：団体情報＋プラン → customers/licenses 作成。free は即時、plus/pro は入金前 free 相当（§2.3）。
 // ホストポータルと同じ D1 を共有。本番は Google ログイン後に呼ぶ（Phase1 は googleSub 任意）。
+// IP単位のレート制限（SESSION KV・1時間に5件まで）。WHY: 無認証導線のため、customer/license量産＋
+// GitHubリポ生成のスパムで GitHub レート/リポ上限を消費されるのを防ぐ。
+const RL_MAX = 5;
+const RL_TTL = 3600;
+
 export const POST: APIRoute = async ({ request, locals }) => {
   const env = locals.runtime.env;
+  const ip = request.headers.get("cf-connecting-ip") ?? "unknown";
+  const rlKey = `apply_rl:${ip}`;
+  const cur = Number((await env.SESSION.get(rlKey)) ?? "0");
+  if (cur >= RL_MAX) return json({ error: "短時間に申込が集中しています。しばらく待って再度お試しください。" }, 429);
+  await env.SESSION.put(rlKey, String(cur + 1), { expirationTtl: RL_TTL });
+
   const b = (await request.json().catch(() => ({}))) as {
     orgName?: string;
     contactName?: string;

@@ -25,6 +25,9 @@ interface Env {
   DISCORD_CLIENT_SECRET?: string;
   // R2 高度モード（任意）
   MEDIA_R2?: R2Bucket;
+  // Profile C：ローカルLLM（OpenAI互換エンドポイント。例 Ollama=http://localhost:11434）。
+  LOCAL_AI_BASE_URL?: string;
+  LOCAL_AI_MODEL?: string;
   // リマインダー drain（外部スケジューラ）保護用。
   INTERNAL_KEY?: string;
 }
@@ -32,5 +35,8 @@ interface Env {
 type Runtime = import("@astrojs/cloudflare").Runtime<Env>;
 
 declare namespace App {
-  interface Locals extends Runtime {}
+  interface Locals extends Runtime {
+    // ポータブルコアの実行コンテキスト（middleware で注入・移植性アーキ §7）。
+    ctx: import("./core/ports").Ctx;
+  }
 }

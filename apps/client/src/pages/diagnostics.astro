@@ -9,9 +9,16 @@ const { recentDiagnostics, hasRecentLimitError } = await import("../lib/diag.ts"
 const diags = await recentDiagnostics(env);
 const limit = await hasRecentLimitError(env);
 const t = (s: number) => new Date(s * 1000).toISOString().slice(0, 16).replace("T", " ");
+const { detectProfile } = await import("../core/profiles.ts");
+const prof = detectProfile(env);
 ---
 <App title="診断・サポート" active="/diagnostics">
   <h1>診断・サポート</h1>
+  <div class="card">
+    <p class="muted">稼働中の構成（環境Profile・§6）</p>
+    <p>Profile <strong>{prof.label}</strong>／AI=<strong>{prof.ai === "local" ? "ローカルLLM" : "クラウド"}</strong>／ストレージ=<strong>{prof.storage.toUpperCase()}</strong>／鍵=<strong>{prof.keyStore === "secret" ? "Worker Secret" : "KV自動生成（要対応）"}</strong></p>
+    {prof.keyStore === "kv-autogen" && (<div class="banner banner-warn">MASTER_KEY が Worker Secret 未設定です。本番は <code>wrangler secret put MASTER_KEY</code> を推奨（鍵と暗号文の同居回避・§10.1）。</div>)}
+  </div>
   {limit && (<div class="banner banner-danger">⚠️ 直近にCloudflareの<strong>無料枠の制限</strong>に達したエラーがあります。重い処理を安定させるには <a href="/settings/advanced">高度なオプション → Workers Paid</a> をご検討ください。</div>)}
   <div class="table-wrap"><table><thead><tr><th>日時</th><th>区分</th><th>レベル</th><th>内容</th></tr></thead><tbody>
     {diags.map((d)=>(<tr><td>{t(d.created_at)}</td><td><span class="pill" style={d.category==="limit"?"background:#fee2e2;color:#b91c1c":""}>{d.category}</span></td><td>{d.level}</td><td>{d.message}</td></tr>))}

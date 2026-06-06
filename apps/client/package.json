@@ -8,7 +8,8 @@
     "preview": "astro build && wrangler dev",
     "deploy": "astro build && wrangler deploy",
     "release": "node scripts/build-release.mjs",
-    "typecheck": "astro check"
+    "typecheck": "astro check",
+    "test": "node --experimental-strip-types --disable-warning=ExperimentalWarning --test test/*.test.ts"
   },
   "dependencies": {
     "@baku-office/shared": "*",

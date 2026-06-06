@@ -1,6 +1,7 @@
 ---
 export const prerender = false;
 import App from "../layouts/App.astro";
+import Slot from "../components/Slot.astro";
 import { planLabel } from "@baku-office/shared";
 const env = Astro.locals.runtime.env;
 const { getSession } = await import("../lib/auth.ts");
@@ -24,6 +25,7 @@ const notices = check?.notices ?? [];
 const yen = (n: number) => "¥" + n.toLocaleString("ja-JP");
 ---
 <App title="ホーム" active="/">
+  <Slot name="home-hero" />
   <h1>ホーム</h1>
   <p class="muted">プラン：<span class="pill">{planLabel(entitlement)}</span> ／ {check ? "ホスト疎通OK" : "オフライン（キャッシュ表示）"}</p>
 

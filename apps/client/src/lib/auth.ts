@@ -28,6 +28,24 @@ export function clearSessionCookie(): string {
   return `${COOKIE}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`;
 }
 
+// 一時 OAuth 引き継ぎ（pending_oauth）の署名付きペイロード。WHY: 以前は btoa(JSON) で改竄可能（externalId 偽装の余地）。
+export async function signPending(env: Env, data: unknown): Promise<string> {
+  const payload = b64url(ENC.encode(JSON.stringify(data)));
+  const sig = b64url(await crypto.subtle.sign("HMAC", await hmacKey(env), ENC.encode(payload)));
+  return `${payload}.${sig}`;
+}
+export async function verifyPending<T>(env: Env, value: string): Promise<T | null> {
+  const [payload, sig] = value.split(".");
+  if (!payload || !sig) return null;
+  const ok = await crypto.subtle.verify("HMAC", await hmacKey(env), b64urlToBytes(sig), ENC.encode(payload));
+  if (!ok) return null;
+  try {
+    return JSON.parse(new TextDecoder().decode(b64urlToBytes(payload))) as T;
+  } catch {
+    return null;
+  }
+}
+
 export async function getSession(env: Env, request: Request): Promise<Session | null> {
   const cookie = request.headers.get("cookie") ?? "";
   const m = new RegExp(`${COOKIE}=([^;]+)`).exec(cookie);

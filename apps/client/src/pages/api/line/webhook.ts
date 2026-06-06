@@ -1,7 +1,7 @@
 import type { APIRoute } from "astro";
 import { getApiKey, cachedEntitlement } from "../../../lib/client.ts";
-import { runAgent, verifyLineSignature, lineReply, linePush, fetchLineImage } from "../../../lib/agent.ts";
-import { dueReminders, markReminderDone } from "../../../lib/agent-tools.ts";
+import { verifyLineSignature, lineReply, linePush, fetchLineImage } from "../../../lib/agent.ts";
+import { dueReminders, markReminderDone } from "../../../parts/reminders.ts";
 import { saveFile } from "../../../lib/storage.ts";
 import { enqueueSummary, transcribeAudio } from "../../../lib/media-ai.ts";
 import { randomId } from "@baku-office/shared";
@@ -33,13 +33,20 @@ export const POST: APIRoute = async ({ request, locals }) => {
       locals.runtime.ctx.waitUntil(lineReply(accessToken, reply, "エージェント機能は Pro プランで有効になります（管理画面のプラン・課金から）。"));
       continue;
     }
+    // §1🔴 発話者を登録済み active 会員に限定。非会員は組織名簿・ナレッジに到達させない。
+    const member = await locals.ctx.identity.memberOf("line", userId);
+    if (!member || member.status !== "active") {
+      locals.runtime.ctx.waitUntil(lineReply(accessToken, reply, "このアシスタントは登録メンバー専用です。管理者から招待コードを受け取り、アプリで参加申請してください。"));
+      continue;
+    }
+    const role = member.role;
     const m = ev.message!;
     const work = (async () => {
       let out: string;
       try {
       if (m.type === "image" && m.id) {
         const img = await fetchLineImage(accessToken, m.id);
-        out = img ? await runAgent(env, `line:${userId}`, "この画像（領収書なら record_expense で記録）を処理してください。", img, origin) : "画像を取得できませんでした。";
+        out = img ? await locals.ctx.agent.run({ owner: `line:${userId}`, text: "この画像（領収書なら record_expense で記録）を処理してください。", image: img, baseUrl: origin, role }) : "画像を取得できませんでした。";
       } else if (m.type === "file" && m.id) {
         // ファイル（PDF等）→ KV/R2保存 → 要約ジョブ投入（drainでGemini要約）。
         const content = await fetchLineContent(accessToken, m.id);
@@ -60,10 +67,10 @@ export const POST: APIRoute = async ({ request, locals }) => {
           out = "🎤 文字起こし・議事録化しました（議事録に保存）。\n\n" + text.slice(0, 1500);
         }
       } else if (m.type === "text") {
-        out = await runAgent(env, `line:${userId}`, m.text ?? "", undefined, origin);
+        out = await locals.ctx.agent.run({ owner: `line:${userId}`, text: m.text ?? "", baseUrl: origin, role });
       } else return;
       await lineReply(accessToken, reply, out);
-      for (const r of await dueReminders(env, `line:${userId}`)) { await linePush(accessToken, userId, `⏰ リマインド：${r.content}`); await markReminderDone(env, r.id); }
+      for (const r of await dueReminders(locals.ctx, `line:${userId}`)) { await linePush(accessToken, userId, `⏰ リマインド：${r.content}`); await markReminderDone(locals.ctx, r.id); }
       } catch (e) {
         // CF制限（CPU時間・waitUntil等）に達した可能性。診断記録＋利用者にWorkers Paid案内。
         const msg = (e as Error).message ?? String(e);

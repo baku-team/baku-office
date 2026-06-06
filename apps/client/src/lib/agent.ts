@@ -2,7 +2,14 @@
 // Gemini function-calling のツールループで、新データモデル（personal_items/knowledge/reminders/users）を操作。
 // APIキーは連携設定の暗号KVから復号して使用。
 import { getApiKey } from "./client.ts";
-import * as T from "./agent-tools.ts";
+import type { Role } from "@baku-office/shared";
+import type { Ctx } from "../core/ports.ts";
+import { enabledParts, toolsOf, enabledPartIds, type AgentTool } from "../core/parts.ts";
+import { runToolLoop, type ToolDecl } from "../core/ai.ts";
+import { localChatModel } from "../core/models/local.ts";
+import { geminiModel } from "../core/models/gemini.ts";
+import { claudeModel } from "../core/models/claude.ts";
+import "../parts/index.ts"; // 組み込みパーツを登録（副作用・移植性アーキ §4）
 import { webSearch, makeDocument } from "./media-ai.ts";
 import { listSkills, runSkill, generateSkill } from "./skills.ts";
 import { listCapabilities, invokeCapability, capabilitySummary, videoStatusText } from "./capabilities.ts";
@@ -16,16 +23,10 @@ const SYSTEM =
   "最新情報が要る質問は web_search、資料作成依頼は make_document（type=md/csv/txt）を使う。" +
   "ツールが不要な質問・雑談は通常のテキストで短く答える。";
 
-// Gemini 関数宣言（OpenAPI風スキーマ）。
-const TOOLS = [
-  { name: "record_expense", description: "支出/領収書を記録", parameters: { type: "object", properties: { amount: { type: "number" }, title: { type: "string" }, date: { type: "string", description: "YYYY-MM-DD" } }, required: ["amount", "title"] } },
-  { name: "save_memo", description: "メモを保存", parameters: { type: "object", properties: { title: { type: "string" }, body: { type: "string" } }, required: ["title"] } },
-  { name: "set_reminder", description: "指定日時にLINEへ通知", parameters: { type: "object", properties: { content: { type: "string" }, remind_at: { type: "string", description: "ISO日時" } }, required: ["content", "remind_at"] } },
-  { name: "list_reminders", description: "未配信リマインダー一覧", parameters: { type: "object", properties: {} } },
-  { name: "list_expenses", description: "記録した領収書一覧", parameters: { type: "object", properties: {} } },
-  { name: "save_knowledge", description: "組織ナレッジを保存", parameters: { type: "object", properties: { title: { type: "string" }, body: { type: "string" } }, required: ["title", "body"] } },
-  { name: "search_knowledge", description: "組織ナレッジを検索", parameters: { type: "object", properties: { query: { type: "string" } }, required: ["query"] } },
-  { name: "search_members", description: "メンバー（名簿）を検索", parameters: { type: "object", properties: { query: { type: "string" } }, required: ["query"] } },
+// 業務道具（record_expense / list_expenses / save_memo / set_reminder / list_reminders /
+// save_knowledge / search_knowledge / search_members）は各パーツが登録する（§4）。宣言は allAgentTools() から得る。
+// コア組み込み道具（業務パーツではない・常時提示）。スキル生成。
+const CORE_TOOLS = [
   { name: "install_skill", description: "ユーザーの要望から新しい業務スキルを設計して登録（無効状態で保存。管理者が高度なオプションで有効化）", parameters: { type: "object", properties: { request: { type: "string", description: "欲しいスキルの要望" } }, required: ["request"] } },
 ];
 // API依存ツール（キーがある時だけ宣言＝モデルに見せる）。
@@ -47,57 +48,16 @@ const CAP_TOOLS: Record<string, unknown> = {
 };
 const VIDEO_STATUS_TOOL = { name: "video_status", description: "依頼した動画生成の状況を確認（完成ならDLリンク）", parameters: { type: "object", properties: {} } };
 
-type Part = { text?: string; functionCall?: { name: string; args: Record<string, unknown> }; functionResponse?: { name: string; response: unknown }; inlineData?: { mimeType: string; data: string } };
-type Content = { role: string; parts: Part[] };
-
-async function gemini(key: string, contents: Content[], decls: unknown[], sys: string): Promise<Content | null> {
-  const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(key)}`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ systemInstruction: { parts: [{ text: sys }] }, contents, tools: [{ functionDeclarations: decls }], generationConfig: { temperature: 0.3, maxOutputTokens: 800 } }),
-  });
-  if (!r.ok) { console.log("[gemini]", r.status, (await r.text()).slice(0, 200)); return null; }
-  const data = (await r.json()) as { candidates?: { content?: Content }[] };
-  return data.candidates?.[0]?.content ?? null;
-}
-
-// Claude（Anthropic Messages API）でのツールループ。Gemini宣言を Claude の tools 形式に変換して使う。
-type Decl = { name: string; description: string; parameters: unknown };
-type CContent = { type: string; text?: string; id?: string; name?: string; input?: Record<string, unknown> };
-async function claudeAgent(key: string, sys: string, decls: Decl[], userText: string, exec: (name: string, args: Record<string, unknown>) => Promise<string>): Promise<string> {
-  const tools = decls.map((d) => ({ name: d.name, description: d.description, input_schema: d.parameters }));
-  const messages: { role: string; content: unknown }[] = [{ role: "user", content: userText }];
-  for (let hop = 0; hop < 4; hop++) {
-    const r = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
-      body: JSON.stringify({ model: "claude-sonnet-4-6", max_tokens: 1500, system: sys, tools, messages }),
-    });
-    if (!r.ok) { console.log("[claude-agent]", r.status, (await r.text()).slice(0, 200)); return "（Claudeの応答に失敗しました）"; }
-    const data = (await r.json()) as { content?: CContent[]; stop_reason?: string };
-    const content = data.content ?? [];
-    const toolUses = content.filter((c) => c.type === "tool_use");
-    if (!toolUses.length || data.stop_reason !== "tool_use") {
-      return content.filter((c) => c.type === "text").map((c) => c.text ?? "").join("").trim() || "（応答が空でした）";
-    }
-    messages.push({ role: "assistant", content });
-    const results = [];
-    for (const tu of toolUses) results.push({ type: "tool_result", tool_use_id: tu.id, content: await exec(tu.name!, tu.input ?? {}) });
-    messages.push({ role: "user", content: results });
+async function execTool(ctx: Ctx, owner: string, baseUrl: string, name: string, args: Record<string, unknown>, role: Role, activeTools: AgentTool[]): Promise<string> {
+  // 1) 有効パーツの業務道具のみ：認可（§14-1）を評価してから実行。
+  const tool = activeTools.find((t) => t.name === name);
+  if (tool) {
+    if (tool.requiredRole && !tool.requiredRole.includes(role)) return `「${name}」を実行する権限がありません（${tool.requiredRole.join("・")}のみ）。`;
+    return tool.run(ctx, owner, baseUrl, args);
   }
-  return "処理が長くなりました。もう一度お試しください。";
-}
-
-async function execTool(env: Env, owner: string, baseUrl: string, name: string, args: Record<string, unknown>): Promise<string> {
+  // 2) コア組み込み道具（スキル・AI能力）。
+  const env = ctx.env;
   switch (name) {
-    case "record_expense": return T.recordExpense(env, owner, { amount: Number(args.amount), title: String(args.title), date: args.date ? String(args.date) : undefined });
-    case "save_memo": return T.saveMemo(env, owner, { title: String(args.title), body: args.body ? String(args.body) : undefined });
-    case "set_reminder": return T.setReminder(env, owner, { content: String(args.content), remind_at: String(args.remind_at) });
-    case "list_reminders": return T.listReminders(env, owner);
-    case "list_expenses": return T.listExpenses(env, owner);
-    case "save_knowledge": return T.saveKnowledge(env, owner, { title: String(args.title), body: String(args.body) });
-    case "search_knowledge": return T.searchKnowledge(env, { query: String(args.query) });
-    case "search_members": return T.searchMembers(env, { query: String(args.query ?? "") });
     case "install_skill": { const g = await generateSkill(env, owner, String(args.request ?? "")); return g.ok ? `スキル「${g.name}」を作成しました（無効状態）。管理者が高度なオプションで有効化すると使えます。` : (g.error ?? "スキル生成に失敗しました。"); }
     case "web_search": return (await webSearch(env, String(args.query))) ?? "web検索は未設定です。";
     case "make_document": return makeDocument(env, owner, baseUrl, { type: String(args.type ?? "md"), title: String(args.title), content: String(args.content) });
@@ -113,21 +73,36 @@ async function execTool(env: Env, owner: string, baseUrl: string, name: string, 
 // テキスト発話 → ツールループ。最大4ホップで関数呼び出しを解決して最終テキストを返す。
 // owner はデータスコープ識別子（LINE は `line:<userId>`、Web は session.uid）。呼び出し側で付与する。
 // API依存ツール（web_search=Gemini／make_document=Claude）は対応キーがある時だけモデルに提示。
-export async function runAgent(env: Env, owner: string, text: string, image?: { mimeType: string; dataB64: string }, baseUrl = ""): Promise<string> {
+export async function runAgent(ctx: Ctx, owner: string, text: string, image?: { mimeType: string; dataB64: string }, baseUrl = "", role: Role = "member"): Promise<string> {
+  const env = ctx.env;
   const geminiKey = await getApiKey(env, "gemini");
   const claudeKey = await getApiKey(env, "claude");
-  if (!geminiKey && !claudeKey) return "AI機能が未設定です。管理画面の『連携設定』または『高度なオプション』で Gemini か Claude のAPIキーを登録してください。";
+  if (!geminiKey && !claudeKey && !env.LOCAL_AI_BASE_URL) return "AI機能が未設定です。管理画面の『連携設定』または『高度なオプション』で Gemini か Claude のAPIキーを登録してください。";
   const hasClaude = !!claudeKey;
   const engine = await getAiEngine(env);
   const enabledSkills = hasClaude ? await listSkills(env, true) : [];
   const caps = await listCapabilities(env, true);
   const capDecls = caps.map((c) => CAP_TOOLS[c.capability]).filter(Boolean);
   if (caps.some((c) => c.capability === "video_gen")) capDecls.push(VIDEO_STATUS_TOOL);
-  const decls = [...TOOLS, ...GEMINI_TOOLS, ...(hasClaude ? CLAUDE_TOOLS : []), ...(enabledSkills.length ? [skillTool(enabledSkills.map((s) => s.name))] : []), ...capDecls];
+  // 道具宣言：団体が有効化したパーツの業務道具（§5）＋コア組み込み＋API依存（キーがある時だけ）。
+  const activeTools = toolsOf(enabledParts(await enabledPartIds(ctx)));
+  const partDecls = activeTools.map((t) => ({ name: t.name, description: t.description, parameters: t.parameters }));
+  const decls = [...partDecls, ...CORE_TOOLS, ...GEMINI_TOOLS, ...(hasClaude ? CLAUDE_TOOLS : []), ...(enabledSkills.length ? [skillTool(enabledSkills.map((s) => s.name))] : []), ...capDecls];
   // 自己認識：有効な追加能力＋団体のカスタム指示（口調・人格・回答形式）をシステム文脈へ。安全制約は不変。
   const capInfo = await capabilitySummary(env);
   const custom = await getCustomPrompt(env);
   const sys = [SYSTEM, capInfo, custom && `団体の追加指示（口調・人格・回答形式など。安全制約は変更しない）:\n${custom}`].filter(Boolean).join("\n");
+
+  // Profile C：ローカルLLM（OAI互換・外部キー不要・オフライン）。外部キーが無く LOCAL_AI_BASE_URL がある時に使用。
+  // モデル非依存の runToolLoop で実行＝パーツ道具はそのまま動く（§2.3/§4）。
+  if (env.LOCAL_AI_BASE_URL && !geminiKey && !claudeKey) {
+    const model = localChatModel(env.LOCAL_AI_BASE_URL, env.LOCAL_AI_MODEL ?? "llama3.1");
+    return runToolLoop(model, sys, { text: text || "（依頼）", image }, decls as ToolDecl[], (n, a) => execTool(ctx, owner, baseUrl, n, a, role, activeTools));
+  }
+
+  // 全エンジン共通：道具実行クロージャとモデル非依存ループ（runToolLoop）で実行。
+  const exec = (n: string, a: Record<string, unknown>) => execTool(ctx, owner, baseUrl, n, a, role, activeTools);
+  const toolDecls = decls as ToolDecl[];
 
   // エンジン選択：Claude（BYOK）を選択／Geminiが無い場合は Claude で実行（画像はGeminiパスのみ対応）。
   const useClaude = !!claudeKey && (engine === "claude" || !geminiKey) && !image;
@@ -137,7 +112,7 @@ export async function runAgent(env: Env, owner: string, text: string, image?: { 
     if (b !== "switch_free") {
       // ok：Claudeで実行。
       await recordUsage(env, "claude");
-      return claudeAgent(claudeKey!, sys, decls as Decl[], text || "（依頼）", (n, a) => execTool(env, owner, baseUrl, n, a));
+      return runToolLoop(claudeModel(claudeKey!), sys, { text: text || "（依頼）" }, toolDecls, exec);
     }
     // switch_free：Geminiが使えればフォールバック、無ければ停止。
     if (!geminiKey) return "Claudeの上限に達しました（Gemini未設定のため停止）。高度なオプションで上限を変更してください。";
@@ -146,33 +121,19 @@ export async function runAgent(env: Env, owner: string, text: string, image?: { 
   const gb = await overBudget(env, "gemini");
   if (gb !== "ok") return "Geminiの今月の利用上限に達しました（高度なオプション → API使用量 で変更できます）。";
   await recordUsage(env, "gemini");
-
-  const firstParts: Part[] = [{ text: text || "（画像）" }];
-  if (image) firstParts.push({ inlineData: { mimeType: image.mimeType, data: image.dataB64 } });
-  const contents: Content[] = [{ role: "user", parts: firstParts }];
-
-  for (let hop = 0; hop < 4; hop++) {
-    const out = await gemini(geminiKey, contents, decls, sys);
-    if (!out) return "（AIの応答に失敗しました）";
-    const calls = out.parts.filter((p) => p.functionCall);
-    if (!calls.length) return out.parts.map((p) => p.text ?? "").join("").trim() || "（応答が空でした）";
-    contents.push(out);
-    const respParts: Part[] = [];
-    for (const c of calls) {
-      const result = await execTool(env, owner, baseUrl, c.functionCall!.name, c.functionCall!.args ?? {});
-      respParts.push({ functionResponse: { name: c.functionCall!.name, response: { result } } });
-    }
-    contents.push({ role: "user", parts: respParts });
-  }
-  return "処理が長くなりました。もう一度お試しください。";
+  return runToolLoop(geminiModel(geminiKey), sys, { text: text || "（依頼）", image }, toolDecls, exec);
 }
 
-// LINE署名検証（HMAC-SHA256）。
+// LINE署名検証（HMAC-SHA256・定数時間比較）。
 export async function verifyLineSignature(secret: string, body: string, signature: string): Promise<boolean> {
   if (!signature) return false;
   const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
   const mac = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(body));
-  return btoa(String.fromCharCode(...new Uint8Array(mac))) === signature;
+  const expected = btoa(String.fromCharCode(...new Uint8Array(mac)));
+  if (expected.length !== signature.length) return false;
+  let r = 0;
+  for (let i = 0; i < expected.length; i++) r |= expected.charCodeAt(i) ^ signature.charCodeAt(i);
+  return r === 0;
 }
 
 // LINE 返信／プッシュ。
