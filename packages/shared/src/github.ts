@@ -29,8 +29,17 @@ export async function provisionRepo(opts: GithubOpts, licenseId: string, code: s
   });
   if (!gen.ok) throw new Error("generate " + gen.status);
 
+  // /generate は非同期：201 直後にテンプレート本体（Initial commit）が後から push され、
+  // 先に書いた report.json を上書き消去してしまう。展開完了（既知ファイルが見える）まで待ってから焼く。
+  let ready = false;
+  for (let i = 0; i < 10; i++) {
+    const probe = await fetch(`${GH}/repos/${owner}/${name}/contents/wrangler.jsonc`, { headers: headers(opts.token) });
+    if (probe.ok) { ready = true; break; }
+    await new Promise((s) => setTimeout(s, 1500));
+  }
+  if (!ready) throw new Error("template population timeout");
+
   const content = btoa(unescape(encodeURIComponent(JSON.stringify({ code, host: opts.hostBaseUrl }))));
-  // generate 直後は contents API が 404 を返すことがあるためリトライ。
   for (let i = 0; i < 5; i++) {
     const put = await fetch(`${GH}/repos/${owner}/${name}/contents/report.json`, {
       method: "PUT",
