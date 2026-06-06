@@ -220,6 +220,7 @@ setTimeout(tick, 8000);
 - report 失敗 → ① CF 完了画面の `*.workers.dev` リンク ＋ ② 初回 Google ログイン時に
   既存 `activate-by-email` が `deploy_url` を記録。
 - 有効化は終始「アプリを開く → Google ログイン（メール突合）」。LICENSE_ID 等の入力は不要。
+- **セキュリティ（実装）**：メール突合は **ホスト署名 relay エンベロープ**（Ed25519・`{sub,email,name,exp}`）で行い、`activate-by-email` はその署名をホスト自身が再検証する（生メール直叩きでのトークン発行を遮断・期限切れ拒否）。
 
 ---
 
