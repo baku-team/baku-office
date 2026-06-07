@@ -1,4 +1,6 @@
 > ℹ️ **背景設計**：脅威モデルは現行 baku-office にも有効です。正本は [integrated_design_package_v1.0.md](integrated_design_package_v1.0.md)。本番ゲート（KMS署名・FIDO2・admin JIT）は [PROGRESS.md](PROGRESS.md) で「課題保留」中。
+>
+> **実装済みのアプリ層対策（2026-06・第三者レビュー反映）**：アクティベートをホスト署名 relay 必須化（無認証発行を遮断）／エージェントを active 会員に限定＋名簿照会のロール認可／ローカルPASSの PBKDF2 化＋一時Cookie・セッションの HMAC 署名／Stripe Webhook のタイムスタンプ鮮度＋定数時間比較・会員Webhook署名検証／申込導線の IP レート制限／マイグレーション無視条件の限定＋失敗の診断記録。詳細は [baku-office_review_確認事項と改善点.md](baku-office_review_確認事項と改善点.md)。残るのは上記3ゲート（鍵・管理者奪取の最終堅牢化）。
 
 # 04. 脅威モデル（レッドチーム分析）
 
