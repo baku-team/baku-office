@@ -103,6 +103,12 @@
 - `/clients`：団体一覧（団体名・プラン・エンタイトルメント・稼働バージョン・最終受信）。
 - 各クライアントは統合チェック（`/api/check`）で自動的に最終受信/バージョンを更新。
 
+### A-3b. アプリ管理（中枢レジストリ）— `/apps`
+- **存在の管理**：各リポで作られたアプリを登録（id/名称/版/リポURL/権限）→ 承認（approved）/停止（blocked）。
+- **利用状況**：クライアントが申告した導入アプリ（id:version・PIIなし）を集計し、アプリ別の導入数・版分布・アクティブ数を表示。
+- **未登録で稼働中**のアプリ（レジストリ未登録だが利用申告あり）を警告表示。
+- 前提：ホスト D1 に `0004_app_registry.sql` を適用（`wrangler d1 execute baku-office-portal-db --remote --file apps/host/migrations/0004_app_registry.sql`）。
+
 ### A-4. お知らせ配信
 - `/notices` で info／important／critical を発行・停止。
 - クライアントは統合チェックで受信し表示（critical は確認モーダル）。
