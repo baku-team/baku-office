@@ -9,7 +9,12 @@ const ses = await getSession(env, Astro.request);
 if (!ses) return Astro.redirect("/login", 302);
 const { pollHost, cachedEntitlement, APP_VERSION } = await import("../lib/client.ts");
 const { cmpVersion } = await import("../lib/update.ts");
-const check = await pollHost(env, Astro.url.origin);
+// 導入アプリを中枢へ申告（どのアプリが使われているかをホストが把握）。
+await import("../parts/index.ts");
+const { appCatalog, installedAppIds } = await import("../core/apps.ts");
+const _inst = new Set(await installedAppIds(Astro.locals.ctx).catch(() => []));
+const _apps = appCatalog().filter((a) => _inst.has(a.id)).map((a) => ({ id: a.id, version: a.version }));
+const check = await pollHost(env, Astro.url.origin, _apps);
 const entitlement = check?.entitlement ?? (await cachedEntitlement(env));
 // 第2層更新：最新版が同梱版より新しければ更新を案内（管理者のみ操作可）。
 const updateAvailable = !!check && cmpVersion(check.latestVersion, APP_VERSION) > 0;

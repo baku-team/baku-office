@@ -1,5 +1,6 @@
 import type { APIRoute } from "astro";
 import { nowSec, buildCheck, signingJwk } from "../../lib/host.ts";
+import { recordUsage, parseAppsParam } from "../../lib/registry.ts";
 import { openLicense, type Envelope } from "@baku-office/shared";
 
 export const prerender = false;
@@ -30,6 +31,10 @@ export const GET: APIRoute = async ({ url, locals }) => {
   await env.DB.prepare("UPDATE licenses SET last_seen = ?, deploy_url = COALESCE(?, deploy_url), version = COALESCE(?, version) WHERE license_id = ?")
     .bind(nowSec(), deployUrl, version, payload.licenseId)
     .run();
+
+  // 導入アプリ申告（id:version・PIIなし）を中枢の利用状況へ記録。
+  const apps = parseAppsParam(url.searchParams.get("apps"));
+  if (apps.length) await recordUsage(env, payload.licenseId, apps).catch(() => {});
 
   return json(await buildCheck(env, entitlement));
 };

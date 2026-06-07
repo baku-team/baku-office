@@ -8,6 +8,7 @@ const ses = await getHostSession(env, Astro.request).catch(() => null);
 const items = [
   { href: "/", label: "ポータル" },
   { href: "/clients", label: "クライアント管理" },
+  { href: "/apps", label: "アプリ管理" },
   { href: "/notices", label: "お知らせ配信" },
 ];
 ---
