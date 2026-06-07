@@ -16,7 +16,7 @@ function fakeEnv(sqlite: DatabaseSync) {
 }
 
 const SCHEMA = `
-CREATE TABLE registry_apps (id TEXT PRIMARY KEY, name TEXT, version TEXT, repo_url TEXT, publisher TEXT, category TEXT, permissions TEXT, description TEXT, status TEXT NOT NULL DEFAULT 'pending', created_at INTEGER, updated_at INTEGER);
+CREATE TABLE registry_apps (id TEXT PRIMARY KEY, name TEXT, version TEXT, repo_url TEXT, publisher TEXT, category TEXT, permissions TEXT, description TEXT, definition TEXT, submitted_by TEXT, status TEXT NOT NULL DEFAULT 'pending', created_at INTEGER, updated_at INTEGER);
 CREATE TABLE app_usage (license_id TEXT, app_id TEXT, version TEXT, last_seen INTEGER, PRIMARY KEY (license_id, app_id));
 `;
 

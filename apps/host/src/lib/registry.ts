@@ -1,9 +1,11 @@
-// アプリ・レジストリ中枢（ホスト側）：存在するアプリの管理＋利用状況の集計。
-import { nowSec } from "./host.ts";
+// アプリ・レジストリ中枢（ホスト側）：存在するアプリの管理＋利用状況の集計＋署名付き配布。
+import { nowSec, signingJwk } from "./host.ts";
+import { signEnvelope, importSignKey } from "@baku-office/shared";
 
 export type RegistryApp = {
   id: string; name: string; version: string; repo_url: string | null; publisher: string | null;
   category: string | null; permissions: string | null; description: string | null; status: string;
+  definition: string | null; submitted_by: string | null;
   created_at: number; updated_at: number;
 };
 
@@ -11,16 +13,40 @@ export async function listApps(env: Env): Promise<RegistryApp[]> {
   return (await env.DB.prepare("SELECT * FROM registry_apps ORDER BY updated_at DESC").all<RegistryApp>()).results;
 }
 
-// アプリ登録／更新（各リポの公開時にホストへ登録）。id で upsert。
-export async function registerApp(env: Env, a: { id: string; name: string; version: string; repoUrl?: string; publisher?: string; category?: string; permissions?: string[]; description?: string }): Promise<void> {
+// アプリ登録／更新（各リポの公開時 or クライアントからの申請）。id で upsert。status は pending。
+export async function registerApp(env: Env, a: { id: string; name: string; version: string; repoUrl?: string; publisher?: string; category?: string; permissions?: string[]; description?: string; definition?: unknown; submittedBy?: string }): Promise<void> {
   const now = nowSec();
   await env.DB.prepare(
-    `INSERT INTO registry_apps (id,name,version,repo_url,publisher,category,permissions,description,status,created_at,updated_at)
-     VALUES (?,?,?,?,?,?,?,?, 'pending', ?, ?)
+    `INSERT INTO registry_apps (id,name,version,repo_url,publisher,category,permissions,description,definition,submitted_by,status,created_at,updated_at)
+     VALUES (?,?,?,?,?,?,?,?,?,?, 'pending', ?, ?)
      ON CONFLICT(id) DO UPDATE SET name=excluded.name, version=excluded.version, repo_url=excluded.repo_url,
        publisher=excluded.publisher, category=excluded.category, permissions=excluded.permissions,
-       description=excluded.description, updated_at=excluded.updated_at`,
-  ).bind(a.id, a.name, a.version, a.repoUrl ?? null, a.publisher ?? null, a.category ?? null, JSON.stringify(a.permissions ?? []), a.description ?? null, now, now).run();
+       description=excluded.description, definition=excluded.definition, submitted_by=excluded.submitted_by, updated_at=excluded.updated_at`,
+  ).bind(a.id, a.name, a.version, a.repoUrl ?? null, a.publisher ?? null, a.category ?? null, JSON.stringify(a.permissions ?? []), a.description ?? null, a.definition != null ? JSON.stringify(a.definition) : null, a.submittedBy ?? null, now, now).run();
+}
+
+export async function getApp(env: Env, id: string): Promise<RegistryApp | null> {
+  return (await env.DB.prepare("SELECT * FROM registry_apps WHERE id=?").bind(id).first<RegistryApp>()) ?? null;
+}
+
+// 承認済みアプリを「ホスト署名付きパッケージ」として配布（クライアントが公開鍵で検証して取り込む）。
+// 署名対象＝アプリ定義の本体（id/name/version/permissions/definition/exp）。
+export async function signAppPackage(env: Env, app: RegistryApp): Promise<string> {
+  const payload = {
+    id: app.id, name: app.name, version: app.version,
+    permissions: JSON.parse(app.permissions || "[]") as string[],
+    category: app.category, description: app.description,
+    definition: app.definition ? JSON.parse(app.definition) : null,
+    exp: nowSec() + 7 * 86400, // 取り込みトークンの鮮度
+  };
+  const envlp = await signEnvelope(await importSignKey(signingJwk(env)), payload);
+  return btoa(JSON.stringify(envlp)); // {body,sig} を base64 化
+}
+
+// 公開カタログ（承認済みのみ・取り込み候補）。
+export async function approvedCatalog(env: Env): Promise<{ id: string; name: string; version: string; category: string | null; description: string | null; permissions: string[] }[]> {
+  const { results } = await env.DB.prepare("SELECT id,name,version,category,description,permissions FROM registry_apps WHERE status='approved' ORDER BY name").all<{ id: string; name: string; version: string; category: string | null; description: string | null; permissions: string }>();
+  return results.map((r) => ({ ...r, permissions: JSON.parse(r.permissions || "[]") }));
 }
 
 export async function setAppStatus(env: Env, id: string, status: "pending" | "approved" | "blocked"): Promise<void> {
