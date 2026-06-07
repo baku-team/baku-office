@@ -34,7 +34,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
   const sets: string[] = [];
   const binds: unknown[] = [];
   if (b.plan && ["free", "plus", "pro"].includes(b.plan)) { sets.push("plan = ?"); binds.push(b.plan); }
-  if (b.entitlement && ["free", "plus", "pro"].includes(b.entitlement)) { sets.push("entitlement = ?"); binds.push(b.entitlement); }
+  if (b.entitlement && ["free", "plus", "pro", "test"].includes(b.entitlement)) { sets.push("entitlement = ?"); binds.push(b.entitlement); }
   if (b.status && ["active", "suspended"].includes(b.status)) { sets.push("status = ?"); binds.push(b.status); }
   if (!sets.length) return json({ error: "変更項目がありません（plan/entitlement/status）" }, 400);
 

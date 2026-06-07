@@ -4,7 +4,7 @@ import { verifyLineSignature, lineReply, linePush, fetchLineImage } from "../../
 import { dueReminders, markReminderDone } from "../../../parts/reminders.ts";
 import { saveFile } from "../../../lib/storage.ts";
 import { enqueueSummary, transcribeAudio } from "../../../lib/media-ai.ts";
-import { randomId } from "@baku-office/shared";
+import { randomId, atLeast } from "@baku-office/shared";
 import { nowSec } from "../../../lib/accounting.ts";
 import { logDiag, looksLikeLimit, PAID_HINT } from "../../../lib/diag.ts";
 
@@ -29,7 +29,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
     if (ev.type !== "message" || !ev.replyToken) continue;
     const userId = ev.source?.userId ?? "anon";
     const reply = ev.replyToken;
-    if (entitlement !== "pro") {
+    if (!atLeast(entitlement, "pro")) {
       locals.runtime.ctx.waitUntil(lineReply(accessToken, reply, "エージェント機能は Pro プランで有効になります（管理画面のプラン・課金から）。"));
       continue;
     }

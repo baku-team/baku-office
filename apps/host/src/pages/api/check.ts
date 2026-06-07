@@ -26,7 +26,7 @@ export const GET: APIRoute = async ({ url, locals }) => {
   // D1 から最新エンタイトルメント（Stripe入金確認で切替＝§2.3）＋ last_seen 更新。
   const lic = await env.DB.prepare("SELECT entitlement FROM licenses WHERE license_id = ?")
     .bind(payload.licenseId)
-    .first<{ entitlement: "free" | "plus" | "pro" }>();
+    .first<{ entitlement: "free" | "plus" | "pro" | "test" }>();
   const entitlement = lic?.entitlement ?? payload.entitlement;
   await env.DB.prepare("UPDATE licenses SET last_seen = ?, deploy_url = COALESCE(?, deploy_url), version = COALESCE(?, version) WHERE license_id = ?")
     .bind(nowSec(), deployUrl, version, payload.licenseId)
