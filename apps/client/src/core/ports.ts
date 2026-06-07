@@ -30,9 +30,9 @@ export interface AiPort {
   makeDocument(owner: string, baseUrl: string, a: { type: string; title: string; content: string }): Promise<string>;
 }
 
-// エージェント（道具ループ）。Phase 2 で registerTool/registerPart を足す（§4/§14-1）。
+// エージェント（道具ループ）。チャットはセッション履歴・モデル選択を渡せる。
 export interface AgentPort {
-  run(input: { owner: string; text: string; role?: Role; image?: { mimeType: string; dataB64: string }; baseUrl?: string }): Promise<string>;
+  run(input: { owner: string; text: string; role?: Role; image?: { mimeType: string; dataB64: string }; baseUrl?: string; history?: import("./ai.ts").Turn[]; model?: "gemini" | "claude" | "local" }): Promise<string>;
 }
 
 // コアへ注入される実行コンテキスト。コアは Profile を知らず、ここに載った Port 実装で動く。

@@ -23,6 +23,13 @@ export const accountingPart: Part = {
   category: "会計",
   description: "支出/領収書の記録と一覧。",
   permissions: ["db:read", "db:write"],
+  menu: [{ href: "/accounting", label: "会計" }],
+  widgets: [
+    { id: "tx_count", title: "取引数", run: async (ctx) => {
+      const r = await ctx.db.prepare("SELECT count(*) AS n FROM transactions").first<{ n: number }>().catch(() => null);
+      return { value: String(r?.n ?? 0) + " 件", sub: "会計取引" };
+    } },
+  ],
   agentTools: [
     {
       name: "record_expense",

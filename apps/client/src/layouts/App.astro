@@ -1,6 +1,5 @@
 ---
 import "../styles/app.css";
-import { atLeast, type Entitlement } from "@baku-office/shared";
 const env = Astro.locals.runtime.env;
 interface Props { title: string; active?: string; auth?: boolean }
 const { title, active = "", auth = true } = Astro.props as Props;
@@ -9,35 +8,14 @@ const { getSession } = await import("../lib/auth.ts");
 const ses = await getSession(env, Astro.request).catch(() => null);
 let limitErr = false;
 try { limitErr = await (await import("../lib/diag.ts")).hasRecentLimitError(env); } catch { /* noop */ }
-let entitlement: Entitlement = "free";
-try { entitlement = await (await import("../lib/client.ts")).cachedEntitlement(env); } catch { /* noop */ }
 
-// ロールに応じたナビ（DRY）。
+// 4項目ナビ（ホーム/AI/アプリ/設定）。業務画面は「アプリ」からランチャー起動、各種設定は「設定」に集約。
 type Item = { href: string; label: string; show: boolean };
-const isAdminOrg = ses?.role === "admin" && ses?.ctx === "org";
-const hasPlus = atLeast(entitlement, "plus"); // AI系・高度なオプションのゲート
-const hasPro = atLeast(entitlement, "pro"); // エージェント・HP/LP のゲート
-const canReview = ses?.role === "admin" || ses?.role === "accounting" || ses?.role === "clerical";
 const items: Item[] = [
   { href: "/", label: "ホーム", show: true },
-  { href: "/accounting", label: "会計", show: true },
-  { href: "/files", label: "ファイル", show: true },
-  { href: "/schedule", label: "予定", show: true },
-  { href: "/minutes", label: "議事録", show: true },
-  { href: "/membership", label: "会員管理", show: ses?.ctx === "org" },
-  { href: "/chat", label: "AIチャット", show: hasPlus },
-  { href: "/usage", label: "API使用量", show: hasPlus },
-  { href: "/drive", label: "ドライブ", show: hasPlus },
-  { href: "/import", label: "資料インポート", show: hasPlus },
-  { href: "/personal", label: "個人", show: ses?.ctx === "personal" },
-  { href: "/review", label: "共有承認", show: !!canReview },
-  { href: "/settings/members", label: "人・ロール", show: isAdminOrg },
-  { href: "/billing", label: "プラン・課金", show: isAdminOrg },
-  { href: "/settings/keys", label: "連携設定", show: true },
-  { href: "/diagnostics", label: "診断", show: true },
-  { href: "/settings/site", label: "HP/LP", show: isAdminOrg && hasPro },
-  { href: "/settings/advanced", label: "高度なオプション", show: isAdminOrg && hasPlus },
-  { href: "/settings/update", label: "アプリの更新", show: isAdminOrg },
+  { href: "/chat", label: "AI", show: true },
+  { href: "/apps", label: "アプリ", show: true },
+  { href: "/settings", label: "設定", show: true },
 ];
 
 // UIカスタマイズ（共通ベース＋団体ごと上書き）。
@@ -47,13 +25,10 @@ const theme = await getTheme(ctx).catch(() => ({}) as import("../core/theme.ts")
 const themeStyle = themeCss(theme);
 const brand = brandName(theme);
 const logoUrl = theme.logoUrl;
-// 第2層：共通ナビ＋有効パーツの menu ＋団体ごと上書き（非表示/ラベル/並び）。
+// 団体ごと上書き（非表示/ラベル/並び）。業務アプリは「アプリ」ページのランチャーへ集約するため top nav には載せない。
 const { buildNav, getNavOverrides } = await import("../core/nav.ts");
-const { partMenuItems, enabledPartIds } = await import("../core/parts.ts");
-await import("../parts/index.ts");
 const navOv = await getNavOverrides(ctx).catch(() => null);
-const partItems = partMenuItems(await enabledPartIds(ctx).catch(() => null));
-const navItems = buildNav(items, partItems, navOv);
+const navItems = buildNav(items, [], navOv);
 ---
 <!doctype html>
 <html lang="ja">

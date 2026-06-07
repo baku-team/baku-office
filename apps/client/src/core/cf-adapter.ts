@@ -38,6 +38,6 @@ export function cfAi(env: Env): AiPort {
 // エージェントは道具実行で ctx 全体（db/storage/ai）を使うため、env でなく ctx を受ける。
 export function cfAgent(ctx: Ctx): AgentPort {
   return {
-    run: (i) => runAgent(ctx, i.owner, i.text, i.image, i.baseUrl ?? "", i.role ?? "member"),
+    run: (i) => runAgent(ctx, i.owner, i.text, i.image, i.baseUrl ?? "", i.role ?? "member", { history: i.history, model: i.model }),
   };
 }

@@ -7,10 +7,14 @@ const { getSession } = await import("../lib/auth.ts");
 const ses = await getSession(env, Astro.request);
 if (!ses) return Astro.redirect("/login", 302);
 const { cachedEntitlement } = await import("../lib/client.ts");
-const hasPlus = atLeast(await cachedEntitlement(env), "plus");
+const entitlement = await cachedEntitlement(env).catch(() => "free" as const);
+const hasPlus = atLeast(entitlement, "plus");
+// claude はキー登録時のみ実用。選択肢は出すが、未設定なら gemini にフォールバックする（サーバ側）。
+const { listSessions } = await import("../lib/chat-sessions.ts");
+const sessions = hasPlus ? await listSessions(Astro.locals.ctx, ses.uid).catch(() => []) : [];
 ---
-<App title="AIチャット" active="/chat">
-  <h1>AIチャット</h1>
+<App title="AI" active="/chat">
+  <h1>AI</h1>
   {!hasPlus && (
     <div class="card">
       <div class="banner banner-warn">この機能は <strong>Plus 以上</strong>のプランで利用できます。</div>
@@ -20,15 +24,41 @@ const hasPlus = atLeast(await cachedEntitlement(env), "plus");
   )}
   {hasPlus && (
     <Fragment>
-      <p class="muted">集計・DB／ファイル検索・文書作成を依頼できます（例：「6月の交通費を科目別に集計して」）。生成結果は各形式でダウンロードできます。</p>
-      <div id="log"></div>
-      <div class="cinput">
-        <textarea id="msg" placeholder="メッセージを入力（Ctrl/⌘+Enter で送信）"></textarea>
-        <button class="btn btn-primary" id="send" style="flex:0 0 auto">送信</button>
+      <div class="chat">
+        <aside class="sbar">
+          <button class="btn btn-primary" id="new-ses" style="width:100%">＋ 新しい会話</button>
+          <div class="ses-list" id="ses-list">
+            {sessions.map((s) => (
+              <div class="ses-row" data-ses={s.id}>
+                <a href="#" class="ses-open" data-id={s.id}>{s.title || "（無題）"}</a>
+                <button class="ses-del" data-id={s.id} title="削除">×</button>
+              </div>
+            ))}
+            {sessions.length === 0 && (<p class="muted" style="font-size:.82rem;padding:6px">会話はまだありません。</p>)}
+          </div>
+        </aside>
+        <section class="pane">
+          <div class="cbar">
+            <label class="muted" style="font-size:.82rem">モデル：
+              <select id="model">
+                <option value="gemini">Gemini（標準・無料枠）</option>
+                <option value="claude">Claude（高精度・要キー）</option>
+                <option value="local">ローカル（簡易）</option>
+              </select>
+            </label>
+          </div>
+          <div id="log"></div>
+          <div class="cinput">
+            <textarea id="msg" placeholder="メッセージを入力（Ctrl/⌘+Enter で送信）"></textarea>
+            <button class="btn btn-primary" id="send" style="flex:0 0 auto">送信</button>
+          </div>
+        </section>
       </div>
 
       <script slot="scripts" is:inline>
         const log = document.getElementById("log");
+        const sel = document.getElementById("model");
+        let sessionId = "";
         const esc = (s) => s.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
         function dload(text, ext, mime) {
           if (ext === "pdf") {
@@ -60,21 +90,78 @@ const hasPlus = atLeast(await cachedEntitlement(env), "plus");
           }
           log.appendChild(d); log.scrollTop = log.scrollHeight;
         }
+        // セッションを開く（履歴ロード）。
+        async function openSession(id) {
+          sessionId = id; log.innerHTML = "";
+          [...document.querySelectorAll(".ses-row")].forEach((r) => r.classList.toggle("on", r.getAttribute("data-ses") === id));
+          const r = await window.bo.api("/api/chat-sessions?id=" + encodeURIComponent(id), undefined, { method: "GET", successMsg: null });
+          if (r.ok) (r.data.messages || []).forEach((m) => addMsg(m.role === "assistant" ? "a" : "u", m.content));
+        }
+        // サイドバー再描画。
+        function renderSessions(sessions) {
+          const list = document.getElementById("ses-list");
+          list.innerHTML = sessions.length ? "" : '<p class="muted" style="font-size:.82rem;padding:6px">会話はまだありません。</p>';
+          sessions.forEach((s) => {
+            const row = document.createElement("div"); row.className = "ses-row"; row.setAttribute("data-ses", s.id);
+            if (s.id === sessionId) row.classList.add("on");
+            const a = document.createElement("a"); a.href = "#"; a.className = "ses-open"; a.textContent = s.title || "（無題）";
+            a.addEventListener("click", (e) => { e.preventDefault(); openSession(s.id); });
+            const del = document.createElement("button"); del.className = "ses-del"; del.textContent = "×";
+            del.addEventListener("click", async (e) => {
+              e.preventDefault();
+              const rr = await window.bo.api("/api/chat-sessions", { _action: "delete", id: s.id }, { btn: del, successMsg: "削除しました" });
+              if (rr.ok) { if (s.id === sessionId) { sessionId = ""; log.innerHTML = ""; } reloadSessions(); }
+            });
+            row.append(a, del); list.appendChild(row);
+          });
+        }
+        async function reloadSessions() {
+          const r = await window.bo.api("/api/chat-sessions", undefined, { method: "GET", successMsg: null });
+          if (r.ok) renderSessions(r.data.sessions || []);
+        }
         async function send() {
           const ta = document.getElementById("msg");
           const text = ta.value.trim(); if (!text) return;
           addMsg("u", text); ta.value = "";
-          const r = await window.bo.api("/api/chat", { message: text }, { btn: document.getElementById("send"), successMsg: null });
-          if (r.ok) addMsg("a", r.data.reply);
+          const r = await window.bo.api("/api/chat", { message: text, sessionId: sessionId || undefined, model: sel.value }, { btn: document.getElementById("send"), successMsg: null });
+          if (r.ok) {
+            addMsg("a", r.data.reply);
+            const isNew = !sessionId;
+            sessionId = r.data.sessionId;
+            if (isNew) reloadSessions();
+          }
         }
+        document.getElementById("new-ses").addEventListener("click", () => { sessionId = ""; log.innerHTML = ""; [...document.querySelectorAll(".ses-row")].forEach((r) => r.classList.remove("on")); document.getElementById("msg").focus(); });
         document.getElementById("send").addEventListener("click", send);
         document.getElementById("msg").addEventListener("keydown", (e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); send(); } });
+        // 既存セッション行（SSR分）の配線。
+        document.querySelectorAll(".ses-row").forEach((row) => {
+          const id = row.getAttribute("data-ses");
+          row.querySelector(".ses-open")?.addEventListener("click", (e) => { e.preventDefault(); openSession(id); });
+          row.querySelector(".ses-del")?.addEventListener("click", async (e) => {
+            e.preventDefault();
+            const rr = await window.bo.api("/api/chat-sessions", { _action: "delete", id }, { btn: e.currentTarget, successMsg: "削除しました" });
+            if (rr.ok) { if (id === sessionId) { sessionId = ""; log.innerHTML = ""; } reloadSessions(); }
+          });
+        });
       </script>
     </Fragment>
   )}
 </App>
 
 <style>
+  .chat { display: grid; grid-template-columns: 230px 1fr; gap: 14px; align-items: start; }
+  @media (max-width: 640px) { .chat { grid-template-columns: 1fr; } }
+  .sbar { display: flex; flex-direction: column; gap: 8px; }
+  .ses-list { display: flex; flex-direction: column; gap: 2px; max-height: 56vh; overflow-y: auto; }
+  .ses-row { display: flex; align-items: center; gap: 4px; border-radius: 6px; padding: 1px 2px; }
+  .ses-row.on { background: #eef1f5; }
+  .ses-open { flex: 1; color: #27313c; text-decoration: none; font-size: .85rem; padding: 5px 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ses-del { border: none; background: none; color: #9aa6b2; cursor: pointer; font-size: 1rem; line-height: 1; padding: 2px 6px; }
+  .ses-del:hover { color: #b91c1c; }
+  .pane { min-width: 0; }
+  .cbar { display: flex; gap: 12px; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+  .cbar select { font: inherit; padding: 3px 6px; border: 1px solid #dde3ea; border-radius: 6px; }
   #log { border: 1px solid #dde3ea; border-radius: 8px; padding: 12px; min-height: 240px; max-height: 52vh; overflow-y: auto; background: #fff; display: flex; flex-direction: column; gap: 8px; }
   .cmsg { max-width: 88%; }
   .cmsg.u { align-self: flex-end; }

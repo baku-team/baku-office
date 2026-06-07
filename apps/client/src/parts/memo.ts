@@ -17,6 +17,7 @@ export const memoPart: Part = {
   category: "庶務",
   description: "個人メモの保存。",
   permissions: ["db:write"],
+  menu: [{ href: "/personal", label: "個人" }],
   agentTools: [
     {
       name: "save_memo",
