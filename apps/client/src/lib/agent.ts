@@ -22,14 +22,16 @@ const SYSTEM =
   "支出/領収書は record_expense、メモは save_memo、リマインダーは set_reminder（日時はISO 例2026-06-20T10:00）、" +
   "ナレッジ保存は save_knowledge、検索は search_knowledge、メンバー照会は search_members、領収書一覧は list_expenses、予定確認は list_reminders。" +
   "最新情報が要る質問は web_search、資料作成依頼は make_document（type=md/csv/txt）を使う。" +
-  "ツールが不要な質問・雑談は通常のテキストで短く答える。";
+  "ツールが不要な質問・雑談は通常のテキストで短く答える。" +
+  "アプリ開発の依頼では、いきなり実装せず必ず①企画・仕様を整理→propose_app に name/spec/permissions/estimated_tokens を渡し、" +
+  "事前確認（環境/権限/安全/コスト）を通す。確認が全てOKのときだけ実装に進む。";
 
 // 業務道具（record_expense / list_expenses / save_memo / set_reminder / list_reminders /
 // save_knowledge / search_knowledge / search_members）は各パーツが登録する（§4）。宣言は allAgentTools() から得る。
 // コア組み込み道具（業務パーツではない・常時提示）。スキル生成。
 const CORE_TOOLS = [
   { name: "install_skill", description: "ユーザーの要望から新しい業務スキルを設計して登録（無効状態で保存。管理者が高度なオプションで有効化）", parameters: { type: "object", properties: { request: { type: "string", description: "欲しいスキルの要望" } }, required: ["request"] } },
-  { name: "propose_app", description: "ユーザーの要望から新しいアプリ（業務機能）の草案を作成（無効・草案で保存→管理者が権限をレビューして公開申請）。AI開発の入口。", parameters: { type: "object", properties: { name: { type: "string" }, description: { type: "string" }, permissions: { type: "array", items: { type: "string" }, description: "要求権限（例 db:read, db:write, ai, agent）" }, definition: { type: "object", description: "宣言的アプリ定義（任意）" } }, required: ["name"] } },
+  { name: "propose_app", description: "アプリ（業務機能）の草案を作成。まず企画・仕様(spec)をまとめ、要求権限・推定トークンを添えて呼ぶ。保存時に実装前の事前確認（環境/権限/安全/コスト）を自動実行し、全て問題なければ実装可となる。", parameters: { type: "object", properties: { name: { type: "string" }, description: { type: "string" }, spec: { type: "string", description: "企画・仕様（目的・データ・操作・画面・想定利用）" }, permissions: { type: "array", items: { type: "string" }, description: "要求権限（例 db:read, db:write, ai, agent, members:read, net）" }, definition: { type: "object", description: "宣言的アプリ定義（任意）" }, estimated_tokens: { type: "number", description: "1実行あたりの推定消費トークン" } }, required: ["name", "spec"] } },
 ];
 // API依存ツール（キーがある時だけ宣言＝モデルに見せる）。
 const GEMINI_TOOLS = [
@@ -63,10 +65,17 @@ async function execTool(ctx: Ctx, owner: string, baseUrl: string, name: string, 
     case "install_skill": { const g = await generateSkill(env, owner, String(args.request ?? "")); return g.ok ? `スキル「${g.name}」を作成しました（無効状態）。管理者が高度なオプションで有効化すると使えます。` : (g.error ?? "スキル生成に失敗しました。"); }
     case "propose_app": {
       const name = String(args.name ?? "").trim();
+      const spec = String(args.spec ?? "").trim();
       if (!name) return "アプリ名が必要です。";
+      if (!spec) return "実装前に企画・仕様（spec）をまとめてください。";
       const perms = Array.isArray(args.permissions) ? (args.permissions as unknown[]).map(String) : [];
-      const draftId = await createDraft(ctx, { name, description: args.description ? String(args.description) : undefined, permissions: perms, definition: args.definition }, owner);
-      return `アプリ草案「${name}」を作成しました（草案）。管理者が高度なオプション → アプリ開発で権限をレビューし、公開申請できます。ID: ${draftId}`;
+      const res = await createDraft(ctx, { name, description: args.description ? String(args.description) : undefined, spec, permissions: perms, definition: args.definition, estTokens: Number(args.estimated_tokens) || undefined }, owner);
+      const icon = (s: string) => (s === "ok" ? "✅" : s === "warn" ? "⚠️" : "⛔");
+      const lines = res.preflight.checks.map((c) => `${icon(c.status)} ${c.label}：${c.detail}`).join("\n");
+      return `企画・仕様を受け付け、実装前の事前確認を実施しました（草案ID: ${res.id}）。\n${lines}\n\n` +
+        (res.gate === "ready"
+          ? "→ 4確認OK。実装に進めます。管理者が高度なオプション → アプリ開発でレビュー後、公開申請できます。"
+          : "→ ⛔ 問題があるため実装はブロックされました。上記の指摘を解消してから再依頼してください。");
     }
     case "web_search": return (await webSearch(env, String(args.query))) ?? "web検索は未設定です。";
     case "make_document": return makeDocument(env, owner, baseUrl, { type: String(args.type ?? "md"), title: String(args.title), content: String(args.content) });
