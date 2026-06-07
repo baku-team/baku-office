@@ -15,10 +15,12 @@ export const POST: APIRoute = async ({ request, locals }) => {
   const licenseId = await getLicenseId(env);
   if (!licenseId) return json({ error: "ライセンス未取得" }, 400);
 
+  // 決済後の戻り先＝このクライアントの /billing。host の Checkout success/cancel に使う。
+  const returnUrl = new URL(request.url).origin + "/billing";
   const r = await hostFetch(env, "/api/billing/checkout", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ licenseId, plan: b.plan }),
+    body: JSON.stringify({ licenseId, plan: b.plan, returnUrl }),
   });
   const j = (await r.json().catch(() => ({}))) as { ok?: boolean; url?: string; mode?: string; error?: string };
   return json(j, r.ok ? 200 : 400);
