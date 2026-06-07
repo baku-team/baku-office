@@ -127,10 +127,21 @@ const NAV_TOGGLE = [
     {drafts.length === 0 && (<p class="muted">草案はありません。AIチャットから作成してください。</p>)}
     {drafts.map((d) => (
       <div class="card" data-draft={d.id} style="margin:.5rem 0">
-        <strong>{d.name}</strong> <span class="muted">v{d.version}・{d.status}</span>
+        <strong>{d.name}</strong> <span class="muted">v{d.version}</span>
+        <span class="pill" style={d.gate_status === "ready" ? "background:#dcfce7;color:#166534" : d.gate_status === "blocked" ? "background:#fee2e2;color:#b91c1c" : ""}>{d.gate_status === "ready" ? "実装可" : d.gate_status === "blocked" ? "ブロック" : "企画中"}</span>
         {d.description && <><br /><span class="muted">{d.description}</span></>}
+        {d.spec && <><br /><span class="muted" style="font-size:.85rem">仕様: {d.spec}</span></>}
         <br /><span class="muted" style="font-size:.8rem">要求権限: {d.permissions.join(" / ") || "なし"}</span>
-        <div class="row" style="margin-top:.4rem"><button class="btn btn-primary d-submit" style="flex:0 0 auto">公開申請</button><button class="btn btn-ghost d-del" style="flex:0 0 auto">削除</button></div>
+        {d.preflight && (
+          <ul style="margin:.4rem 0 0;padding-left:1.1rem;font-size:.82rem">
+            {d.preflight.checks.map((c) => (<li class="muted">{c.status === "ok" ? "✅" : c.status === "warn" ? "⚠️" : "⛔"} {c.label}：{c.detail}</li>))}
+          </ul>
+        )}
+        <div class="row" style="margin-top:.4rem">
+          <button class="btn btn-primary d-submit" style="flex:0 0 auto" disabled={d.gate_status !== "ready"}>公開申請</button>
+          <button class="btn btn-ghost d-del" style="flex:0 0 auto">削除</button>
+          {d.gate_status !== "ready" && <span class="muted" style="font-size:.8rem;align-self:center">事前確認に未通過のため申請不可</span>}
+        </div>
       </div>
     ))}
   </div>

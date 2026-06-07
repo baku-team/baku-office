@@ -3,6 +3,7 @@ import type { Ctx } from "../core/ports.ts";
 import { hostFetch, getVerifyJwk, getLicenseId } from "./client.ts";
 import { importVerifyKey, verifyEnvelope, payloadOf, randomId } from "@baku-office/shared";
 import { nowSec } from "./accounting.ts";
+import { preflight, type PreflightResult } from "./preflight.ts";
 
 type AppPkg = { id: string; name: string; version: string; permissions?: string[]; category?: string | null; description?: string | null; definition?: unknown; exp?: number };
 
@@ -40,16 +41,22 @@ export async function uninstallExternal(ctx: Ctx, id: string): Promise<void> {
 // ---- AI開発：ドラフト（生成）→レビュー→公開申請 ----
 const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 48) || ("app-" + randomId(3));
 
-export async function createDraft(ctx: Ctx, d: { name: string; description?: string; permissions?: string[]; definition?: unknown; version?: string }, by?: string): Promise<string> {
+// 企画・仕様→事前4確認（環境/権限/安全/コスト）まで実行して保存。全て fail でなければ gate=ready（実装/申請可）。
+export async function createDraft(ctx: Ctx, d: { name: string; description?: string; spec?: string; permissions?: string[]; definition?: unknown; version?: string; estTokens?: number }, by?: string): Promise<{ id: string; preflight: PreflightResult; gate: string }> {
   const id = slug(d.name);
+  const pf = await preflight(ctx, { name: d.name, permissions: d.permissions, definition: d.definition, spec: d.spec, estTokens: d.estTokens });
+  const gate = pf.ok ? "ready" : "blocked";
   await ctx.db.prepare(
-    "INSERT INTO app_drafts (id,name,version,description,permissions,definition,status,created_by,created_at) VALUES (?,?,?,?,?,?, 'pending', ?, ?) ON CONFLICT(id) DO UPDATE SET name=excluded.name,version=excluded.version,description=excluded.description,permissions=excluded.permissions,definition=excluded.definition,status='pending'",
-  ).bind(id, d.name, d.version ?? "0.1.0", d.description ?? null, JSON.stringify(d.permissions ?? []), d.definition != null ? JSON.stringify(d.definition) : null, by ?? null, nowSec()).run();
-  return id;
+    `INSERT INTO app_drafts (id,name,version,description,spec,permissions,definition,est_tokens,preflight,gate_status,status,created_by,created_at)
+     VALUES (?,?,?,?,?,?,?,?,?,?, 'pending', ?, ?)
+     ON CONFLICT(id) DO UPDATE SET name=excluded.name,version=excluded.version,description=excluded.description,spec=excluded.spec,
+       permissions=excluded.permissions,definition=excluded.definition,est_tokens=excluded.est_tokens,preflight=excluded.preflight,gate_status=excluded.gate_status,status='pending'`,
+  ).bind(id, d.name, d.version ?? "0.1.0", d.description ?? null, d.spec ?? null, JSON.stringify(d.permissions ?? []), d.definition != null ? JSON.stringify(d.definition) : null, d.estTokens ?? null, JSON.stringify(pf), gate, by ?? null, nowSec()).run();
+  return { id, preflight: pf, gate };
 }
-export async function listDrafts(ctx: Ctx): Promise<{ id: string; name: string; version: string; description: string | null; permissions: string[]; status: string }[]> {
-  const { results } = await ctx.db.prepare("SELECT id,name,version,description,permissions,status FROM app_drafts ORDER BY created_at DESC").all<{ id: string; name: string; version: string; description: string | null; permissions: string; status: string }>();
-  return results.map((r) => ({ ...r, permissions: JSON.parse(r.permissions || "[]") }));
+export async function listDrafts(ctx: Ctx): Promise<{ id: string; name: string; version: string; description: string | null; spec: string | null; permissions: string[]; status: string; gate_status: string; preflight: PreflightResult | null }[]> {
+  const { results } = await ctx.db.prepare("SELECT id,name,version,description,spec,permissions,status,gate_status,preflight FROM app_drafts ORDER BY created_at DESC").all<{ id: string; name: string; version: string; description: string | null; spec: string | null; permissions: string; status: string; gate_status: string; preflight: string | null }>();
+  return results.map((r) => ({ ...r, permissions: JSON.parse(r.permissions || "[]"), preflight: r.preflight ? (JSON.parse(r.preflight) as PreflightResult) : null }));
 }
 export async function deleteDraft(ctx: Ctx, id: string): Promise<void> {
   await ctx.db.prepare("DELETE FROM app_drafts WHERE id=?").bind(id).run();
@@ -58,8 +65,9 @@ export async function deleteDraft(ctx: Ctx, id: string): Promise<void> {
 // レビュー後、ホストレジストリへ公開申請（pending 登録・ホスト管理者が承認）。
 export async function submitDraft(ctx: Ctx, id: string): Promise<{ ok: boolean; error?: string }> {
   const env = ctx.env;
-  const d = await ctx.db.prepare("SELECT * FROM app_drafts WHERE id=?").bind(id).first<{ id: string; name: string; version: string; description: string | null; permissions: string; definition: string | null }>();
+  const d = await ctx.db.prepare("SELECT * FROM app_drafts WHERE id=?").bind(id).first<{ id: string; name: string; version: string; description: string | null; permissions: string; definition: string | null; gate_status: string }>();
   if (!d) return { ok: false, error: "ドラフトが見つかりません" };
+  if (d.gate_status !== "ready") return { ok: false, error: "事前確認（環境/権限/安全/コスト）に未通過のため公開申請できません。" };
   const licenseId = await getLicenseId(env);
   if (!licenseId) return { ok: false, error: "ライセンス未取得" };
   const app = { id: d.id, name: d.name, version: d.version, description: d.description, permissions: JSON.parse(d.permissions || "[]"), definition: d.definition ? JSON.parse(d.definition) : null };
