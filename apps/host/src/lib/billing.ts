@@ -20,6 +20,9 @@ export async function createCheckout(env: Env, licenseId: string, plan: Plan, su
     client_reference_id: licenseId,
     "metadata[license_id]": licenseId,
     "metadata[plan]": plan,
+    // サブスク本体にも license_id を載せる＝subscription.deleted/invoice 等のイベントから団体を特定できる（解約ダウングレード用）。
+    "subscription_data[metadata][license_id]": licenseId,
+    "subscription_data[metadata][plan]": plan,
     // 日本：カード＋コンビニ＋銀行振込（仮想口座）。口座振替は非対応（付録B）。
     "payment_method_types[0]": "card",
   });

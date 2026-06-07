@@ -17,7 +17,10 @@ export const POST: APIRoute = async ({ request, locals }) => {
 
   const ret = b.returnUrl ?? "";
   if (stripeEnabled(env)) {
-    const url = await createCheckout(env, b.licenseId, b.plan as Plan, ret || "https://example.com/ok", ret || "https://example.com/cancel");
+    // 戻り先：成功は ?upgraded=1 付き、キャンセルは素の戻りURL。returnUrl 未指定時のみ最終フォールバック。
+    const base = /^https?:\/\//.test(ret) ? ret : "https://example.com/billing";
+    const success = base + (base.includes("?") ? "&" : "?") + "upgraded=1";
+    const url = await createCheckout(env, b.licenseId, b.plan as Plan, success, base);
     if (!url) return json({ error: "Stripe Checkout 生成に失敗" }, 502);
     return json({ ok: true, url, mode: "stripe" });
   }
