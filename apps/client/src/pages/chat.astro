@@ -54,9 +54,12 @@ const sessions = hasPlus ? await listSessions(Astro.locals.ctx, ses.uid).catch((
           </div>
         </section>
       </div>
-
-      <script slot="scripts" is:inline>
+    </Fragment>
+  )}
+  <script slot="scripts" is:inline>
+    (function () {
         const log = document.getElementById("log");
+        if (!log) return;  // Plus未満は要素が無い
         const sel = document.getElementById("model");
         let sessionId = "";
         const esc = (s) => s.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
@@ -131,9 +134,9 @@ const sessions = hasPlus ? await listSessions(Astro.locals.ctx, ses.uid).catch((
             if (isNew) reloadSessions();
           }
         }
-        document.getElementById("new-ses").addEventListener("click", () => { sessionId = ""; log.innerHTML = ""; [...document.querySelectorAll(".ses-row")].forEach((r) => r.classList.remove("on")); document.getElementById("msg").focus(); });
-        document.getElementById("send").addEventListener("click", send);
-        document.getElementById("msg").addEventListener("keydown", (e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); send(); } });
+        document.getElementById("new-ses")?.addEventListener("click", () => { sessionId = ""; log.innerHTML = ""; [...document.querySelectorAll(".ses-row")].forEach((r) => r.classList.remove("on")); document.getElementById("msg")?.focus(); });
+        document.getElementById("send")?.addEventListener("click", send);
+        document.getElementById("msg")?.addEventListener("keydown", (e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); send(); } });
         // 既存セッション行（SSR分）の配線。
         document.querySelectorAll(".ses-row").forEach((row) => {
           const id = row.getAttribute("data-ses");
@@ -144,9 +147,8 @@ const sessions = hasPlus ? await listSessions(Astro.locals.ctx, ses.uid).catch((
             if (rr.ok) { if (id === sessionId) { sessionId = ""; log.innerHTML = ""; } reloadSessions(); }
           });
         });
-      </script>
-    </Fragment>
-  )}
+    })();
+  </script>
 </App>
 
 <style>
