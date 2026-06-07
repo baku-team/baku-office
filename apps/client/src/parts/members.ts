@@ -22,6 +22,9 @@ export const membersPart: Part = {
   id: "members",
   name: "庶務／名簿",
   version: "1.0.0",
+  category: "庶務",
+  description: "会員名簿（暗号化PII）の照会。特権ロールのみ。",
+  permissions: ["db:read", "members:read"],
   agentTools: [
     {
       name: "search_members",

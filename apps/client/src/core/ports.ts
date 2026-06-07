@@ -44,4 +44,5 @@ export type Ctx = {
   ai: AiPort;
   agent: AgentPort;
   identity: import("./identity.ts").IdentityPort;
+  apps: import("./apps.ts").AppsApi; // アプリ間連動（§アプリレジストリ）
 };

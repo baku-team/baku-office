@@ -4,6 +4,7 @@
 import type { Ctx } from "./ports.ts";
 import type { Role } from "@baku-office/shared";
 import type { NavItem } from "./nav.ts";
+import type { Permission, AppAction } from "./apps.ts";
 
 export interface AgentTool {
   name: string;
@@ -20,8 +21,11 @@ export interface Part {
   name: string;
   version: string;       // アプリ版（semver推奨）。更新の識別・互換管理に使う
   description?: string;
+  category?: string;     // マーケット分類（core/会計/庶務/…）
   derivedFrom?: string;  // 派生元アプリの id（派生で新アプリを作った場合）
+  permissions?: readonly Permission[]; // 要求能力（宣言した分のみ付与・§セキュリティ）
   agentTools?: AgentTool[];
+  actions?: AppAction[]; // アプリ間連動で他アプリへ公開する操作
   menu?: NavItem[]; // 第2層：このパーツが提供するナビ項目（UIパーツ用）。
 }
 
