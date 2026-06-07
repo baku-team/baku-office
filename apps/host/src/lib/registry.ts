@@ -9,6 +9,10 @@ export type RegistryApp = {
   created_at: number; updated_at: number;
 };
 
+// 標準同梱アプリ（クライアントに常にバンドルされるコアパーツ）。レジストリ配布対象ではないため
+// 「未登録で稼働中」の警告には出さない（要確認＝本当に未知のアプリだけに絞る）。
+export const BUILTIN_APP_IDS = ["chat", "accounting", "memo", "reminders", "knowledge", "members"];
+
 export async function listApps(env: Env): Promise<RegistryApp[]> {
   return (await env.DB.prepare("SELECT * FROM registry_apps ORDER BY updated_at DESC").all<RegistryApp>()).results;
 }
