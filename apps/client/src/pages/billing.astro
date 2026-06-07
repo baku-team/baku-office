@@ -1,7 +1,7 @@
 ---
 export const prerender = false;
 import App from "../layouts/App.astro";
-import { planLabel } from "@baku-office/shared";
+import { planLabel, atLeast } from "@baku-office/shared";
 const env = Astro.locals.runtime.env;
 const { getSession } = await import("../lib/auth.ts");
 const ses = await getSession(env, Astro.request);
@@ -23,8 +23,9 @@ try { stripe = ((await (await hostFetch(env, "/api/billing/status")).json()) as 
   <div class="card" style="margin-top:1rem">
     <h2 style="margin-top:0;border:0">アップグレード</h2>
     <p class="muted">{stripe ? "カードは即時、銀行振込・コンビニは入金確認後に反映（§2.4）。" : "デモ：ボタンで即時に昇格します。"}</p>
-    <button class={`btn ${stripe?"btn-primary":"btn-warn"} up`} data-plan="plus" disabled={entitlement==="plus"||entitlement==="pro"}>{stripe ? "Plus（AI）にする" : "【デモ】Plus に支払った"}</button>
-    <button class={`btn ${stripe?"btn-primary":"btn-warn"} up`} data-plan="pro" disabled={entitlement==="pro"}>{stripe ? "Pro（エージェント）にする" : "【デモ】Pro に支払った"}</button>
+    <button class={`btn ${stripe?"btn-primary":"btn-warn"} up`} data-plan="plus" disabled={atLeast(entitlement, "plus")}>{stripe ? "Plus（AI）にする" : "【デモ】Plus に支払った"}</button>
+    <button class={`btn ${stripe?"btn-primary":"btn-warn"} up`} data-plan="pro" disabled={atLeast(entitlement, "pro")}>{stripe ? "Pro（エージェント）にする" : "【デモ】Pro に支払った"}</button>
+    {entitlement === "test" && (<p class="muted" style="margin-top:.5rem">テスト権限（全機能解放）が付与されています。</p>)}
   </div>
   <script slot="scripts" is:inline define:vars={{ licenseId, hostBase, stripe }}>
     document.querySelectorAll(".up").forEach(b=>b.addEventListener("click",async(e)=>{

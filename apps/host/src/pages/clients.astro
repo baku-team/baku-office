@@ -17,6 +17,8 @@ const { results } = await env.DB.prepare(
 ).all<Row>();
 const fmt = (s: number | null) => (s ? new Date(s * 1000).toISOString().slice(0, 16).replace("T", " ") : "—");
 const PLANS = ["free", "plus", "pro"];
+// エンタイトルメントは test（全機能解放・非売・管理者付与）を含む。
+const ENTS = ["free", "plus", "pro", "test"];
 const opt = (cur: string, v: string) => ({ value: v, selected: cur === v });
 ---
 <Host title="クライアント管理" active="/clients">
@@ -34,7 +36,7 @@ const opt = (cur: string, v: string) => ({ value: v, selected: cur === v });
             <div class="muted" style="font-size:.75rem">{r.deploy_url ? <a href={r.deploy_url} target="_blank" rel="noreferrer">デプロイ先を開く</a> : "未デプロイ"}</div>
           </td>
           <td><select class="c-plan">{PLANS.map((v) => (<option {...opt(r.plan, v)}>{v}</option>))}</select></td>
-          <td><select class="c-ent">{PLANS.map((v) => (<option {...opt(r.entitlement, v)}>{v}</option>))}</select></td>
+          <td><select class="c-ent">{ENTS.map((v) => (<option {...opt(r.entitlement, v)}>{v}</option>))}</select></td>
           <td><select class="c-status"><option {...opt(r.status, "active")}>active</option><option {...opt(r.status, "suspended")}>suspended</option></select></td>
           <td>{r.version ?? "—"}</td>
           <td>{fmt(r.created_at)}</td>
