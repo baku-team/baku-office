@@ -1,0 +1,61 @@
+name: Release signed client bundle
+
+# 第2層更新（案①・日和見ローダ）用の署名付きリリースを公開する恒久パイプライン。
+#   ビルド → tar → RELEASE署名鍵で署名 → baku-office-app に GitHub Release 公開 → host /api/release/publish 通知。
+#   クライアントは再ビルド時に host/api/release/latest を見て tarball を取得・/api/release/pubkey で検証し差し替え。
+# 必要 secrets（baku-office private repo）：
+#   PUBLISH_TOKEN（baku-office-app の Contents:RW・Release作成）／RELEASE_SIGNING_JWK（Ed25519秘密鍵JWK）／RELEASE_PUBLISH_KEY（host共有）。
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps/client/**"
+      - "packages/shared/**"
+      - ".github/workflows/release.yml"
+  workflow_dispatch: {}
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      HOST_BASE_URL: https://baku-office-portal.baku-027.workers.dev
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - run: npm ci
+      - name: Build release bundle
+        run: npm -w apps/client run release
+      - name: Read version
+        id: ver
+        run: echo "v=$(cat apps/client/release/VERSION)" >> "$GITHUB_OUTPUT"
+      - name: Skip if release already exists
+        id: exists
+        env:
+          GH_TOKEN: ${{ secrets.PUBLISH_TOKEN }}
+        run: |
+          if gh release view "v${{ steps.ver.outputs.v }}" -R baku-team/baku-office-app >/dev/null 2>&1; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Package, sign, publish & notify host
+        if: steps.exists.outputs.skip == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.PUBLISH_TOKEN }}
+          RELEASE_SIGNING_JWK: ${{ secrets.RELEASE_SIGNING_JWK }}
+          RELEASE_PUBLISH_KEY: ${{ secrets.RELEASE_PUBLISH_KEY }}
+        run: |
+          set -e
+          V="${{ steps.ver.outputs.v }}"
+          tar -czf bundle.tgz -C apps/client/release .
+          SIG="$(node apps/client/scripts/sign-release.mjs bundle.tgz)"
+          gh release create "v$V" bundle.tgz -R baku-team/baku-office-app -t "v$V" -n "client distribution bundle v$V (auto-signed)"
+          URL="https://github.com/baku-team/baku-office-app/releases/download/v$V/bundle.tgz"
+          echo "publishing to host: $V $URL"
+          code=$(curl -sS -o /tmp/resp -w "%{http_code}" -X POST "$HOST_BASE_URL/api/release/publish" \
+            -H "content-type: application/json" -H "x-release-key: $RELEASE_PUBLISH_KEY" \
+            -d "{\"version\":\"$V\",\"tarballUrl\":\"$URL\",\"sig\":\"$SIG\"}")
+          echo "host /api/release/publish -> $code"; cat /tmp/resp; echo
+          test "$code" = "200"

@@ -37,7 +37,10 @@ try {
   if (cmp(latest.version, bundled) <= 0) die("同梱が最新（" + bundled + "）");
 
   const tarball = Buffer.from(await (await fetch(latest.tarballUrl)).arrayBuffer());
-  const jwk = await (await fetch(host + "/api/pubkey")).json(); // {kty:'OKP',crv:'Ed25519',x:'...'}
+  // リリース署名の検証鍵（ライセンス鍵とは別鍵）。未提供時は後方互換で /api/pubkey にフォールバック。
+  let jwk;
+  try { const rp = await fetch(host + "/api/release/pubkey"); if (rp.ok) jwk = await rp.json(); } catch {}
+  if (!jwk || !jwk.x) jwk = await (await fetch(host + "/api/pubkey")).json(); // {kty:'OKP',crv:'Ed25519',x:'...'}
   const pub = createPublicKey({ key: jwk, format: "jwk" });
   const sig = Buffer.from(latest.sig, "base64");
   if (!edVerify(null, tarball, pub, sig)) die("署名検証NG");
