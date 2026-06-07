@@ -40,10 +40,11 @@ const MIGRATIONS: { id: string; sql: string }[] = [
 
 export const SCHEMA_VERSION = MIGRATIONS.length;
 
-// コメント除去＋セミコロン分割。
+// コメント除去＋セミコロン分割。WHY: 行頭だけでなく `;` 後のインラインコメント（例 `... DEFAULT 'x'; -- 説明`）も
+// 除かないと、分割後にコメントのみの断片が残り D1 が "No SQL statements detected" で全マイグレーションを中断する。
 function statements(sql: string): string[] {
   return sql
-    .split("\n").filter((l) => !l.trim().startsWith("--")).join("\n")
+    .split("\n").map((l) => l.replace(/--.*$/, "")).join("\n")
     .split(";").map((s) => s.trim()).filter(Boolean);
 }
 // 既存環境への再適用で安全に無視できるエラーのみを限定列挙。WHY: 以前は bare "duplicate" も無視しており、
