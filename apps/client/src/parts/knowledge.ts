@@ -19,6 +19,14 @@ export async function searchKnowledge(ctx: Ctx, a: { query: string }): Promise<s
 export const knowledgePart: Part = {
   id: "knowledge",
   name: "組織ナレッジ",
+  version: "1.0.0",
+  category: "庶務",
+  description: "組織のナレッジを保存・検索。他アプリから検索操作を呼べる。",
+  permissions: ["db:read", "db:write"],
+  // アプリ間連動：他アプリは ctx.apps.call("knowledge","search",{query}) で検索できる（要 db:read）。
+  actions: [
+    { name: "search", description: "ナレッジ検索", requiredPermission: "db:read", run: (ctx, a) => searchKnowledge(ctx, { query: String(a.query ?? "") }) },
+  ],
   agentTools: [
     {
       name: "save_knowledge",

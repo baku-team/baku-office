@@ -24,11 +24,12 @@ const caps = hasPlus ? await listCapabilities(env) : [];
 const mode = storageMode(env);
 const curMax = hasPlus ? await maxUploadMb(env) : 5;
 // 有効パーツ（団体ごとの機能・§5）。
-const { partCatalog, enabledPartIds } = await import("../../core/parts.ts");
-await import("../../parts/index.ts"); // 組み込みパーツを登録（副作用）
-const partCat = hasPlus ? partCatalog() : [];
-const enabledPartList = hasPlus ? await enabledPartIds(Astro.locals.ctx) : null;
-const isPartOn = (id: string) => enabledPartList === null || enabledPartList.includes(id);
+await import("../../parts/index.ts"); // 組み込みアプリ（パーツ）を登録（副作用）
+const { appCatalog, installedAppIds, MANDATORY_APPS } = await import("../../core/apps.ts");
+const appCat = hasPlus ? appCatalog() : [];
+const installedSet = new Set(hasPlus ? await installedAppIds(Astro.locals.ctx) : []);
+const isPartOn = (id: string) => installedSet.has(id);
+const isMandatory = (id: string) => MANDATORY_APPS.includes(id);
 // 見た目（テーマ）＋ナビ表示（団体ごと上書き）。
 const { getTheme } = await import("../../core/theme.ts");
 const { getNavOverrides } = await import("../../core/nav.ts");
@@ -91,13 +92,18 @@ const NAV_TOGGLE = [
     <button class="btn btn-primary" id="saveNav">ナビ表示を保存</button>
   </div>
 
-  <h2>有効パーツ（団体ごとの機能）</h2>
+  <h2>アプリ（マーケット）</h2>
   <div class="card">
-    <p class="muted">このアシスタントで使う業務機能（パーツ）を選びます。チェックを外すと、その道具はAIに提示されず実行もされません。未選択時は全て有効。</p>
-    {partCat.map((p) => (
-      <div class="field"><label><input type="checkbox" class="part-chk" value={p.id} checked={isPartOn(p.id)} /> {p.name}</label></div>
+    <p class="muted">公開アプリ（業務パーツ）から、使うものだけ導入します。外すと画面・道具とも消えます。<strong>AIチャットは Plus 以上で必須</strong>（外せません）。</p>
+    {appCat.map((p) => (
+      <div class="field"><label>
+        <input type="checkbox" class="part-chk" value={p.id} checked={isPartOn(p.id)} disabled={isMandatory(p.id)} />
+        <strong>{p.name}</strong> <span class="muted">v{p.version}{p.category ? `・${p.category}` : ""}{isMandatory(p.id) ? "・必須" : ""}</span>
+        {p.description && <><br /><span class="muted" style="font-size:.85rem">{p.description}</span></>}
+        {p.permissions.length > 0 && <><br /><span class="muted" style="font-size:.8rem">権限: {p.permissions.join(" / ")}</span></>}
+      </label></div>
     ))}
-    <button class="btn btn-primary" id="saveParts">有効パーツを保存</button>
+    <button class="btn btn-primary" id="saveParts">導入アプリを保存</button>
   </div>
 
   <h2>ストレージ上限（標準モード・KV）</h2>

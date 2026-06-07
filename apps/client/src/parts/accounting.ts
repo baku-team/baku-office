@@ -19,6 +19,10 @@ export async function listExpenses(ctx: Ctx, owner: string): Promise<string> {
 export const accountingPart: Part = {
   id: "accounting",
   name: "会計",
+  version: "1.0.0",
+  category: "会計",
+  description: "支出/領収書の記録と一覧。",
+  permissions: ["db:read", "db:write"],
   agentTools: [
     {
       name: "record_expense",

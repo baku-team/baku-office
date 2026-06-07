@@ -13,6 +13,10 @@ export async function saveMemo(ctx: Ctx, owner: string, a: { title: string; body
 export const memoPart: Part = {
   id: "memo",
   name: "メモ",
+  version: "1.0.0",
+  category: "庶務",
+  description: "個人メモの保存。",
+  permissions: ["db:write"],
   agentTools: [
     {
       name: "save_memo",

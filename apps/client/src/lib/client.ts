@@ -27,11 +27,13 @@ export async function saveToken(env: Env, token: string): Promise<void> {
 // 統合チェック（§13.1）：ホストへトークン＋deploy_url/version を送り {entitlement,latestVersion,notices}。
 // 稼働中バンドルのバージョン（リリース時に build-release.mjs の VERSION と揃えて更新）。
 export const APP_VERSION = "0.1.0";
-export async function pollHost(env: Env, deployUrl?: string): Promise<CheckResponse | null> {
+export async function pollHost(env: Env, deployUrl?: string, apps?: { id: string; version: string }[]): Promise<CheckResponse | null> {
   const token = await getToken(env);
   if (!token) return null;
   const qs = new URLSearchParams({ token, version: APP_VERSION });
   if (deployUrl) qs.set("deploy_url", deployUrl);
+  // 導入アプリを中枢へ申告（id:version・PIIなし）。ホストが「どのアプリがどこで使われているか」を集計。
+  if (apps?.length) qs.set("apps", apps.map((a) => `${a.id}:${a.version}`).join(","));
   try {
     const r = await hostFetch(env, "/api/check?" + qs.toString());
     if (!r.ok) return null;

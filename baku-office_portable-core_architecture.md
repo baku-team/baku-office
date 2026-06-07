@@ -311,3 +311,50 @@ interface AgentTool {
 - 問題：SqlStore は SQL 素通し前提だが、D1 ↔ libSQL/Turso/SQLite は `batch` セマンティクスや一部関数に差がある。
 - 対策：Port 契約で**使用してよい SQL サブセット**（標準的な DDL/DML・バインド変数・`INSERT OR IGNORE` 等）を固定するか、
   アダプタ側で正規化する。逸脱は契約テスト（§9）で検出する。
+
+---
+
+## 15. アプリ・プラットフォーム（レジストリ／マーケット・開発・連動・セキュリティ）
+
+パーツ＝**アプリ**を、公開カタログから必要なものだけ導入し、AIで開発でき、相互に連動でき、
+かつ baku-office に対する破壊・認証回避は構造的に拒絶する——ノーコードを超える拡張基盤。
+
+### 15-1. レジストリ／マーケットと最小構成
+- **マニフェスト**：`Part` に `version`/`category`/`description`/`permissions`/`actions`（[`core/parts.ts`](apps/client/src/core/parts.ts)）。
+- **公開カタログ**：`appCatalog()`（[`core/apps.ts`](apps/client/src/core/apps.ts)）。導入集合＝`installedAppIds(ctx)`（KV・`enabled_parts` を流用）。
+- **最小構成＝設定のみ**：導入していないアプリは画面・道具とも出ない。設定画面「アプリ（マーケット）」から `install_app`/`uninstall_app` で増減。
+- **Plus 以上は AIチャットアプリ必須**（`MANDATORY_APPS=["chat"]`・削除不可）＝設定・開発のハブ。
+
+### 15-2. セキュリティ（破壊・認証回避を構造的に拒絶）
+- アプリはコア能力 `ctx`（スコープ済みPort）にのみ触れる。**生 env・署名鍵・認証内部・破壊操作（削除/課金/ライセンス/admin）・他テナントには到達不可**＝列挙された `Permission` の範囲だけ。
+- `Permission`：`db:read`/`db:write`/`storage:*`/`ai`/`agent`/`members:read`/`net`。マニフェストで宣言した分のみ付与。
+- アプリ間呼び出し（§15-3）は呼び出し元の保有権限を検査して拒否。AI生成アプリは既存スキル同様サンドボックス（Worker内 eval なし）。
+- ＝「baku-office 上で動く範囲（CF/ローカルサーバの制限内）」は自由、悪意ある仕組みは作れない。
+- （次フェーズ）アプリへ渡す `ctx` から `env` を外した**完全スコープ ctx**、外部送信の allowlist 実体化。
+
+### 15-3. アプリ間連動
+- `ctx.apps.list()` / `ctx.apps.call(appId, action, args, caller)`（[`core/apps.ts`](apps/client/src/core/apps.ts)）。
+- 各アプリは `actions`（`name`＋`requiredPermission`）を公開。呼び出しは「対象操作の必要権限を呼び出し元アプリが保有しているか」を検査。
+- 例：`ctx.apps.call("knowledge","search",{query})`（要 `db:read`）。
+
+### 15-4. 開発（AIでアプリ開発）
+- **ランタイム型（再デプロイ不要・推奨の入口）**：チャットから AI に要望→アプリ雛形（manifest＋スキル/宣言設定）を生成→**無効保存→管理者が権限レビューで有効化**（既存 `install_skill` の拡張）。サンドボックス実行。
+- **コンパイル型（本格アプリ）**：自リポで AI（Claude/Cursor）で `Part` を実装（`ctx.db/ai/...` 経由）→契約テスト→レジストリへ公開→他団体が導入。
+- 既存の Agent Skills／任意API（`capabilities`）が、AIアプリ開発のランタイム土台。
+
+### 15-5. 更新の波及と派生（§14-7 と一体）
+- アプリ更新（`version`↑）はコア配布で**導入している全団体に波及**（自動マイグレーション）。
+- 既存アプリをコピーし `id` を変えて改変＝**派生で新アプリ**（`derivedFrom`）。元の更新と独立。
+
+### 15-7. ホスト中枢のアプリ管理（存在＋利用状況）
+
+アプリは各リポで作成するが、**ホスト側で「どのアプリが存在し、どこで使われているか」を中枢管理**する。
+
+- **レジストリ（存在）**：`registry_apps`（ホスト D1・`apps/host/migrations/0004_app_registry.sql`）。各リポの公開時にホストへ登録（id/name/version/repo_url/permissions/status=pending→approved/blocked）。`apps/host/src/lib/registry.ts`＋`/api/registry`＋管理画面 `/apps`。
+- **利用状況**：クライアントは統合チェック（`/api/check`）の際に**導入アプリ一覧（`id:version`・PIIなし）を申告**。ホストが `app_usage`（license×app×version×last_seen）へ記録し、アプリ別の導入数・版分布・アクティブ数を集計（`usageByApp`）。
+- **未登録検知**：レジストリ未登録だが利用申告のあるアプリを管理画面で警告（各リポ確認→登録/承認 or 停止判断）。
+- これにより「各リポ作成＋中枢管理（承認・可視化）」が両立。承認制（status）で配布ポリシーを効かせられる。
+
+### 15-6. フェーズ（本リビジョンの実装範囲）
+- **実装済み（基盤スライス）**：マニフェスト/権限、`appCatalog`/導入モデル/最小構成、Plus＝チャット必須、アプリ間API＋権限検査、マーケットUI（高度なオプション）、契約テスト。配信は**ランタイム型中心**。
+- **次フェーズ**：外部リポ/パッケージからの取り込み（署名検証付きレジストリ）、AI開発IDE（チャット主導の生成→レビュー→公開）、完全スコープ ctx、外部送信 allowlist、アプリ別課金/配布。

@@ -38,6 +38,10 @@ export async function markReminderDone(ctx: Ctx, id: string): Promise<void> {
 export const remindersPart: Part = {
   id: "reminders",
   name: "リマインダー",
+  version: "1.0.0",
+  category: "庶務",
+  description: "指定日時の通知。",
+  permissions: ["db:read", "db:write"],
   agentTools: [
     {
       name: "set_reminder",

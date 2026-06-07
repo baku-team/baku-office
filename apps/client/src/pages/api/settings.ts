@@ -6,6 +6,7 @@ import { setStorageLimits } from "../../lib/storage-usage.ts";
 import { partCatalog, enabledPartIds, setEnabledPartIds } from "../../core/parts.ts";
 import { setTheme } from "../../core/theme.ts";
 import { setNavOverrides } from "../../core/nav.ts";
+import { appCatalog, installApp, uninstallApp, installedAppIds } from "../../core/apps.ts";
 
 export const prerender = false;
 const json = (o: unknown, s = 200) => new Response(JSON.stringify(o), { status: s, headers: { "content-type": "application/json" } });
@@ -15,7 +16,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
   const env = locals.runtime.env;
   const ses = await getSession(env, request);
   if (!ses || ses.role !== "admin" || ses.ctx !== "org") return json({ error: "管理者のみ" }, 403);
-  const b = (await request.json().catch(() => ({}))) as { _action?: string; mb?: number; engine?: string; prompt?: string; limits?: Record<string, number>; parts?: string[]; theme?: unknown; nav?: { hidden?: string[]; labels?: Record<string, string>; order?: string[] } };
+  const b = (await request.json().catch(() => ({}))) as { _action?: string; mb?: number; engine?: string; prompt?: string; limits?: Record<string, number>; parts?: string[]; theme?: unknown; nav?: { hidden?: string[]; labels?: Record<string, string>; order?: string[] }; appId?: string };
   if (b._action === "max_upload") {
     const v = await setMaxUploadMb(env, Number(b.mb));
     return json({ ok: true, mb: v });
@@ -55,6 +56,22 @@ export const POST: APIRoute = async ({ request, locals }) => {
   if (b._action === "nav_overrides") {
     const v = await setNavOverrides(locals.ctx, b.nav ?? {});
     return json({ ok: true, nav: v });
+  }
+  // アプリ（マーケット）：導入/削除/一覧。
+  if (b._action === "install_app") {
+    const installed = await installApp(locals.ctx, String(b.appId ?? ""));
+    return json({ ok: true, installed });
+  }
+  if (b._action === "uninstall_app") {
+    try {
+      const installed = await uninstallApp(locals.ctx, String(b.appId ?? ""));
+      return json({ ok: true, installed });
+    } catch (e) {
+      return json({ error: (e as Error).message }, 400);
+    }
+  }
+  if (b._action === "list_apps") {
+    return json({ ok: true, catalog: appCatalog(), installed: await installedAppIds(locals.ctx) });
   }
   return json({ error: "不明な操作" }, 400);
 };

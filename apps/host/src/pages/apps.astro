@@ -1,0 +1,70 @@
+---
+export const prerender = false;
+import Host from "../layouts/Host.astro";
+const env = Astro.locals.runtime.env;
+const { getHostSession } = await import("../lib/hostauth.ts");
+const ses = await getHostSession(env, Astro.request);
+if (!ses?.isAdmin) return Astro.redirect("/login", 302);
+
+const { listApps, usageByApp } = await import("../lib/registry.ts");
+const apps = await listApps(env);
+const usage = await usageByApp(env);
+const usageMap = new Map(usage.map((u) => [u.app_id, u]));
+// レジストリ未登録だが利用申告のあるアプリ（＝各リポで作られ稼働中だが中枢未登録）。
+const unregistered = usage.filter((u) => !apps.some((a) => a.id === u.app_id));
+const fmt = (s: number | null) => (s ? new Date(s * 1000).toISOString().slice(0, 16).replace("T", " ") : "—");
+---
+<Host title="アプリ管理" active="/apps">
+  <h1>アプリ管理（中枢レジストリ）</h1>
+  <p class="muted">各リポで作成されたアプリの<strong>存在（レジストリ）</strong>と、<strong>利用状況</strong>（どのクライアントがどの版を使っているか・PIIなし）を中枢で管理します。</p>
+
+  <h2>レジストリ（公開アプリ）</h2>
+  <div class="table-wrap"><table><thead><tr><th>ID</th><th>名称</th><th>版</th><th>分類</th><th>権限</th><th>リポ</th><th>状態</th><th>導入数(有効)</th><th>操作</th></tr></thead><tbody>
+    {apps.map((a) => { const u = usageMap.get(a.id); return (
+      <tr data-id={a.id}>
+        <td><code>{a.id}</code></td><td>{a.name}</td><td>{a.version}</td><td>{a.category ?? "—"}</td>
+        <td class="muted" style="font-size:.8rem">{(JSON.parse(a.permissions || "[]") as string[]).join(" / ") || "—"}</td>
+        <td>{a.repo_url ? <a href={a.repo_url} target="_blank" rel="noreferrer">repo</a> : "—"}</td>
+        <td><span class="pill" style={a.status === "approved" ? "background:#dcfce7;color:#166534" : a.status === "blocked" ? "background:#fee2e2;color:#b91c1c" : ""}>{a.status}</span></td>
+        <td>{u ? `${u.installs}(${u.active})` : 0}</td>
+        <td>
+          <button class="btn btn-ghost st" data-st="approved">承認</button>
+          <button class="btn btn-ghost st" data-st="blocked">停止</button>
+        </td>
+      </tr>); })}
+    {apps.length === 0 && (<tr><td colspan="9" class="muted">レジストリは空です。下のフォームから登録してください。</td></tr>)}
+  </tbody></table></div>
+
+  {unregistered.length > 0 && (
+    <>
+      <h2>未登録で稼働中のアプリ（要確認）</h2>
+      <div class="banner banner-warn">レジストリ未登録だが利用申告のあるアプリ。各リポを確認し、登録/承認または停止対象か判断してください。</div>
+      <div class="table-wrap"><table><thead><tr><th>ID</th><th>導入数(有効)</th><th>版</th></tr></thead><tbody>
+        {unregistered.map((u) => (<tr><td><code>{u.app_id}</code></td><td>{u.installs}({u.active})</td><td class="muted">{u.versions}</td></tr>))}
+      </tbody></table></div>
+    </>
+  )}
+
+  <h2>アプリを登録（各リポの公開時）</h2>
+  <div class="card">
+    <div class="row"><label style="flex:1">ID<input id="r-id" placeholder="inventory" /></label><label style="flex:1">名称<input id="r-name" placeholder="在庫" /></label><label style="flex:0 0 120px">版<input id="r-version" placeholder="1.0.0" /></label></div>
+    <div class="row"><label style="flex:1">リポURL<input id="r-repo" placeholder="https://github.com/…" /></label><label style="flex:1">公開者<input id="r-pub" /></label><label style="flex:0 0 140px">分類<input id="r-cat" /></label></div>
+    <div class="field"><label>権限（カンマ区切り）<input id="r-perms" placeholder="db:read, db:write" /></label></div>
+    <div class="field"><label>説明<input id="r-desc" /></label></div>
+    <button class="btn btn-primary" id="reg">レジストリに登録</button>
+  </div>
+
+  <script slot="scripts" is:inline>
+    const api = async (b, btn) => { if (btn) btn.disabled = true; try { const r = await fetch("/api/registry", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(b) }); const j = await r.json().catch(() => ({})); if (!r.ok || j.error) { alert("エラー：" + (j.error || r.status)); return null; } return j; } finally { if (btn) btn.disabled = false; } };
+    document.querySelectorAll("tr[data-id]").forEach((tr) => {
+      const id = tr.getAttribute("data-id");
+      tr.querySelectorAll(".st").forEach((b) => b.addEventListener("click", async (e) => { const r = await api({ _action: "status", id, status: e.currentTarget.dataset.st }, e.currentTarget); if (r) location.reload(); }));
+    });
+    document.getElementById("reg").addEventListener("click", async (e) => {
+      const perms = (document.getElementById("r-perms").value || "").split(",").map((s) => s.trim()).filter(Boolean);
+      const body = { _action: "register", id: document.getElementById("r-id").value, name: document.getElementById("r-name").value, version: document.getElementById("r-version").value, repoUrl: document.getElementById("r-repo").value, publisher: document.getElementById("r-pub").value, category: document.getElementById("r-cat").value, permissions: perms, description: document.getElementById("r-desc").value };
+      if (!body.id || !body.name || !body.version) { alert("ID・名称・版は必須です"); return; }
+      const r = await api(body, e.currentTarget); if (r) location.reload();
+    });
+  </script>
+</Host>
