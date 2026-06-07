@@ -1,7 +1,8 @@
 # baku-office アーキテクチャ：更新フローと「基本＋カスタム」設計
 
-> 本システムは **「ポータブルコア＋パーツ」基盤**。コア（DB・ストレージ・AI・エージェント・認証）を Port で抽象化し、
-> 業務機能は Part として載せ替える。**コアは共通（全顧客同一）／パーツと UI は団体ごとに差し替え**、が基本＋カスタムの土台。
+> 本システムは **「自社専用AIの相棒」をクライアントが丸ごと所有するための「ポータブルコア＋パーツ」基盤**。
+> コア（DB・ストレージ・AI・エージェント・認証・アプリ管理）を Port で抽象化し、業務機能は Part（＝アプリ）として
+> 載せ替える。**コアは共通（全顧客同一）／パーツと UI は団体ごとに差し替え・AIで自作**、が基本＋カスタムの土台。
 > 詳細：[baku-office_portable-core_architecture.md](baku-office_portable-core_architecture.md)。
 
 ## リポジトリと配布（CI）
@@ -32,7 +33,7 @@ baku-team/baku-office-app (public・配布物のみ)
 
 ## ポータブルコア＋パーツ（コアは共通・機能は載せ替え）
 
-- **コア能力 Port**（`src/core/ports.ts`）：`SqlStore`/`StoragePort`/`AiPort`/`AgentPort`/`IdentityPort`。`middleware` が環境別アダプタを束ねた `ctx` を注入。
+- **コア能力 Port**（`src/core/ports.ts`）：`SqlStore`/`StoragePort`/`AiPort`/`AgentPort`/`IdentityPort`/`AppsApi`。`middleware` が環境別アダプタを束ねた `ctx` を注入。
 - **環境アダプタ**：CF（D1/KV/R2/Gemini/Claude）が標準。AI は `ChatModel`（gemini/claude/**ローカルLLM(OpenAI互換)**）を実行時切替。`Profile`（`core/profiles.ts`）で稼働構成を検出（フルクラウド〜オフライン）。
 - **パーツ**（`src/parts/`）：業務機能＝道具(`agentTools`)＋ナビ(`menu`)＋データ操作を `Part` として登録。`requiredRole` で認可。**団体ごとに有効/無効を選択**（`enabled_parts`）。
 - **移植性の保証**：`apps/client/test/` の適合性テストが **Node+SQLite** で同じコア/パーツを実行（アダプタ差し替え＝CF非依存を実証）。
