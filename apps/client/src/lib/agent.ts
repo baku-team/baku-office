@@ -12,6 +12,7 @@ import { claudeModel } from "../core/models/claude.ts";
 import "../parts/index.ts"; // 組み込みパーツを登録（副作用・移植性アーキ §4）
 import { webSearch, makeDocument } from "./media-ai.ts";
 import { listSkills, runSkill, generateSkill } from "./skills.ts";
+import { createDraft } from "./external-apps.ts";
 import { listCapabilities, invokeCapability, capabilitySummary, videoStatusText } from "./capabilities.ts";
 import { getAiEngine, getCustomPrompt } from "./settings.ts";
 import { recordUsage, overBudget } from "./usage.ts";
@@ -28,6 +29,7 @@ const SYSTEM =
 // コア組み込み道具（業務パーツではない・常時提示）。スキル生成。
 const CORE_TOOLS = [
   { name: "install_skill", description: "ユーザーの要望から新しい業務スキルを設計して登録（無効状態で保存。管理者が高度なオプションで有効化）", parameters: { type: "object", properties: { request: { type: "string", description: "欲しいスキルの要望" } }, required: ["request"] } },
+  { name: "propose_app", description: "ユーザーの要望から新しいアプリ（業務機能）の草案を作成（無効・草案で保存→管理者が権限をレビューして公開申請）。AI開発の入口。", parameters: { type: "object", properties: { name: { type: "string" }, description: { type: "string" }, permissions: { type: "array", items: { type: "string" }, description: "要求権限（例 db:read, db:write, ai, agent）" }, definition: { type: "object", description: "宣言的アプリ定義（任意）" } }, required: ["name"] } },
 ];
 // API依存ツール（キーがある時だけ宣言＝モデルに見せる）。
 const GEMINI_TOOLS = [
@@ -59,6 +61,13 @@ async function execTool(ctx: Ctx, owner: string, baseUrl: string, name: string, 
   const env = ctx.env;
   switch (name) {
     case "install_skill": { const g = await generateSkill(env, owner, String(args.request ?? "")); return g.ok ? `スキル「${g.name}」を作成しました（無効状態）。管理者が高度なオプションで有効化すると使えます。` : (g.error ?? "スキル生成に失敗しました。"); }
+    case "propose_app": {
+      const name = String(args.name ?? "").trim();
+      if (!name) return "アプリ名が必要です。";
+      const perms = Array.isArray(args.permissions) ? (args.permissions as unknown[]).map(String) : [];
+      const draftId = await createDraft(ctx, { name, description: args.description ? String(args.description) : undefined, permissions: perms, definition: args.definition }, owner);
+      return `アプリ草案「${name}」を作成しました（草案）。管理者が高度なオプション → アプリ開発で権限をレビューし、公開申請できます。ID: ${draftId}`;
+    }
     case "web_search": return (await webSearch(env, String(args.query))) ?? "web検索は未設定です。";
     case "make_document": return makeDocument(env, owner, baseUrl, { type: String(args.type ?? "md"), title: String(args.title), content: String(args.content) });
     case "run_skill": return runSkill(env, owner, baseUrl, String(args.name), String(args.input ?? ""));

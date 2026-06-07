@@ -30,6 +30,10 @@ const appCat = hasPlus ? appCatalog() : [];
 const installedSet = new Set(hasPlus ? await installedAppIds(Astro.locals.ctx) : []);
 const isPartOn = (id: string) => installedSet.has(id);
 const isMandatory = (id: string) => MANDATORY_APPS.includes(id);
+// 外部アプリ（取り込み）＋アプリ開発（草案）。
+const { listExternalApps, listDrafts } = await import("../../lib/external-apps.ts");
+const externalApps = hasPlus ? await listExternalApps(Astro.locals.ctx) : [];
+const drafts = hasPlus ? await listDrafts(Astro.locals.ctx) : [];
 // 見た目（テーマ）＋ナビ表示（団体ごと上書き）。
 const { getTheme } = await import("../../core/theme.ts");
 const { getNavOverrides } = await import("../../core/nav.ts");
@@ -104,6 +108,31 @@ const NAV_TOGGLE = [
       </label></div>
     ))}
     <button class="btn btn-primary" id="saveParts">導入アプリを保存</button>
+  </div>
+
+  <h2>外部アプリの取り込み（署名検証）</h2>
+  <div class="card">
+    <p class="muted">公開レジストリのアプリIDを入れて取り込みます（ホスト署名を検証・改竄や未承認は拒否）。再デプロイ不要。</p>
+    <div class="row"><input id="ext-id" placeholder="アプリID（例 inventory）" style="flex:1" /><button class="btn btn-primary" id="fetchApp" style="flex:0 0 auto">取り込む</button></div>
+    {externalApps.length > 0 && (
+      <div class="table-wrap" style="margin-top:.6rem"><table><thead><tr><th>ID</th><th>名称</th><th>版</th><th>権限</th><th></th></tr></thead><tbody>
+        {externalApps.map((a) => (<tr data-ext={a.id}><td><code>{a.id}</code></td><td>{a.name}</td><td>{a.version}</td><td class="muted" style="font-size:.8rem">{a.permissions.join(" / ")}</td><td><button class="btn btn-ghost ext-del">削除</button></td></tr>))}
+      </tbody></table></div>
+    )}
+  </div>
+
+  <h2>アプリ開発（草案 → レビュー → 公開申請）</h2>
+  <div class="card">
+    <p class="muted">AIチャットで「〜するアプリを作って」と頼むと<strong>草案</strong>ができます。ここで<strong>要求権限をレビュー</strong>し、問題なければ公開申請（ホスト承認後、他団体も取り込み可）。</p>
+    {drafts.length === 0 && (<p class="muted">草案はありません。AIチャットから作成してください。</p>)}
+    {drafts.map((d) => (
+      <div class="card" data-draft={d.id} style="margin:.5rem 0">
+        <strong>{d.name}</strong> <span class="muted">v{d.version}・{d.status}</span>
+        {d.description && <><br /><span class="muted">{d.description}</span></>}
+        <br /><span class="muted" style="font-size:.8rem">要求権限: {d.permissions.join(" / ") || "なし"}</span>
+        <div class="row" style="margin-top:.4rem"><button class="btn btn-primary d-submit" style="flex:0 0 auto">公開申請</button><button class="btn btn-ghost d-del" style="flex:0 0 auto">削除</button></div>
+      </div>
+    ))}
   </div>
 
   <h2>ストレージ上限（標準モード・KV）</h2>
@@ -186,6 +215,9 @@ const NAV_TOGGLE = [
     document.getElementById("saveParts")?.addEventListener("click",async(e)=>{const parts=[...document.querySelectorAll(".part-chk")].filter(c=>c.checked).map(c=>c.value);const r=await window.bo.api("/api/settings",{_action:"enabled_parts",parts},{btn:e.currentTarget,successMsg:"有効パーツを保存しました"});if(r.ok)setTimeout(()=>location.reload(),600);});
     document.getElementById("saveTheme")?.addEventListener("click",async(e)=>{const theme={brand:document.getElementById("th-brand").value,logoUrl:document.getElementById("th-logo").value,colors:{brand:document.getElementById("th-brand-color").value,bg:document.getElementById("th-bg").value,ink:document.getElementById("th-ink").value}};const r=await window.bo.api("/api/settings",{_action:"ui_theme",theme},{btn:e.currentTarget,successMsg:"テーマを保存しました"});if(r.ok)setTimeout(()=>location.reload(),700);});
     document.getElementById("saveNav")?.addEventListener("click",async(e)=>{const hidden=[...document.querySelectorAll(".nav-chk")].filter(c=>!c.checked).map(c=>c.value);const r=await window.bo.api("/api/settings",{_action:"nav_overrides",nav:{hidden}},{btn:e.currentTarget,successMsg:"ナビ表示を保存しました"});if(r.ok)setTimeout(()=>location.reload(),700);});
+    document.getElementById("fetchApp")?.addEventListener("click",async(e)=>{const id=(document.getElementById("ext-id").value||"").trim();if(!id){window.bo.toast("アプリIDを入力","err");return;}const r=await window.bo.api("/api/settings",{_action:"fetch_app",appId:id},{btn:e.currentTarget,successMsg:"取り込みました"});if(r.ok)setTimeout(()=>location.reload(),700);});
+    document.querySelectorAll("tr[data-ext]").forEach((tr)=>{const id=tr.getAttribute("data-ext");tr.querySelector(".ext-del")?.addEventListener("click",async(e)=>{const r=await window.bo.api("/api/settings",{_action:"uninstall_external",appId:id},{btn:e.currentTarget,successMsg:"削除しました"});if(r.ok)setTimeout(()=>location.reload(),500);});});
+    document.querySelectorAll("[data-draft]").forEach((el)=>{const id=el.getAttribute("data-draft");el.querySelector(".d-submit")?.addEventListener("click",async(e)=>{const r=await window.bo.api("/api/settings",{_action:"submit_draft",draftId:id},{btn:e.currentTarget,successMsg:"公開申請しました（ホスト承認待ち）"});if(r.ok)setTimeout(()=>location.reload(),800);});el.querySelector(".d-del")?.addEventListener("click",async(e)=>{const r=await window.bo.api("/api/settings",{_action:"delete_draft",draftId:id},{btn:e.currentTarget,successMsg:"削除しました"});if(r.ok)setTimeout(()=>location.reload(),500);});});
     document.getElementById("capadd").addEventListener("click",async(e)=>{const r=await cap({_action:"create",capability:document.getElementById("cap").value,provider:document.getElementById("cprov").value,model:document.getElementById("cmodel").value,endpoint:document.getElementById("cendpoint").value,api_key:document.getElementById("ckey").value},e.currentTarget);if(r.ok){window.bo.toast("登録しました（無効状態）");setTimeout(()=>location.reload(),600);}});
     document.querySelectorAll("tr[data-cid]").forEach(tr=>{const id=tr.dataset.cid;
       tr.querySelector(".cen")?.addEventListener("click",async(e)=>{const r=await cap({_action:"enable",id,enabled:true},e.target);if(r.ok)setTimeout(()=>location.reload(),500);});

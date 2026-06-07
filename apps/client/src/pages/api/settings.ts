@@ -7,6 +7,7 @@ import { partCatalog, enabledPartIds, setEnabledPartIds } from "../../core/parts
 import { setTheme } from "../../core/theme.ts";
 import { setNavOverrides } from "../../core/nav.ts";
 import { appCatalog, installApp, uninstallApp, installedAppIds } from "../../core/apps.ts";
+import { fetchAndInstall, listExternalApps, uninstallExternal, listDrafts, submitDraft, deleteDraft } from "../../lib/external-apps.ts";
 
 export const prerender = false;
 const json = (o: unknown, s = 200) => new Response(JSON.stringify(o), { status: s, headers: { "content-type": "application/json" } });
@@ -16,7 +17,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
   const env = locals.runtime.env;
   const ses = await getSession(env, request);
   if (!ses || ses.role !== "admin" || ses.ctx !== "org") return json({ error: "管理者のみ" }, 403);
-  const b = (await request.json().catch(() => ({}))) as { _action?: string; mb?: number; engine?: string; prompt?: string; limits?: Record<string, number>; parts?: string[]; theme?: unknown; nav?: { hidden?: string[]; labels?: Record<string, string>; order?: string[] }; appId?: string };
+  const b = (await request.json().catch(() => ({}))) as { _action?: string; mb?: number; engine?: string; prompt?: string; limits?: Record<string, number>; parts?: string[]; theme?: unknown; nav?: { hidden?: string[]; labels?: Record<string, string>; order?: string[] }; appId?: string; draftId?: string };
   if (b._action === "max_upload") {
     const v = await setMaxUploadMb(env, Number(b.mb));
     return json({ ok: true, mb: v });
@@ -72,6 +73,30 @@ export const POST: APIRoute = async ({ request, locals }) => {
   }
   if (b._action === "list_apps") {
     return json({ ok: true, catalog: appCatalog(), installed: await installedAppIds(locals.ctx) });
+  }
+  // 外部アプリ（レジストリから署名検証して取り込み）。
+  if (b._action === "fetch_app") {
+    const r = await fetchAndInstall(locals.ctx, String(b.appId ?? ""));
+    return json(r, r.ok ? 200 : 400);
+  }
+  if (b._action === "uninstall_external") {
+    await uninstallExternal(locals.ctx, String(b.appId ?? ""));
+    return json({ ok: true });
+  }
+  if (b._action === "list_external") {
+    return json({ ok: true, external: await listExternalApps(locals.ctx) });
+  }
+  // AI開発：ドラフトのレビュー→公開申請。
+  if (b._action === "list_drafts") {
+    return json({ ok: true, drafts: await listDrafts(locals.ctx) });
+  }
+  if (b._action === "submit_draft") {
+    const r = await submitDraft(locals.ctx, String(b.draftId ?? ""));
+    return json(r, r.ok ? 200 : 400);
+  }
+  if (b._action === "delete_draft") {
+    await deleteDraft(locals.ctx, String(b.draftId ?? ""));
+    return json({ ok: true });
   }
   return json({ error: "不明な操作" }, 400);
 };
