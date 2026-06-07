@@ -6,12 +6,15 @@ const { getHostSession } = await import("../lib/hostauth.ts");
 const ses = await getHostSession(env, Astro.request);
 if (!ses?.isAdmin) return Astro.redirect("/login", 302);
 
-const { listApps, usageByApp } = await import("../lib/registry.ts");
+const { listApps, usageByApp, BUILTIN_APP_IDS } = await import("../lib/registry.ts");
 const apps = await listApps(env);
 const usage = await usageByApp(env);
 const usageMap = new Map(usage.map((u) => [u.app_id, u]));
-// レジストリ未登録だが利用申告のあるアプリ（＝各リポで作られ稼働中だが中枢未登録）。
-const unregistered = usage.filter((u) => !apps.some((a) => a.id === u.app_id));
+const builtin = new Set(BUILTIN_APP_IDS);
+// 標準同梱アプリ（コア・配布対象外）。利用状況のみ表示。
+const builtinUsage = usage.filter((u) => builtin.has(u.app_id));
+// 本当に未知＝レジストリ未登録かつ標準同梱でもないアプリ（要確認）。
+const unregistered = usage.filter((u) => !builtin.has(u.app_id) && !apps.some((a) => a.id === u.app_id));
 const fmt = (s: number | null) => (s ? new Date(s * 1000).toISOString().slice(0, 16).replace("T", " ") : "—");
 ---
 <Host title="アプリ管理" active="/apps">
@@ -34,6 +37,16 @@ const fmt = (s: number | null) => (s ? new Date(s * 1000).toISOString().slice(0,
       </tr>); })}
     {apps.length === 0 && (<tr><td colspan="9" class="muted">レジストリは空です。下のフォームから登録してください。</td></tr>)}
   </tbody></table></div>
+
+  {builtinUsage.length > 0 && (
+    <>
+      <h2>標準同梱アプリ（コア・利用状況）</h2>
+      <p class="muted">全クライアントに同梱される標準アプリ。レジストリ配布対象ではないため登録不要・正常です。</p>
+      <div class="table-wrap"><table><thead><tr><th>ID</th><th>導入数(有効)</th><th>版</th></tr></thead><tbody>
+        {builtinUsage.map((u) => (<tr><td><code>{u.app_id}</code></td><td>{u.installs}({u.active})</td><td class="muted">{u.versions}</td></tr>))}
+      </tbody></table></div>
+    </>
+  )}
 
   {unregistered.length > 0 && (
     <>
