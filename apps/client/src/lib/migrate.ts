@@ -16,6 +16,7 @@ import m0011 from "../../migrations/0011_sites.sql?raw";
 import m0012 from "../../migrations/0012_imports.sql?raw";
 import m0013 from "../../migrations/0013_external_apps.sql?raw";
 import m0014 from "../../migrations/0014_draft_preflight.sql?raw";
+import m0015 from "../../migrations/0015_chat_sessions.sql?raw";
 import { logDiag } from "./diag.ts";
 
 // 並び順＝適用順。新しいマイグレーションはここに追記するだけ。
@@ -34,6 +35,7 @@ const MIGRATIONS: { id: string; sql: string }[] = [
   { id: "0012_imports", sql: m0012 },
   { id: "0013_external_apps", sql: m0013 },
   { id: "0014_draft_preflight", sql: m0014 },
+  { id: "0015_chat_sessions", sql: m0015 },
 ];
 
 export const SCHEMA_VERSION = MIGRATIONS.length;

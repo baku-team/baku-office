@@ -24,8 +24,9 @@ export async function runToolLoop(
   tools: ToolDecl[],
   exec: (name: string, args: Record<string, unknown>) => Promise<string>,
   maxHops = 4,
+  priorHistory: Turn[] = [],
 ): Promise<string> {
-  const history: Turn[] = [{ role: "user", text: first.text, image: first.image }];
+  const history: Turn[] = [...priorHistory, { role: "user", text: first.text, image: first.image }];
   for (let h = 0; h < maxHops; h++) {
     const res = await model.turn(system, history, tools);
     if (!res.toolCalls?.length) return (res.text ?? "").trim() || "（応答が空でした）";

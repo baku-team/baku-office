@@ -16,6 +16,13 @@ export interface AgentTool {
 
 // Part ＝再利用可能な「アプリ（業務モジュール）」。複数団体で共有・再利用でき、
 // コア更新（CI配布）で全導入先に波及する。派生は id を変えてコピー＝新アプリ（§移植性アーキ）。
+// ホーム（ダッシュボード）に出すアプリ提供ウィジェット。値カード（タイトル＋数値＋補足）。
+export interface AppWidget {
+  id: string;
+  title: string;
+  run(ctx: Ctx, owner: string): Promise<{ value: string; sub?: string }>;
+}
+
 export interface Part {
   id: string;            // アプリの一意キー（派生時は新IDにする）
   name: string;
@@ -27,6 +34,12 @@ export interface Part {
   agentTools?: AgentTool[];
   actions?: AppAction[]; // アプリ間連動で他アプリへ公開する操作
   menu?: NavItem[]; // 第2層：このパーツが提供するナビ項目（UIパーツ用）。
+  widgets?: AppWidget[]; // ホームに出す連携ウィジェット（例 総会員数・当月収支）。
+}
+
+// 有効パーツが提供するホームウィジェットを集約。
+export function widgetsOf(parts: Part[]): AppWidget[] {
+  return parts.flatMap((p) => p.widgets ?? []);
 }
 
 // 有効パーツが提供するナビ項目を集約（第2層）。

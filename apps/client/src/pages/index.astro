@@ -28,6 +28,12 @@ let balance = 0;
 try { balance = (await env.DB.prepare("SELECT COALESCE(SUM(opening_balance),0) AS b FROM wallets").first<{ b: number }>())?.b ?? 0; } catch { /* 未マイグレ */ }
 const notices = check?.notices ?? [];
 const yen = (n: number) => "¥" + n.toLocaleString("ja-JP");
+// アプリ連携ウィジェット（有効アプリが提供：例 登録メンバー数・取引数）。
+const { widgetsOf, enabledParts } = await import("../core/parts.ts");
+const widgetData: { title: string; value: string; sub?: string }[] = [];
+for (const w of widgetsOf(enabledParts([..._inst]))) {
+  try { widgetData.push({ title: w.title, ...(await w.run(Astro.locals.ctx, ses.uid)) }); } catch { /* skip */ }
+}
 ---
 <App title="ホーム" active="/">
   <Slot name="home-hero" />
@@ -46,6 +52,17 @@ const yen = (n: number) => "¥" + n.toLocaleString("ja-JP");
     <div class="card"><div class="label">未処理伝票</div><div class="num">0</div></div>
     <div class="card"><div class="label">プラン / ライセンス</div><div class="num" style="font-size:1.1rem">{planLabel(entitlement)}</div></div>
   </div>
+
+  {widgetData.length > 0 && (
+    <>
+      <h2>アプリの状況</h2>
+      <div class="grid">
+        {widgetData.map((w) => (
+          <div class="card"><div class="label">{w.title}</div><div class="num">{w.value}</div>{w.sub && <div class="muted" style="font-size:.82rem">{w.sub}</div>}</div>
+        ))}
+      </div>
+    </>
+  )}
 
   <h2>ストレージ使用量</h2>
   {nearFull.map((s) => (<div class="banner banner-warn">⚠️ <strong>{s.label}</strong> が上限の {pct(s.used, s.limit)}% に達しています。{hintText[s.hint]}</div>))}

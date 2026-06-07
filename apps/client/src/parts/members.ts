@@ -25,6 +25,13 @@ export const membersPart: Part = {
   category: "庶務",
   description: "会員名簿（暗号化PII）の照会。特権ロールのみ。",
   permissions: ["db:read", "members:read"],
+  menu: [{ href: "/membership", label: "会員管理" }],
+  widgets: [
+    { id: "members_count", title: "登録メンバー", run: async (ctx) => {
+      const r = await ctx.db.prepare("SELECT count(*) AS n FROM users WHERE status='active'").first<{ n: number }>();
+      return { value: String(r?.n ?? 0) + " 名", sub: "アクティブ会員" };
+    } },
+  ],
   agentTools: [
     {
       name: "search_members",

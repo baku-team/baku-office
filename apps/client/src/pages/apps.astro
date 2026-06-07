@@ -1,0 +1,106 @@
+---
+export const prerender = false;
+import App from "../layouts/App.astro";
+const env = Astro.locals.runtime.env;
+const { getSession } = await import("../lib/auth.ts");
+const ses = await getSession(env, Astro.request);
+if (!ses) return Astro.redirect("/login", 302);
+const ctx = Astro.locals.ctx;
+const isAdminOrg = ses.role === "admin" && ses.ctx === "org";
+
+await import("../parts/index.ts");
+const { appCatalog, installedAppIds, MANDATORY_APPS } = await import("../core/apps.ts");
+const { registeredParts } = await import("../core/parts.ts");
+const cat = appCatalog();
+const installed = new Set(await installedAppIds(ctx));
+const isOn = (id: string) => installed.has(id);
+const isMust = (id: string) => MANDATORY_APPS.includes(id);
+// ランチャー：導入済みでナビ(menu)を持つアプリの起動リンク。
+const launch = registeredParts().filter((p) => installed.has(p.id) && (p.menu?.length ?? 0) > 0)
+  .flatMap((p) => (p.menu ?? []).map((m) => ({ app: p.name, href: m.href, label: m.label })));
+
+const { listExternalApps, listDrafts } = await import("../lib/external-apps.ts");
+const externalApps = isAdminOrg ? await listExternalApps(ctx) : [];
+const drafts = isAdminOrg ? await listDrafts(ctx) : [];
+---
+<App title="アプリ" active="/apps">
+  <h1>アプリ</h1>
+
+  <h2>使う（導入済み）</h2>
+  <div class="grid">
+    {launch.map((l) => (
+      <a class="card" href={l.href} style="text-decoration:none;color:inherit;display:block">
+        <strong>{l.label}</strong><div class="muted" style="font-size:.8rem">{l.app}</div>
+      </a>
+    ))}
+    {launch.length === 0 && (<p class="muted">起動できるアプリがありません。下のマーケットから導入してください。</p>)}
+  </div>
+
+  {isAdminOrg && (
+    <>
+      <h2>マーケット（導入・削除）</h2>
+      <div class="card">
+        <p class="muted">使うアプリを選びます。外すと画面・道具とも消えます。<strong>AIチャットは Plus 以上で必須</strong>。</p>
+        {cat.map((p) => (
+          <div class="field"><label>
+            <input type="checkbox" class="app-chk" value={p.id} checked={isOn(p.id)} disabled={isMust(p.id)} />
+            <strong>{p.name}</strong> <span class="muted">v{p.version}{p.category ? `・${p.category}` : ""}{isMust(p.id) ? "・必須" : ""}</span>
+            {p.description && <><br /><span class="muted" style="font-size:.85rem">{p.description}</span></>}
+            {p.permissions.length > 0 && <><br /><span class="muted" style="font-size:.8rem">権限: {p.permissions.join(" / ")}</span></>}
+          </label></div>
+        ))}
+        <button class="btn btn-primary" id="saveApps">導入アプリを保存</button>
+      </div>
+
+      <h2>外部アプリの取り込み（署名検証）</h2>
+      <div class="card">
+        <p class="muted">公開レジストリのアプリIDで取り込み（ホスト署名を検証）。再デプロイ不要。</p>
+        <div class="row"><input id="ext-id" placeholder="アプリID（例 inventory）" style="flex:1" /><button class="btn btn-primary" id="fetchApp" style="flex:0 0 auto">取り込む</button></div>
+        {externalApps.length > 0 && (
+          <div class="table-wrap" style="margin-top:.6rem"><table><thead><tr><th>ID</th><th>名称</th><th>版</th><th>権限</th><th></th></tr></thead><tbody>
+            {externalApps.map((a) => (<tr data-ext={a.id}><td><code>{a.id}</code></td><td>{a.name}</td><td>{a.version}</td><td class="muted" style="font-size:.8rem">{a.permissions.join(" / ")}</td><td><button class="btn btn-ghost ext-del">削除</button></td></tr>))}
+          </tbody></table></div>
+        )}
+      </div>
+
+      <h2>アプリ開発（草案 → レビュー → 公開申請）</h2>
+      <div class="card">
+        <p class="muted">AIチャットで「〜するアプリを作って」と頼むと草案ができます。要求権限と事前確認（環境/権限/安全/コスト）をレビューし、公開申請できます。</p>
+        {drafts.length === 0 && (<p class="muted">草案はありません。AIから作成してください。</p>)}
+        {drafts.map((d) => (
+          <div class="card" data-draft={d.id} style="margin:.5rem 0">
+            <strong>{d.name}</strong> <span class="muted">v{d.version}</span>
+            <span class="pill" style={d.gate_status === "ready" ? "background:#dcfce7;color:#166534" : d.gate_status === "blocked" ? "background:#fee2e2;color:#b91c1c" : ""}>{d.gate_status === "ready" ? "実装可" : d.gate_status === "blocked" ? "ブロック" : "企画中"}</span>
+            {d.spec && <><br /><span class="muted" style="font-size:.85rem">仕様: {d.spec}</span></>}
+            <br /><span class="muted" style="font-size:.8rem">要求権限: {d.permissions.join(" / ") || "なし"}</span>
+            {d.preflight && (<ul style="margin:.4rem 0 0;padding-left:1.1rem;font-size:.82rem">{d.preflight.checks.map((c) => (<li class="muted">{c.status === "ok" ? "✅" : c.status === "warn" ? "⚠️" : "⛔"} {c.label}：{c.detail}</li>))}</ul>)}
+            <div class="row" style="margin-top:.4rem"><button class="btn btn-primary d-submit" style="flex:0 0 auto" disabled={d.gate_status !== "ready"}>公開申請</button><button class="btn btn-ghost d-del" style="flex:0 0 auto">削除</button></div>
+          </div>
+        ))}
+      </div>
+    </>
+  )}
+
+  <script slot="scripts" is:inline>
+    document.getElementById("saveApps")?.addEventListener("click", async (e) => {
+      const parts = [...document.querySelectorAll(".app-chk")].filter((c) => c.checked).map((c) => c.value);
+      const r = await window.bo.api("/api/settings", { _action: "enabled_parts", parts }, { btn: e.currentTarget, successMsg: "導入アプリを保存しました" });
+      if (r.ok) setTimeout(() => location.reload(), 600);
+    });
+    document.getElementById("fetchApp")?.addEventListener("click", async (e) => {
+      const id = (document.getElementById("ext-id").value || "").trim();
+      if (!id) { window.bo.toast("アプリIDを入力", "err"); return; }
+      const r = await window.bo.api("/api/settings", { _action: "fetch_app", appId: id }, { btn: e.currentTarget, successMsg: "取り込みました" });
+      if (r.ok) setTimeout(() => location.reload(), 700);
+    });
+    document.querySelectorAll("tr[data-ext]").forEach((tr) => {
+      const id = tr.getAttribute("data-ext");
+      tr.querySelector(".ext-del")?.addEventListener("click", async (e) => { const r = await window.bo.api("/api/settings", { _action: "uninstall_external", appId: id }, { btn: e.currentTarget, successMsg: "削除しました" }); if (r.ok) setTimeout(() => location.reload(), 500); });
+    });
+    document.querySelectorAll("[data-draft]").forEach((el) => {
+      const id = el.getAttribute("data-draft");
+      el.querySelector(".d-submit")?.addEventListener("click", async (e) => { const r = await window.bo.api("/api/settings", { _action: "submit_draft", draftId: id }, { btn: e.currentTarget, successMsg: "公開申請しました（ホスト承認待ち）" }); if (r.ok) setTimeout(() => location.reload(), 800); });
+      el.querySelector(".d-del")?.addEventListener("click", async (e) => { const r = await window.bo.api("/api/settings", { _action: "delete_draft", draftId: id }, { btn: e.currentTarget, successMsg: "削除しました" }); if (r.ok) setTimeout(() => location.reload(), 500); });
+    });
+  </script>
+</App>

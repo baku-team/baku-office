@@ -5,7 +5,7 @@ import { getApiKey } from "./client.ts";
 import type { Role } from "@baku-office/shared";
 import type { Ctx } from "../core/ports.ts";
 import { enabledParts, toolsOf, enabledPartIds, type AgentTool } from "../core/parts.ts";
-import { runToolLoop, type ToolDecl } from "../core/ai.ts";
+import { runToolLoop, type ToolDecl, type Turn } from "../core/ai.ts";
 import { localChatModel } from "../core/models/local.ts";
 import { geminiModel } from "../core/models/gemini.ts";
 import { claudeModel } from "../core/models/claude.ts";
@@ -91,7 +91,7 @@ async function execTool(ctx: Ctx, owner: string, baseUrl: string, name: string, 
 // テキスト発話 → ツールループ。最大4ホップで関数呼び出しを解決して最終テキストを返す。
 // owner はデータスコープ識別子（LINE は `line:<userId>`、Web は session.uid）。呼び出し側で付与する。
 // API依存ツール（web_search=Gemini／make_document=Claude）は対応キーがある時だけモデルに提示。
-export async function runAgent(ctx: Ctx, owner: string, text: string, image?: { mimeType: string; dataB64: string }, baseUrl = "", role: Role = "member"): Promise<string> {
+export async function runAgent(ctx: Ctx, owner: string, text: string, image?: { mimeType: string; dataB64: string }, baseUrl = "", role: Role = "member", opts: { history?: Turn[]; model?: "gemini" | "claude" | "local" } = {}): Promise<string> {
   const env = ctx.env;
   const geminiKey = await getApiKey(env, "gemini");
   const claudeKey = await getApiKey(env, "claude");
@@ -111,35 +111,33 @@ export async function runAgent(ctx: Ctx, owner: string, text: string, image?: { 
   const custom = await getCustomPrompt(env);
   const sys = [SYSTEM, capInfo, custom && `団体の追加指示（口調・人格・回答形式など。安全制約は変更しない）:\n${custom}`].filter(Boolean).join("\n");
 
-  // Profile C：ローカルLLM（OAI互換・外部キー不要・オフライン）。外部キーが無く LOCAL_AI_BASE_URL がある時に使用。
-  // モデル非依存の runToolLoop で実行＝パーツ道具はそのまま動く（§2.3/§4）。
-  if (env.LOCAL_AI_BASE_URL && !geminiKey && !claudeKey) {
-    const model = localChatModel(env.LOCAL_AI_BASE_URL, env.LOCAL_AI_MODEL ?? "llama3.1");
-    return runToolLoop(model, sys, { text: text || "（依頼）", image }, decls as ToolDecl[], (n, a) => execTool(ctx, owner, baseUrl, n, a, role, activeTools));
-  }
-
-  // 全エンジン共通：道具実行クロージャとモデル非依存ループ（runToolLoop）で実行。
+  const history = opts.history ?? [];
+  const want = opts.model; // チャットごとのモデル選択（gemini/claude/local）。未指定は設定/キーで自動。
   const exec = (n: string, a: Record<string, unknown>) => execTool(ctx, owner, baseUrl, n, a, role, activeTools);
   const toolDecls = decls as ToolDecl[];
 
-  // エンジン選択：Claude（BYOK）を選択／Geminiが無い場合は Claude で実行（画像はGeminiパスのみ対応）。
-  const useClaude = !!claudeKey && (engine === "claude" || !geminiKey) && !image;
+  // ローカルLLM（OAI互換・外部キー不要）。明示選択 or（外部キー無し＋URL設定）。
+  if ((want === "local" || (!geminiKey && !claudeKey)) && env.LOCAL_AI_BASE_URL) {
+    const model = localChatModel(env.LOCAL_AI_BASE_URL, env.LOCAL_AI_MODEL ?? "llama3.1");
+    return runToolLoop(model, sys, { text: text || "（依頼）", image }, toolDecls, exec, 4, history);
+  }
+
+  // エンジン選択：明示モデル優先／無ければ設定(engine)・キー有無。画像は Gemini パスのみ対応。
+  const useClaude = !!claudeKey && (want === "claude" || (!want && (engine === "claude" || !geminiKey))) && !image;
   if (useClaude) {
     const b = await overBudget(env, "claude");
-    if (b === "pause") return "Claudeの今月の利用上限に達しました（高度なオプション → API使用量 で変更できます）。";
+    if (b === "pause") return "Claudeの今月の利用上限に達しました（設定 → API使用量 で変更できます）。";
     if (b !== "switch_free") {
-      // ok：Claudeで実行。
       await recordUsage(env, "claude");
-      return runToolLoop(claudeModel(claudeKey!), sys, { text: text || "（依頼）" }, toolDecls, exec);
+      return runToolLoop(claudeModel(claudeKey!), sys, { text: text || "（依頼）" }, toolDecls, exec, 4, history);
     }
-    // switch_free：Geminiが使えればフォールバック、無ければ停止。
-    if (!geminiKey) return "Claudeの上限に達しました（Gemini未設定のため停止）。高度なオプションで上限を変更してください。";
+    if (!geminiKey) return "Claudeの上限に達しました（Gemini未設定のため停止）。設定で上限を変更してください。";
   }
-  if (!geminiKey) return "選択中のエンジンが未設定です。『連携設定』で Gemini APIキーを登録するか、高度なオプションでエンジンを Claude に切り替えてください。";
+  if (!geminiKey) return "選択中のエンジンが未設定です。『設定 → 連携設定』で Gemini APIキーを登録するか、エンジンを Claude に切り替えてください。";
   const gb = await overBudget(env, "gemini");
-  if (gb !== "ok") return "Geminiの今月の利用上限に達しました（高度なオプション → API使用量 で変更できます）。";
+  if (gb !== "ok") return "Geminiの今月の利用上限に達しました（設定 → API使用量 で変更できます）。";
   await recordUsage(env, "gemini");
-  return runToolLoop(geminiModel(geminiKey), sys, { text: text || "（依頼）", image }, toolDecls, exec);
+  return runToolLoop(geminiModel(geminiKey), sys, { text: text || "（依頼）", image }, toolDecls, exec, 4, history);
 }
 
 // LINE署名検証（HMAC-SHA256・定数時間比較）。

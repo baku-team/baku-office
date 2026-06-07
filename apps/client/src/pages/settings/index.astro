@@ -1,0 +1,59 @@
+---
+export const prerender = false;
+import App from "../../layouts/App.astro";
+import { atLeast } from "@baku-office/shared";
+const env = Astro.locals.runtime.env;
+const { getSession } = await import("../../lib/auth.ts");
+const ses = await getSession(env, Astro.request);
+if (!ses) return Astro.redirect("/login", 302);
+const { cachedEntitlement } = await import("../../lib/client.ts");
+const entitlement = await cachedEntitlement(env).catch(() => "free" as const);
+const isAdminOrg = ses.role === "admin" && ses.ctx === "org";
+const hasPlus = atLeast(entitlement, "plus");
+const hasPro = atLeast(entitlement, "pro");
+
+type Link = { href: string; label: string; desc: string; show: boolean };
+type Group = { title: string; items: Link[] };
+const groups: Group[] = [
+  { title: "アカウント・メンバー", items: [
+    { href: "/settings/members", label: "人・ロール", desc: "招待・承認・権限（管理者）", show: isAdminOrg },
+    { href: "/billing", label: "プラン・課金", desc: "Free/Plus/Pro のアップグレード", show: isAdminOrg },
+    { href: "/membership", label: "会員管理", desc: "会員名簿・会費", show: ses.ctx === "org" },
+  ] },
+  { title: "連携・AI", items: [
+    { href: "/settings/keys", label: "連携設定（APIキー）", desc: "Gemini / LINE / Claude", show: true },
+    { href: "/usage", label: "API使用量", desc: "消費・上限・アラート", show: hasPlus },
+    { href: "/drive", label: "Googleドライブ連携", desc: "同期・バックアップ", show: hasPlus },
+    { href: "/import", label: "資料インポート", desc: "Notion / ドライブ取込", show: hasPlus },
+  ] },
+  { title: "カスタマイズ・高度な設定", items: [
+    { href: "/settings/advanced", label: "高度なオプション", desc: "見た目（テーマ）・ナビ・ストレージ・任意API・スキル", show: isAdminOrg && hasPlus },
+    { href: "/settings/site", label: "HP/LP 公開", desc: "サイト公開・会員申込フォーム", show: isAdminOrg && hasPro },
+  ] },
+  { title: "運用・サポート", items: [
+    { href: "/review", label: "共有承認", desc: "個人→組織の承認", show: ses.role === "admin" || ses.role === "accounting" || ses.role === "clerical" },
+    { href: "/diagnostics", label: "診断・サポート", desc: "稼働状況・エラー・Workers Paid 案内", show: true },
+    { href: "/settings/update", label: "アプリの更新", desc: "最新版への更新", show: isAdminOrg },
+  ] },
+];
+---
+<App title="設定" active="/settings">
+  <h1>設定</h1>
+  <p class="muted">このシステムの設定・オプションをまとめています。項目を選んでください。</p>
+  {groups.map((g) => {
+    const items = g.items.filter((i) => i.show);
+    return items.length === 0 ? null : (
+      <>
+        <h2>{g.title}</h2>
+        <div class="grid">
+          {items.map((i) => (
+            <a class="card" href={i.href} style="text-decoration:none;color:inherit;display:block">
+              <strong>{i.label}</strong>
+              <div class="muted" style="font-size:.85rem;margin-top:.2rem">{i.desc}</div>
+            </a>
+          ))}
+        </div>
+      </>
+    );
+  })}
+</App>

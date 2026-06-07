@@ -42,6 +42,7 @@ export const remindersPart: Part = {
   category: "庶務",
   description: "指定日時の通知。",
   permissions: ["db:read", "db:write"],
+  menu: [{ href: "/schedule", label: "予定" }],
   agentTools: [
     {
       name: "set_reminder",
