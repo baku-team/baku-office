@@ -1,7 +1,8 @@
 // 共有型（設計書 v1.0 準拠）。
 
-// エンタイトルメント状態（§2・§4）。free=無料 / plus=AI / pro=エージェント / test=全機能解放（管理画面で付与・非売）。
-export type Entitlement = "free" | "plus" | "pro" | "test";
+// エンタイトルメント状態（§2・§4）。free=無料 / plus=AI / pro=エージェント /
+// enterprise=大企業・組織向け（個別相談・全機能解放） / test=全機能解放（管理画面で付与・非売）。
+export type Entitlement = "free" | "plus" | "pro" | "enterprise" | "test";
 
 // プラン（申込時の選択。入金前は free 相当で稼働＝プロビジョナル§2.3）。test は購入プランではない。
 export type Plan = "free" | "plus" | "pro";
@@ -39,8 +40,8 @@ export function initialEntitlement(_plan: Plan): Entitlement {
   return "free"; // plus/pro も入金前は free 相当（プロビジョナル）
 }
 
-// エンタイトルメントの序列（free < plus < pro < test=全機能）。
-export const ENTITLEMENT_RANK: Record<Entitlement, number> = { free: 0, plus: 1, pro: 2, test: 99 };
+// エンタイトルメントの序列（free < plus < pro < enterprise < test=全機能）。enterprise/test は全ゲート通過。
+export const ENTITLEMENT_RANK: Record<Entitlement, number> = { free: 0, plus: 1, pro: 2, enterprise: 50, test: 99 };
 
 // min 以上のエンタイトルメントか（例：atLeast(e,"plus") で AI 系を判定）。
 export function atLeast(e: Entitlement, min: Entitlement): boolean {
@@ -49,5 +50,5 @@ export function atLeast(e: Entitlement, min: Entitlement): boolean {
 
 // ユーザー向けプラン表示名。
 export function planLabel(p: Plan | Entitlement): string {
-  return p === "test" ? "テスト（全機能解放）" : p === "pro" ? "Pro（エージェント）" : p === "plus" ? "Plus（AI）" : "Free（無料）";
+  return p === "test" ? "テスト（全機能解放）" : p === "enterprise" ? "エンタープライズ（個別相談・全機能）" : p === "pro" ? "Pro（エージェント）" : p === "plus" ? "Plus（AI）" : "Free（無料）";
 }

@@ -17,8 +17,8 @@ const { results } = await env.DB.prepare(
 ).all<Row>();
 const fmt = (s: number | null) => (s ? new Date(s * 1000).toISOString().slice(0, 16).replace("T", " ") : "—");
 const PLANS = ["free", "plus", "pro"];
-// エンタイトルメントは test（全機能解放・非売・管理者付与）を含む。
-const ENTS = ["free", "plus", "pro", "test"];
+// エンタイトルメントは enterprise（大企業・個別相談・全機能）/ test（全機能解放・非売・管理者付与）を含む。
+const ENTS = ["free", "plus", "pro", "enterprise", "test"];
 const opt = (cur: string, v: string) => ({ value: v, selected: cur === v });
 ---
 <Host title="クライアント管理" active="/clients">

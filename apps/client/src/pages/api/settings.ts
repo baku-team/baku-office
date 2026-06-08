@@ -6,6 +6,9 @@ import { setStorageLimits } from "../../lib/storage-usage.ts";
 import { partCatalog, enabledPartIds, setEnabledPartIds } from "../../core/parts.ts";
 import { setTheme } from "../../core/theme.ts";
 import { setNavOverrides } from "../../core/nav.ts";
+import { setHomeLayout } from "../../core/home.ts";
+import { setCustomDomain } from "../../core/custom-domain.ts";
+import { nowSec } from "../../lib/accounting.ts";
 import { appCatalog, installApp, uninstallApp, installedAppIds } from "../../core/apps.ts";
 import { fetchAndInstall, listExternalApps, uninstallExternal, listDrafts, submitDraft, deleteDraft } from "../../lib/external-apps.ts";
 
@@ -17,7 +20,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
   const env = locals.runtime.env;
   const ses = await getSession(env, request);
   if (!ses || ses.role !== "admin" || ses.ctx !== "org") return json({ error: "管理者のみ" }, 403);
-  const b = (await request.json().catch(() => ({}))) as { _action?: string; mb?: number; engine?: string; prompt?: string; limits?: Record<string, number>; parts?: string[]; theme?: unknown; nav?: { hidden?: string[]; labels?: Record<string, string>; order?: string[] }; appId?: string; draftId?: string };
+  const b = (await request.json().catch(() => ({}))) as { _action?: string; mb?: number; engine?: string; prompt?: string; limits?: Record<string, number>; parts?: string[]; theme?: unknown; nav?: { hidden?: string[]; labels?: Record<string, string>; order?: string[] }; appId?: string; draftId?: string; layout?: { order?: string[]; hidden?: string[] }; domain?: string };
   if (b._action === "max_upload") {
     const v = await setMaxUploadMb(env, Number(b.mb));
     return json({ ok: true, mb: v });
@@ -57,6 +60,16 @@ export const POST: APIRoute = async ({ request, locals }) => {
   if (b._action === "nav_overrides") {
     const v = await setNavOverrides(locals.ctx, b.nav ?? {});
     return json({ ok: true, nav: v });
+  }
+  // ホームのセクション構成（並べ替え/非表示）。
+  if (b._action === "home_layout") {
+    const v = await setHomeLayout(locals.ctx, b.layout ?? {});
+    return json({ ok: true, layout: v });
+  }
+  // カスタムドメイン（希望ドメインの保存。実紐付けは顧客がCFダッシュボードで実施）。
+  if (b._action === "custom_domain") {
+    const v = await setCustomDomain(locals.ctx, b.domain ?? "", nowSec());
+    return json({ ok: true, domain: v });
   }
   // アプリ（マーケット）：導入/削除/一覧。
   if (b._action === "install_app") {

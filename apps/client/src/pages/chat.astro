@@ -12,6 +12,10 @@ const hasPlus = atLeast(entitlement, "plus");
 // claude はキー登録時のみ実用。選択肢は出すが、未設定なら gemini にフォールバックする（サーバ側）。
 const { listSessions } = await import("../lib/chat-sessions.ts");
 const sessions = hasPlus ? await listSessions(Astro.locals.ctx, ses.uid).catch(() => []) : [];
+// Agent Skills（AIメニューへ統合）。管理は組織管理者のみ。
+const isOrgAdmin = ses.role === "admin" && ses.ctx === "org";
+const { listSkills } = await import("../lib/skills.ts");
+const skills = hasPlus && isOrgAdmin ? await listSkills(env).catch(() => []) : [];
 ---
 <App title="AI" active="/chat">
   <h1>AI</h1>
@@ -54,6 +58,27 @@ const sessions = hasPlus ? await listSessions(Astro.locals.ctx, ses.uid).catch((
           </div>
         </section>
       </div>
+
+      {isOrgAdmin && (
+        <details class="skills-box" style="margin-top:1rem">
+          <summary><strong>スキル管理</strong>（Agent Skills・コード実行/従量課金）</summary>
+          <p class="muted" style="font-size:.85rem">SKILL.md を登録して独自業務スキルを追加（Worker内でevalしません）。mode=instruction（通常費）／code（Anthropic code execution＝従量課金）。有効化すると「〇〇スキルで…」で実行（要 Claude）。</p>
+          <div class="card">
+            <p class="muted">🤖 <strong>AIに作らせる</strong>：やりたいことを書くと、AI がスキルを設計して<strong>無効状態で自動登録</strong>します。確認して下で有効化してください。</p>
+            <div class="row"><input id="skreq" placeholder="例：月次の会費集計表を作るスキル" /><button class="btn btn-primary" id="skgen" style="flex:0 0 auto">AIに作らせる</button></div>
+          </div>
+          <details style="margin-top:.5rem"><summary>スキルを手動で追加</summary>
+            <div class="field"><input id="sname" placeholder="スキル名（呼び出し名）" /></div>
+            <div class="row"><input id="sdesc" placeholder="説明（任意）" /><select id="smode" style="flex:0 0 200px"><option value="instruction">instruction（通常費）</option><option value="code">code（従量課金）</option></select></div>
+            <div class="field"><textarea id="smd" rows="5" placeholder="SKILL.md（手順・テンプレート）"></textarea></div>
+            <button class="btn btn-primary" id="skadd">登録（無効状態で保存）</button>
+          </details>
+          <div class="table-wrap" style="margin-top:.5rem"><table><thead><tr><th>名前</th><th>モード</th><th>状態</th><th>操作</th></tr></thead><tbody>
+            {skills.map((s) => (<tr data-sid={s.id}><td>{s.name}<div class="muted">{s.description ?? ""}</div></td><td><span class="pill">{s.mode}</span></td><td>{s.enabled ? "有効" : "無効"}</td><td>{s.enabled ? <button class="btn btn-sm btn-warn sdis">無効化</button> : <button class="btn btn-sm btn-ok sen">有効化</button>} <button class="btn btn-sm btn-danger sdel">削除</button></td></tr>))}
+            {skills.length === 0 && (<tr><td colspan="4" class="muted">スキルは未登録です。</td></tr>)}
+          </tbody></table></div>
+        </details>
+      )}
     </Fragment>
   )}
   <script slot="scripts" is:inline>
@@ -146,6 +171,24 @@ const sessions = hasPlus ? await listSessions(Astro.locals.ctx, ses.uid).catch((
             const rr = await window.bo.api("/api/chat-sessions", { _action: "delete", id }, { btn: e.currentTarget, successMsg: "削除しました" });
             if (rr.ok) { if (id === sessionId) { sessionId = ""; log.innerHTML = ""; } reloadSessions(); }
           });
+        });
+        // --- スキル管理（管理者のみ要素が存在） ---
+        const sk = (b, btn) => window.bo.api("/api/skills", b, { btn });
+        document.getElementById("skgen")?.addEventListener("click", async (e) => {
+          const request = document.getElementById("skreq").value.trim();
+          if (!request) { window.bo.toast("作りたいスキルの要望を入力してください", "err"); return; }
+          const r = await sk({ _action: "generate", request }, e.currentTarget);
+          if (r.ok) { window.bo.toast("スキル「" + (r.data.name || "") + "」を作成しました（無効状態）"); setTimeout(() => location.reload(), 900); }
+        });
+        document.getElementById("skadd")?.addEventListener("click", async (e) => {
+          const r = await sk({ _action: "create", name: document.getElementById("sname").value, description: document.getElementById("sdesc").value, mode: document.getElementById("smode").value, skill_md: document.getElementById("smd").value }, e.currentTarget);
+          if (r.ok) { window.bo.toast("登録しました（無効状態）"); setTimeout(() => location.reload(), 600); }
+        });
+        document.querySelectorAll("tr[data-sid]").forEach((tr) => {
+          const id = tr.dataset.sid;
+          tr.querySelector(".sen")?.addEventListener("click", async (e) => { const r = await sk({ _action: "enable", id, enabled: true }, e.target); if (r.ok) setTimeout(() => location.reload(), 500); });
+          tr.querySelector(".sdis")?.addEventListener("click", async (e) => { const r = await sk({ _action: "enable", id, enabled: false }, e.target); if (r.ok) setTimeout(() => location.reload(), 500); });
+          tr.querySelector(".sdel")?.addEventListener("click", async (e) => { if (confirm("削除しますか？")) { const r = await sk({ _action: "delete", id }, e.target); if (r.ok) setTimeout(() => location.reload(), 500); } });
         });
     })();
   </script>

@@ -27,13 +27,22 @@ const maxDay = Math.max(1, ...daily.map((d) => d.count));
 const rows = USAGE_PROVIDERS.map((p) => ({ p, label: PROVIDER_LABEL[p] ?? p, today: today[p] ?? 0, month: month[p] ?? 0, lim: limits[p] ?? {} }));
 const overs = rows.filter((r) => r.lim.monthlyCap && r.month >= (r.lim.monthlyCap ?? 0));
 const warns = rows.filter((r) => r.lim.freeQuota && r.today >= (r.lim.freeQuota ?? 0) * 0.8 && r.today < (r.lim.monthlyCap ?? Infinity));
+
+// 任意API（画像/音声/動画など）。登録・有効化は管理者（旧・高度なオプションから統合）。
+const { listCapabilities, CAPABILITY_LABEL } = await import("../lib/capabilities.ts");
+const caps = hasPlus ? await listCapabilities(env).catch(() => []) : [];
+// ストレージ容量（D1/KV/R2/Drive）。API使用量と同体裁で表示。上限編集は管理者。
+const { getStorageUsage, getStorageLimits, fmtBytes } = await import("../lib/storage-usage.ts");
+const storage = hasPlus ? await getStorageUsage(env).catch(() => []) : [];
+const slimits: Partial<Record<string, number>> = hasPlus && isAdmin ? await getStorageLimits(env).catch(() => ({})) : {};
+const spct = (u: number, l: number) => (u < 0 || l <= 0 ? 0 : Math.min(100, Math.round((u / l) * 100)));
 ---
-<App title="API使用量" active="/usage">
-  <h1>API使用量</h1>
+<App title="使用量・上限" active="/usage">
+  <h1>使用量・上限</h1>
   {!hasPlus && (
     <div class="card">
       <div class="banner banner-warn">この機能は <strong>Plus 以上</strong>のプランで利用できます。</div>
-      <p class="muted">AI機能・各APIの利用回数を数値とグラフで確認し、無料枠アラートや従量上限を設定できます。</p>
+      <p class="muted">AI機能・各APIの利用回数を数値とグラフで確認し、無料枠アラート・従量上限・任意APIの登録・ストレージ容量を管理できます。</p>
       <a class="btn btn-primary" href="/billing">プラン・課金へ</a>
     </div>
   )}
@@ -77,18 +86,70 @@ const warns = rows.filter((r) => r.lim.freeQuota && r.today >= (r.lim.freeQuota 
       {isAdmin && (<button class="btn btn-primary" id="saveLimits">上限を保存</button>)}
       {!isAdmin && (<p class="muted">上限の変更は管理者のみ可能です。</p>)}
 
+      <h2>任意API（画像生成・音声合成・動画生成など）</h2>
+      <p class="muted">外部AIサービスをBYOKで追加。APIキーは暗号化保存。<strong>有効化したものはAI/エージェントが参照・実行</strong>します。利用料は団体負担。管理者がレビューして有効化。利用回数は上の表に計上されます。</p>
+      {isAdmin && (
+        <details><summary>能力を追加</summary>
+          <div class="field"><select id="cap"><option value="image_gen">画像生成</option><option value="tts">音声合成</option><option value="video_gen">動画生成</option><option value="embed">埋め込み(検索)</option><option value="custom">カスタムAPI</option></select></div>
+          <div class="field"><input id="cprov" placeholder="プロバイダ（openai / stability / elevenlabs 等）" /></div>
+          <div class="row"><input id="cmodel" placeholder="モデル（任意）" /><input id="cendpoint" placeholder="エンドポイントURL（カスタム時）" /></div>
+          <div class="field"><input id="ckey" type="password" placeholder="APIキー" /></div>
+          <button class="btn btn-primary" id="capadd">登録（無効状態で保存）</button>
+        </details>
+      )}
+      <div class="table-wrap" style="margin-top:.5rem"><table><thead><tr><th>能力</th><th>プロバイダ</th><th>状態</th><th>操作</th></tr></thead><tbody>
+        {caps.map((c) => (<tr data-cid={c.id}><td>{CAPABILITY_LABEL[c.capability] ?? c.capability}</td><td>{c.provider ?? ""}{c.model ? `（${c.model}）` : ""}</td><td>{c.enabled ? "有効" : "無効"}</td><td>{isAdmin ? (<Fragment>{c.enabled ? <button class="btn btn-sm btn-warn cdis">無効化</button> : <button class="btn btn-sm btn-ok cen">有効化</button>} <button class="btn btn-sm btn-danger cdel">削除</button></Fragment>) : ""}</td></tr>))}
+        {caps.length === 0 && (<tr><td colspan="4" class="muted">任意APIは未登録です。</td></tr>)}
+      </tbody></table></div>
+
+      <h2>ストレージ容量</h2>
+      <p class="muted">D1／KV／R2／Googleドライブの使用量と上限。上限値はホームのゲージ表示にも使われます（Workers Paid／R2 有効化時は実枠に合わせて調整）。</p>
+      <div class="table-wrap"><table>
+        <thead><tr><th>区分</th><th>使用量</th><th>上限(GB)</th></tr></thead>
+        <tbody>
+          {storage.map((s) => (
+            <tr data-skey={s.key}>
+              <td>{s.label}{!s.enabled && (s.key === "r2" ? "（未使用）" : s.key === "drive" ? "（未連携）" : "")}</td>
+              <td class={spct(s.used, s.limit) >= 80 ? "u-warn" : ""}>{s.used < 0 ? "計測不可" : `${fmtBytes(s.used)} / ${fmtBytes(s.limit)}（${spct(s.used, s.limit)}%）`}</td>
+              <td><input class="lim-gb" type="number" min="0" step="0.1" value={(slimits as Record<string, number>)[s.key] ?? ""} placeholder="既定" disabled={!isAdmin} style="width:100px" /></td>
+            </tr>
+          ))}
+        </tbody>
+      </table></div>
+      {isAdmin && (<button class="btn btn-primary" id="saveStorage">容量上限を保存</button>)}
+
       <script slot="scripts" is:inline>
-        const btn = document.getElementById("saveLimits");
-        if (btn) btn.addEventListener("click", async (e) => {
-          const limits = {};
-          document.querySelectorAll("tr[data-prov]").forEach((tr) => {
-            const fq = tr.querySelector(".lim-fq").value;
-            const mc = tr.querySelector(".lim-mc").value;
-            limits[tr.dataset.prov] = { freeQuota: fq ? Number(fq) : 0, monthlyCap: mc ? Number(mc) : 0, onExceed: tr.querySelector(".lim-oe").value };
+        (function () {
+          document.getElementById("saveLimits")?.addEventListener("click", async (e) => {
+            const limits = {};
+            document.querySelectorAll("tr[data-prov]").forEach((tr) => {
+              const fq = tr.querySelector(".lim-fq").value;
+              const mc = tr.querySelector(".lim-mc").value;
+              limits[tr.dataset.prov] = { freeQuota: fq ? Number(fq) : 0, monthlyCap: mc ? Number(mc) : 0, onExceed: tr.querySelector(".lim-oe").value };
+            });
+            const r = await window.bo.api("/api/usage", { limits }, { btn: e.currentTarget, successMsg: "上限を保存しました" });
+            if (r.ok) setTimeout(() => location.reload(), 600);
           });
-          const r = await window.bo.api("/api/usage", { limits }, { btn: e.currentTarget, successMsg: "上限を保存しました" });
-          if (r.ok) setTimeout(() => location.reload(), 600);
-        });
+          // 任意API（capabilities）。
+          const cap = (b, btn) => window.bo.api("/api/capabilities", b, { btn });
+          document.getElementById("capadd")?.addEventListener("click", async (e) => {
+            const r = await cap({ _action: "create", capability: document.getElementById("cap").value, provider: document.getElementById("cprov").value, model: document.getElementById("cmodel").value, endpoint: document.getElementById("cendpoint").value, api_key: document.getElementById("ckey").value }, e.currentTarget);
+            if (r.ok) { window.bo.toast("登録しました（無効状態）"); setTimeout(() => location.reload(), 600); }
+          });
+          document.querySelectorAll("tr[data-cid]").forEach((tr) => {
+            const id = tr.dataset.cid;
+            tr.querySelector(".cen")?.addEventListener("click", async (e) => { const r = await cap({ _action: "enable", id, enabled: true }, e.target); if (r.ok) setTimeout(() => location.reload(), 500); });
+            tr.querySelector(".cdis")?.addEventListener("click", async (e) => { const r = await cap({ _action: "enable", id, enabled: false }, e.target); if (r.ok) setTimeout(() => location.reload(), 500); });
+            tr.querySelector(".cdel")?.addEventListener("click", async (e) => { if (confirm("削除しますか？")) { const r = await cap({ _action: "delete", id }, e.target); if (r.ok) setTimeout(() => location.reload(), 500); } });
+          });
+          // ストレージ容量上限。
+          document.getElementById("saveStorage")?.addEventListener("click", async (e) => {
+            const limits = {};
+            document.querySelectorAll("tr[data-skey]").forEach((tr) => { const v = tr.querySelector(".lim-gb").value; limits[tr.dataset.skey] = v ? Number(v) : 0; });
+            const r = await window.bo.api("/api/settings", { _action: "storage_limits", limits }, { btn: e.currentTarget, successMsg: "容量上限を保存しました" });
+            if (r.ok) setTimeout(() => location.reload(), 600);
+          });
+        })();
       </script>
     </Fragment>
   )}

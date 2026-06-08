@@ -13,40 +13,24 @@ const { hasApiKey } = await import("../../lib/client.ts");
 const engine = hasPlus ? await getAiEngine(env) : "gemini";
 const custom = hasPlus ? await getCustomPrompt(env) : "";
 const claudeSet = hasPlus ? await hasApiKey(env, "claude") : false;
-const { getStorageLimits } = await import("../../lib/storage-usage.ts");
-const slimits: Partial<Record<string, number>> = hasPlus ? await getStorageLimits(env) : {};
-const { listSkills } = await import("../../lib/skills.ts");
-const { listCapabilities, CAPABILITY_LABEL } = await import("../../lib/capabilities.ts");
 const { storageMode, maxUploadMb } = await import("../../lib/storage.ts");
-// Plus 未満では高度なオプションを読み込まない（表示もしない）。
-const skills = hasPlus ? await listSkills(env) : [];
-const caps = hasPlus ? await listCapabilities(env) : [];
 const mode = storageMode(env);
 const curMax = hasPlus ? await maxUploadMb(env) : 5;
-// アプリの導入/外部取込/開発は「アプリ」ページ(/apps)へ集約。ここでは見た目・ナビ等の設定のみ。
-// 見た目（テーマ）＋ナビ表示（団体ごと上書き）。
-const { getTheme } = await import("../../core/theme.ts");
-const { getNavOverrides } = await import("../../core/nav.ts");
-const theme = hasPlus ? await getTheme(Astro.locals.ctx) : {};
-const navOv = hasPlus ? await getNavOverrides(Astro.locals.ctx) : null;
-const navHidden = new Set(navOv?.hidden ?? []);
-const NAV_TOGGLE = [
-  { href: "/accounting", label: "会計" }, { href: "/files", label: "ファイル" }, { href: "/schedule", label: "予定" },
-  { href: "/minutes", label: "議事録" }, { href: "/chat", label: "AIチャット" }, { href: "/drive", label: "ドライブ" }, { href: "/import", label: "資料インポート" },
-];
+// 見た目（テーマ）はアプリ「ブランド設定」、任意API・容量上限は「使用量・上限」(/usage)、
+// ナビ表示は「アプリ」(/apps) へ移管。ここは AIエンジン・カスタム指示・KVアップロードサイズ上限・Workers Paid 案内のみ。
 ---
-<App title="高度なオプション" active="/settings/advanced">
+<App title="高度なオプション" active="/settings">
   <h1>高度なオプション</h1>
   {!hasPlus && (
     <div class="card">
       <div class="banner banner-warn">この機能は <strong>Plus 以上</strong>のプランで利用できます。</div>
-      <p class="muted">任意API（画像・音声・動画生成）／Agent Skills／ストレージ上限／Workers Paid 案内などの高度な設定は、Plus 以上で開放されます。</p>
+      <p class="muted">AIエンジン選択／カスタム指示／KVアップロードサイズ上限／Workers Paid 案内などの高度な設定は、Plus 以上で開放されます。</p>
       <a class="btn btn-primary" href="/billing">プラン・課金へ</a>
     </div>
   )}
   {hasPlus && (
   <div class="adv">
-  <div class="banner banner-warn">⚠️ ここでは<strong>従量課金につながる機能</strong>を扱います。利用には対応APIキーの登録と各サービスの課金が必要です。</div>
+  <p class="muted">見た目（テーマ）は「アプリ → ブランド設定」、任意API・ストレージ容量は「使用量・上限」、メニューの出し入れは「アプリ」から行えます。</p>
 
   <h2>AIエンジン</h2>
   <div class="card">
@@ -64,72 +48,11 @@ const NAV_TOGGLE = [
     <button class="btn btn-primary" id="savePrompt">カスタム指示を保存</button>
   </div>
 
-  <h2>見た目（テーマ・団体ごと）</h2>
-  <div class="card">
-    <p class="muted">ブランド名・ロゴ・配色を団体ごとに上書きします（共通の画面構造はそのまま）。空欄は既定値。色は #hex 等で指定。</p>
-    <div class="field"><label>ブランド名<input id="th-brand" value={theme.brand ?? ""} placeholder="baku-office" /></label></div>
-    <div class="field"><label>ロゴURL<input id="th-logo" value={theme.logoUrl ?? ""} placeholder="https://…/logo.png" /></label></div>
-    <div class="row">
-      <label style="flex:1">ブランド色<input id="th-brand-color" value={theme.colors?.brand ?? ""} placeholder="#2563eb" /></label>
-      <label style="flex:1">背景色<input id="th-bg" value={theme.colors?.bg ?? ""} placeholder="#f5f7fb" /></label>
-      <label style="flex:1">文字色<input id="th-ink" value={theme.colors?.ink ?? ""} placeholder="#1b2430" /></label>
-    </div>
-    <button class="btn btn-primary" id="saveTheme">テーマを保存</button>
-  </div>
-
-  <h2>ナビの表示（団体ごと）</h2>
-  <div class="card">
-    <p class="muted">メニューに出す機能を選びます（外すと非表示）。権限・プランによる制御は別途適用されます。</p>
-    {NAV_TOGGLE.map((n) => (
-      <div class="field"><label><input type="checkbox" class="nav-chk" value={n.href} checked={!navHidden.has(n.href)} /> {n.label}</label></div>
-    ))}
-    <button class="btn btn-primary" id="saveNav">ナビ表示を保存</button>
-  </div>
-
-  <h2>ストレージ上限（標準モード・KV）</h2>
+  <h2>KVアップロードサイズ上限（標準モード）</h2>
   <div class="card">
     <p class="muted">現在：<strong>{mode === "r2" ? "高度モード（R2・上限なし）" : `標準モード（KV）・1ファイル上限 ${curMax}MB`}</strong>。KVの値上限は <strong>25MiB</strong> までで、既定は安全側の5MB。下で1〜25MBに変更できます（R2有効時はこの上限は無視）。</p>
     <div class="row"><input id="maxmb" type="number" min="1" max="25" value={curMax} style="flex:0 0 120px" /><button class="btn btn-primary" id="saveMax" style="flex:0 0 auto">上限を保存</button></div>
   </div>
-
-  <h2>容量上限（ホームのゲージ表示用）</h2>
-  <div class="card">
-    <p class="muted">ホームのストレージゲージに使う上限値（GB）。Workers Paid／R2 を有効化したら実際の枠に合わせて調整してください。空欄は既定（D1=5／KV=1／R2=10／Drive=15）。</p>
-    <div class="row"><label style="flex:1">D1（GB）<input id="lim-d1" type="number" min="0" step="0.1" value={slimits.d1 ?? ""} /></label><label style="flex:1">KV（GB）<input id="lim-kv" type="number" min="0" step="0.1" value={slimits.kv ?? ""} /></label></div>
-    <div class="row"><label style="flex:1">R2（GB）<input id="lim-r2" type="number" min="0" step="0.1" value={slimits.r2 ?? ""} /></label><label style="flex:1">Drive（GB）<input id="lim-drive" type="number" min="0" step="0.1" value={slimits.drive ?? ""} /></label></div>
-    <button class="btn btn-primary" id="saveStorageLim" style="margin-top:.5rem">容量上限を保存</button>
-  </div>
-
-  <h2>任意API（画像生成・音声合成・動画生成など）</h2>
-  <p class="muted">外部AIサービスをBYOKで追加。APIキーは暗号化保存。<strong>有効化したものはAI/エージェントが参照・実行</strong>します（LINEから「画像を作って」等）。利用料は団体負担。管理者がレビューして有効化。</p>
-  <details><summary>能力を追加</summary>
-    <div class="field"><select id="cap"><option value="image_gen">画像生成</option><option value="tts">音声合成</option><option value="video_gen">動画生成</option><option value="embed">埋め込み(検索)</option><option value="custom">カスタムAPI</option></select></div>
-    <div class="field"><input id="cprov" placeholder="プロバイダ（openai / stability / elevenlabs 等）" /></div>
-    <div class="row"><input id="cmodel" placeholder="モデル（任意）" /><input id="cendpoint" placeholder="エンドポイントURL（カスタム時）" /></div>
-    <div class="field"><input id="ckey" type="password" placeholder="APIキー" /></div>
-    <button class="btn btn-primary" id="capadd">登録（無効状態で保存）</button>
-  </details>
-  <div class="table-wrap" style="margin-top:.5rem"><table><thead><tr><th>能力</th><th>プロバイダ</th><th>状態</th><th>操作</th></tr></thead><tbody>
-    {caps.map((c)=>(<tr data-cid={c.id}><td>{CAPABILITY_LABEL[c.capability]??c.capability}</td><td>{c.provider??""}{c.model?`（${c.model}）`:""}</td><td>{c.enabled?"有効":"無効"}</td><td>{c.enabled?<button class="btn btn-sm btn-warn cdis">無効化</button>:<button class="btn btn-sm btn-ok cen">有効化</button>} <button class="btn btn-sm btn-danger cdel">削除</button></td></tr>))}
-    {caps.length===0 && (<tr><td colspan="4" class="muted">任意APIは未登録です。</td></tr>)}
-  </tbody></table></div>
-
-  <h2>Agent Skills（コード実行・従量課金）</h2>
-  <p class="muted">SKILL.md を登録して独自業務スキルを追加（Worker内でevalしません）。mode=instruction（通常費）／code（Anthropic code execution＝従量課金）。管理者がレビューして有効化。LINEから「〇〇スキルで…」で実行（要 Pro＋Claude）。</p>
-  <div class="card">
-    <p class="muted">🤖 <strong>AIに作らせる</strong>：やりたいことを書くと、AI がスキル（SKILL.md）を設計して<strong>無効状態で自動登録</strong>します。内容を確認し、下の一覧で有効化してください。</p>
-    <div class="row"><input id="skreq" placeholder="例：月次の会費集計表を作るスキル" /><button class="btn btn-primary" id="skgen" style="flex:0 0 auto">AIに作らせる</button></div>
-  </div>
-  <details><summary>スキルを手動で追加</summary>
-    <div class="field"><input id="sname" placeholder="スキル名（呼び出し名）" /></div>
-    <div class="row"><input id="sdesc" placeholder="説明（任意）" /><select id="smode" style="flex:0 0 200px"><option value="instruction">instruction（通常費）</option><option value="code">code（従量課金）</option></select></div>
-    <div class="field"><textarea id="smd" rows="5" placeholder="SKILL.md（手順・テンプレート）"></textarea></div>
-    <button class="btn btn-primary" id="skadd">登録（無効状態で保存）</button>
-  </details>
-  <div class="table-wrap" style="margin-top:.5rem"><table><thead><tr><th>名前</th><th>モード</th><th>状態</th><th>操作</th></tr></thead><tbody>
-    {skills.map((s)=>(<tr data-sid={s.id}><td>{s.name}<div class="muted">{s.description??""}</div></td><td><span class="pill">{s.mode}</span></td><td>{s.enabled?"有効":"無効"}</td><td>{s.enabled?<button class="btn btn-sm btn-warn sdis">無効化</button>:<button class="btn btn-sm btn-ok sen">有効化</button>} <button class="btn btn-sm btn-danger sdel">削除</button></td></tr>))}
-    {skills.length===0 && (<tr><td colspan="4" class="muted">スキルは未登録です。</td></tr>)}
-  </tbody></table></div>
 
   <h2>Workers Paid（CF有料プラン）への切替案内</h2>
   <div class="banner banner-info">無料枠では CPU時間・実行時間(waitUntil)・サブリクエスト数 等に上限があり、大きなファイル処理や生成でエラーになることがあります（<a href="/diagnostics">診断</a>）。安定運用には Cloudflareダッシュボードで <strong>Workers &amp; Pages → Plans → Workers Paid（月$5〜）</strong> に切り替えてください。データ・デプロイはそのまま、上限が大幅緩和されます。</div>
@@ -138,43 +61,20 @@ const NAV_TOGGLE = [
 
   {hasPlus && (
   <script slot="scripts" is:inline>
-    const cap=(b,btn)=>window.bo.api("/api/capabilities",b,{btn});
-    const sk=(b,btn)=>window.bo.api("/api/skills",b,{btn});
-    document.getElementById("saveEngine").addEventListener("click",async(e)=>{
-      const engine=document.querySelector('input[name="engine"]:checked').value;
-      const ck=document.getElementById("claudeKey").value.trim();
-      if(ck){const kr=await window.bo.api("/api/keys",{claude:ck},{btn:e.currentTarget,successMsg:null});if(!kr.ok)return;if(kr.data.result&&kr.data.result.claude&&!kr.data.result.claude.ok){window.bo.toast("Claudeキー検証失敗："+(kr.data.result.claude.detail||""),"err");return;}}
-      const r=await window.bo.api("/api/settings",{_action:"ai_engine",engine},{btn:e.currentTarget,successMsg:"エンジン設定を保存しました"});
-      if(r.ok)setTimeout(()=>location.reload(),600);
-    });
-    document.getElementById("savePrompt").addEventListener("click",async(e)=>{
-      const prompt=document.getElementById("customPrompt").value;
-      await window.bo.api("/api/settings",{_action:"custom_prompt",prompt},{btn:e.currentTarget,successMsg:"カスタム指示を保存しました"});
-    });
-    document.getElementById("saveStorageLim").addEventListener("click",async(e)=>{
-      const g=(id)=>{const v=document.getElementById(id).value;return v?Number(v):0;};
-      const limits={d1:g("lim-d1"),kv:g("lim-kv"),r2:g("lim-r2"),drive:g("lim-drive")};
-      await window.bo.api("/api/settings",{_action:"storage_limits",limits},{btn:e.currentTarget,successMsg:"容量上限を保存しました"});
-    });
-    document.getElementById("skgen").addEventListener("click",async(e)=>{
-      const request=document.getElementById("skreq").value.trim();
-      if(!request){window.bo.toast("作りたいスキルの要望を入力してください","err");return;}
-      const r=await window.bo.api("/api/skills",{_action:"generate",request},{btn:e.currentTarget,successMsg:null});
-      if(r.ok){window.bo.toast("スキル「"+(r.data.name||"")+"」を作成しました（無効状態）");setTimeout(()=>location.reload(),900);}
-    });
-    document.getElementById("saveMax").addEventListener("click",async(e)=>{const v=document.getElementById("maxmb").value;const r=await window.bo.api("/api/settings",{_action:"max_upload",mb:Number(v)},{btn:e.currentTarget,successMsg:"上限を保存しました"});if(r.ok)setTimeout(()=>location.reload(),600);});
-    document.getElementById("saveTheme")?.addEventListener("click",async(e)=>{const theme={brand:document.getElementById("th-brand").value,logoUrl:document.getElementById("th-logo").value,colors:{brand:document.getElementById("th-brand-color").value,bg:document.getElementById("th-bg").value,ink:document.getElementById("th-ink").value}};const r=await window.bo.api("/api/settings",{_action:"ui_theme",theme},{btn:e.currentTarget,successMsg:"テーマを保存しました"});if(r.ok)setTimeout(()=>location.reload(),700);});
-    document.getElementById("saveNav")?.addEventListener("click",async(e)=>{const hidden=[...document.querySelectorAll(".nav-chk")].filter(c=>!c.checked).map(c=>c.value);const r=await window.bo.api("/api/settings",{_action:"nav_overrides",nav:{hidden}},{btn:e.currentTarget,successMsg:"ナビ表示を保存しました"});if(r.ok)setTimeout(()=>location.reload(),700);});
-    document.getElementById("capadd").addEventListener("click",async(e)=>{const r=await cap({_action:"create",capability:document.getElementById("cap").value,provider:document.getElementById("cprov").value,model:document.getElementById("cmodel").value,endpoint:document.getElementById("cendpoint").value,api_key:document.getElementById("ckey").value},e.currentTarget);if(r.ok){window.bo.toast("登録しました（無効状態）");setTimeout(()=>location.reload(),600);}});
-    document.querySelectorAll("tr[data-cid]").forEach(tr=>{const id=tr.dataset.cid;
-      tr.querySelector(".cen")?.addEventListener("click",async(e)=>{const r=await cap({_action:"enable",id,enabled:true},e.target);if(r.ok)setTimeout(()=>location.reload(),500);});
-      tr.querySelector(".cdis")?.addEventListener("click",async(e)=>{const r=await cap({_action:"enable",id,enabled:false},e.target);if(r.ok)setTimeout(()=>location.reload(),500);});
-      tr.querySelector(".cdel")?.addEventListener("click",async(e)=>{if(confirm("削除しますか？")){const r=await cap({_action:"delete",id},e.target);if(r.ok)setTimeout(()=>location.reload(),500);}});});
-    document.getElementById("skadd").addEventListener("click",async(e)=>{const r=await sk({_action:"create",name:document.getElementById("sname").value,description:document.getElementById("sdesc").value,mode:document.getElementById("smode").value,skill_md:document.getElementById("smd").value},e.currentTarget);if(r.ok){window.bo.toast("登録しました（無効状態）");setTimeout(()=>location.reload(),600);}});
-    document.querySelectorAll("tr[data-sid]").forEach(tr=>{const id=tr.dataset.sid;
-      tr.querySelector(".sen")?.addEventListener("click",async(e)=>{const r=await sk({_action:"enable",id,enabled:true},e.target);if(r.ok)setTimeout(()=>location.reload(),500);});
-      tr.querySelector(".sdis")?.addEventListener("click",async(e)=>{const r=await sk({_action:"enable",id,enabled:false},e.target);if(r.ok)setTimeout(()=>location.reload(),500);});
-      tr.querySelector(".sdel")?.addEventListener("click",async(e)=>{if(confirm("削除しますか？")){const r=await sk({_action:"delete",id},e.target);if(r.ok)setTimeout(()=>location.reload(),500);}});});
+    (function () {
+      document.getElementById("saveEngine")?.addEventListener("click", async (e) => {
+        const engine = document.querySelector('input[name="engine"]:checked').value;
+        const ck = document.getElementById("claudeKey").value.trim();
+        if (ck) { const kr = await window.bo.api("/api/keys", { claude: ck }, { btn: e.currentTarget, successMsg: null }); if (!kr.ok) return; if (kr.data.result && kr.data.result.claude && !kr.data.result.claude.ok) { window.bo.toast("Claudeキー検証失敗：" + (kr.data.result.claude.detail || ""), "err"); return; } }
+        const r = await window.bo.api("/api/settings", { _action: "ai_engine", engine }, { btn: e.currentTarget, successMsg: "エンジン設定を保存しました" });
+        if (r.ok) setTimeout(() => location.reload(), 600);
+      });
+      document.getElementById("savePrompt")?.addEventListener("click", async (e) => {
+        const prompt = document.getElementById("customPrompt").value;
+        await window.bo.api("/api/settings", { _action: "custom_prompt", prompt }, { btn: e.currentTarget, successMsg: "カスタム指示を保存しました" });
+      });
+      document.getElementById("saveMax")?.addEventListener("click", async (e) => { const v = document.getElementById("maxmb").value; const r = await window.bo.api("/api/settings", { _action: "max_upload", mb: Number(v) }, { btn: e.currentTarget, successMsg: "上限を保存しました" }); if (r.ok) setTimeout(() => location.reload(), 600); });
+    })();
   </script>
   )}
 </App>

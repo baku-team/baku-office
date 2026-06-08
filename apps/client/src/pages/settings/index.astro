@@ -10,7 +10,6 @@ const { cachedEntitlement } = await import("../../lib/client.ts");
 const entitlement = await cachedEntitlement(env).catch(() => "free" as const);
 const isAdminOrg = ses.role === "admin" && ses.ctx === "org";
 const hasPlus = atLeast(entitlement, "plus");
-const hasPro = atLeast(entitlement, "pro");
 
 type Link = { href: string; label: string; desc: string; show: boolean };
 type Group = { title: string; items: Link[] };
@@ -18,17 +17,15 @@ const groups: Group[] = [
   { title: "アカウント・メンバー", items: [
     { href: "/settings/members", label: "人・ロール", desc: "招待・承認・権限（管理者）", show: isAdminOrg },
     { href: "/billing", label: "プラン・課金", desc: "Free/Plus/Pro のアップグレード", show: isAdminOrg },
-    { href: "/membership", label: "会員管理", desc: "会員名簿・会費", show: ses.ctx === "org" },
   ] },
   { title: "連携・AI", items: [
     { href: "/settings/keys", label: "連携設定（APIキー）", desc: "Gemini / LINE / Claude", show: true },
-    { href: "/usage", label: "API使用量", desc: "消費・上限・アラート", show: hasPlus },
+    { href: "/usage", label: "使用量・上限", desc: "API消費・上限・任意API・ストレージ容量", show: hasPlus },
     { href: "/drive", label: "Googleドライブ連携", desc: "同期・バックアップ", show: hasPlus },
-    { href: "/import", label: "資料インポート", desc: "Notion / ドライブ取込", show: hasPlus },
   ] },
   { title: "カスタマイズ・高度な設定", items: [
-    { href: "/settings/advanced", label: "高度なオプション", desc: "見た目（テーマ）・ナビ・ストレージ・任意API・スキル", show: isAdminOrg && hasPlus },
-    { href: "/settings/site", label: "HP/LP 公開", desc: "サイト公開・会員申込フォーム", show: isAdminOrg && hasPro },
+    { href: "/settings/advanced", label: "高度なオプション", desc: "AIエンジン・カスタム指示・KV上限・Workers Paid", show: isAdminOrg && hasPlus },
+    { href: "/settings/domain", label: "カスタムドメイン", desc: "独自ドメインで公開（Plus以上）", show: isAdminOrg && hasPlus },
   ] },
   { title: "運用・サポート", items: [
     { href: "/review", label: "共有承認", desc: "個人→組織の承認", show: ses.role === "admin" || ses.role === "accounting" || ses.role === "clerical" },

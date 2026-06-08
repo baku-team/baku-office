@@ -1,0 +1,50 @@
+---
+export const prerender = false;
+import App from "../../layouts/App.astro";
+import { atLeast } from "@baku-office/shared";
+const env = Astro.locals.runtime.env;
+const { getSession } = await import("../../lib/auth.ts");
+const ses = await getSession(env, Astro.request);
+if (!ses || ses.role !== "admin" || ses.ctx !== "org") return Astro.redirect("/login", 302);
+const entitlement = await (await import("../../lib/client.ts")).cachedEntitlement(env);
+const hasPlus = atLeast(entitlement, "plus");
+const { getTheme } = await import("../../core/theme.ts");
+const theme = hasPlus ? await getTheme(Astro.locals.ctx) : {};
+---
+<App title="ブランド設定" active="/apps">
+  <h1>ブランド設定（見た目）</h1>
+  {!hasPlus && (
+    <div class="card">
+      <div class="banner banner-warn">この機能は <strong>Plus 以上</strong>のプランで利用できます。</div>
+      <p class="muted">ブランド名・ロゴ・配色を団体ごとに上書きできます。</p>
+      <a class="btn btn-primary" href="/billing">プラン・課金へ</a>
+    </div>
+  )}
+  {hasPlus && (
+    <Fragment>
+      <p class="muted">ブランド名・ロゴ・配色を団体ごとに上書きします（共通の画面構造はそのまま）。空欄は既定値。色は #hex 等で指定。</p>
+      <div class="card">
+        <div class="field"><label>ブランド名<input id="th-brand" value={theme.brand ?? ""} placeholder="baku-office" /></label></div>
+        <div class="field"><label>ロゴURL<input id="th-logo" value={theme.logoUrl ?? ""} placeholder="https://…/logo.png" /></label></div>
+        <div class="row">
+          <label style="flex:1">ブランド色<input id="th-brand-color" value={theme.colors?.brand ?? ""} placeholder="#2563eb" /></label>
+          <label style="flex:1">背景色<input id="th-bg" value={theme.colors?.bg ?? ""} placeholder="#f5f7fb" /></label>
+          <label style="flex:1">文字色<input id="th-ink" value={theme.colors?.ink ?? ""} placeholder="#1b2430" /></label>
+        </div>
+        <button class="btn btn-primary" id="saveTheme">テーマを保存</button>
+      </div>
+
+      <script slot="scripts" is:inline>
+        (function () {
+          const btn = document.getElementById("saveTheme");
+          if (!btn) return;
+          btn.addEventListener("click", async (e) => {
+            const theme = { brand: document.getElementById("th-brand").value, logoUrl: document.getElementById("th-logo").value, colors: { brand: document.getElementById("th-brand-color").value, bg: document.getElementById("th-bg").value, ink: document.getElementById("th-ink").value } };
+            const r = await window.bo.api("/api/settings", { _action: "ui_theme", theme }, { btn: e.currentTarget, successMsg: "テーマを保存しました" });
+            if (r.ok) setTimeout(() => location.reload(), 700);
+          });
+        })();
+      </script>
+    </Fragment>
+  )}
+</App>

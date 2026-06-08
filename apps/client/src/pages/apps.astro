@@ -7,6 +7,9 @@ const ses = await getSession(env, Astro.request);
 if (!ses) return Astro.redirect("/login", 302);
 const ctx = Astro.locals.ctx;
 const isAdminOrg = ses.role === "admin" && ses.ctx === "org";
+const { atLeast, planLabel } = await import("@baku-office/shared");
+const entitlement = await (await import("../lib/client.ts")).cachedEntitlement(env).catch(() => "free" as const);
+const okPlan = (minPlan?: string) => !minPlan || atLeast(entitlement, minPlan as import("@baku-office/shared").Entitlement);
 
 await import("../parts/index.ts");
 const { appCatalog, installedAppIds, MANDATORY_APPS } = await import("../core/apps.ts");
@@ -15,8 +18,8 @@ const cat = appCatalog();
 const installed = new Set(await installedAppIds(ctx));
 const isOn = (id: string) => installed.has(id);
 const isMust = (id: string) => MANDATORY_APPS.includes(id);
-// ランチャー：導入済みでナビ(menu)を持つアプリの起動リンク。
-const launch = registeredParts().filter((p) => installed.has(p.id) && (p.menu?.length ?? 0) > 0)
+// ランチャー：導入済み・ナビ(menu)あり・プラン充足のアプリの起動リンク。
+const launch = registeredParts().filter((p) => installed.has(p.id) && (p.menu?.length ?? 0) > 0 && okPlan(p.minPlan))
   .flatMap((p) => (p.menu ?? []).map((m) => ({ app: p.name, href: m.href, label: m.label })));
 
 const { listExternalApps, listDrafts } = await import("../lib/external-apps.ts");
@@ -43,8 +46,8 @@ const drafts = isAdminOrg ? await listDrafts(ctx) : [];
         <p class="muted">使うアプリを選びます。外すと画面・道具とも消えます。<strong>AIチャットは Plus 以上で必須</strong>。</p>
         {cat.map((p) => (
           <div class="field"><label>
-            <input type="checkbox" class="app-chk" value={p.id} checked={isOn(p.id)} disabled={isMust(p.id)} />
-            <strong>{p.name}</strong> <span class="muted">v{p.version}{p.category ? `・${p.category}` : ""}{isMust(p.id) ? "・必須" : ""}</span>
+            <input type="checkbox" class="app-chk" value={p.id} checked={isOn(p.id)} disabled={isMust(p.id) || !okPlan(p.minPlan)} />
+            <strong>{p.name}</strong> <span class="muted">v{p.version}{p.category ? `・${p.category}` : ""}{isMust(p.id) ? "・必須" : ""}{p.minPlan && !okPlan(p.minPlan) ? `・要${planLabel(p.minPlan)}` : ""}</span>
             {p.description && <><br /><span class="muted" style="font-size:.85rem">{p.description}</span></>}
             {p.permissions.length > 0 && <><br /><span class="muted" style="font-size:.8rem">権限: {p.permissions.join(" / ")}</span></>}
           </label></div>
