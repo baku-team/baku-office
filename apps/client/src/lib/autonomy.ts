@@ -1,4 +1,4 @@
-// AIサーバー自治（Pro・opt-in・管理者）：団体自身の Cloudflare/GitHub を、破壊的（コア損害）以外の範囲でAIに任せる。
+// オートパイロット（Pro・opt-in・管理者）：団体自身の Cloudflare/GitHub を、破壊的（コア損害）以外の範囲でAIに任せる。
 // 方針：read/create 中心。削除・force-push・課金/権限変更・シークレット開示・他テナントは「ツール自体を提供しない」。
 import { getApiKey, saveApiKey } from "./client.ts";
 import { getDeployHook } from "./update.ts";
@@ -10,7 +10,7 @@ const KV_GH_REPO = "gh_repo";        // owner/repo（非秘匿）
 
 // できること/できないことのポリシー（自治有効時に agent SYSTEM へ注入＝AIが可否を理解する）。
 export const AUTONOMY_POLICY =
-  "【サーバー自治モード（この団体自身のCloudflare/GitHubを運用代行）】\n" +
+  "【オートパイロット（この団体自身のCloudflare/GitHubを運用代行）】\n" +
   "できること：CFのKV/D1リソースの一覧・作成、Deploy Hookによるデプロイ、GitHubリポの読取・ブランチ作成・非コアファイルのコミット・PR作成。\n" +
   "できないこと（コア損害＝ツール自体が無い・絶対に試みない）：アカウントや本番DB/KVの削除、リポジトリ削除、force-push、main等の保護ブランチへの直接コミット、課金/プラン/メンバー権限の変更、シークレット/トークンの開示・外部送信、他団体・他テナントへの操作。\n" +
   "不可逆・影響の大きい操作（デプロイ、リソース作成、PR）は実行前に要点を述べ、ユーザーの意図に沿うときだけ行う。";
@@ -30,11 +30,66 @@ export async function getAutonomyConfig(env: Env): Promise<{ on: boolean; cfToke
     ghRepo: (await env.LICENSE.get(KV_GH_REPO)) ?? "",
   };
 }
-export async function saveAutonomyConfig(env: Env, a: { cfToken?: string; cfAccount?: string; ghToken?: string; ghRepo?: string }): Promise<void> {
-  if (a.cfToken) await saveApiKey(env, "cloudflare_token", a.cfToken.trim());
+export async function saveAutonomyConfig(env: Env, a: { cfToken?: string; cfAccount?: string; ghToken?: string; ghRepo?: string }): Promise<{ cfAccount?: string; cfError?: string }> {
+  const out: { cfAccount?: string; cfError?: string } = {};
+  if (a.cfToken) {
+    await saveApiKey(env, "cloudflare_token", a.cfToken.trim());
+    // アカウントIDを自動検出（初心者は入力不要）。明示指定があればそちらを優先。
+    if (!a.cfAccount) {
+      const det = await cfDetectAccount(a.cfToken.trim());
+      if (det) { await env.LICENSE.put(KV_CF_ACCT, det); out.cfAccount = det; }
+      else out.cfError = "トークンからアカウントを検出できませんでした。権限（Account 読み取り）をご確認ください。";
+    }
+  }
   if (a.ghToken) await saveApiKey(env, "github_token", a.ghToken.trim());
-  if (a.cfAccount !== undefined) await env.LICENSE.put(KV_CF_ACCT, a.cfAccount.trim());
+  if (a.cfAccount) await env.LICENSE.put(KV_CF_ACCT, a.cfAccount.trim());
   if (a.ghRepo !== undefined) await env.LICENSE.put(KV_GH_REPO, a.ghRepo.trim());
+  return out;
+}
+
+// CF トークンからアカウントIDを自動検出（最初のアカウント）。
+export async function cfDetectAccount(token: string): Promise<string | null> {
+  try {
+    const r = await fetch("https://api.cloudflare.com/client/v4/accounts?per_page=1", { headers: { authorization: `Bearer ${token}` } });
+    const j = (await r.json().catch(() => ({}))) as { success?: boolean; result?: { id: string }[] };
+    return j.success && j.result?.[0]?.id ? j.result[0].id : null;
+  } catch { return null; }
+}
+
+// ===== GitHub OAuth デバイスフロー（PAT作成不要・コード入力だけで接続） =====
+const GH_SCOPE = "repo";
+export function ghDeviceAvailable(env: Env): boolean { return !!env.GITHUB_OAUTH_CLIENT_ID; }
+
+export async function ghDeviceStart(env: Env): Promise<{ ok: boolean; user_code?: string; verification_uri?: string; device_code?: string; interval?: number; error?: string }> {
+  const cid = env.GITHUB_OAUTH_CLIENT_ID;
+  if (!cid) return { ok: false, error: "GitHub接続は未設定です（手動トークンをご利用ください）" };
+  try {
+    const r = await fetch("https://github.com/login/device/code", { method: "POST", headers: { accept: "application/json", "content-type": "application/json", "user-agent": "baku-office" }, body: JSON.stringify({ client_id: cid, scope: GH_SCOPE }) });
+    const j = (await r.json().catch(() => ({}))) as { device_code?: string; user_code?: string; verification_uri?: string; interval?: number };
+    if (!j.device_code) return { ok: false, error: "開始に失敗しました" };
+    return { ok: true, user_code: j.user_code, verification_uri: j.verification_uri, device_code: j.device_code, interval: j.interval ?? 5 };
+  } catch (e) { return { ok: false, error: (e as Error).message }; }
+}
+export async function ghDevicePoll(env: Env, deviceCode: string): Promise<{ ok: boolean; pending?: boolean; error?: string }> {
+  const cid = env.GITHUB_OAUTH_CLIENT_ID;
+  if (!cid) return { ok: false, error: "未設定" };
+  try {
+    const r = await fetch("https://github.com/login/oauth/access_token", { method: "POST", headers: { accept: "application/json", "content-type": "application/json", "user-agent": "baku-office" }, body: JSON.stringify({ client_id: cid, device_code: deviceCode, grant_type: "urn:ietf:params:oauth:grant-type:device_code" }) });
+    const j = (await r.json().catch(() => ({}))) as { access_token?: string; error?: string };
+    if (j.access_token) { await saveApiKey(env, "github_token", j.access_token); return { ok: true }; }
+    if (j.error === "authorization_pending" || j.error === "slow_down") return { ok: false, pending: true };
+    return { ok: false, error: j.error || "取得に失敗しました" };
+  } catch (e) { return { ok: false, error: (e as Error).message }; }
+}
+// 接続済みトークンでリポ一覧（接続先の自動選択用）。
+export async function ghListRepos(env: Env): Promise<string[]> {
+  const token = await getApiKey(env, "github_token");
+  if (!token) return [];
+  try {
+    const r = await fetch("https://api.github.com/user/repos?per_page=100&sort=updated", { headers: { authorization: `Bearer ${token}`, accept: "application/vnd.github+json", "user-agent": "baku-office" } });
+    const j = await r.json().catch(() => []);
+    return Array.isArray(j) ? (j as { full_name: string }[]).map((x) => x.full_name) : [];
+  } catch { return []; }
 }
 
 // 自治ツールを提示できる状態か（ON＋少なくとも片方のトークン）。

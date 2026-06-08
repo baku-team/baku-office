@@ -30,6 +30,8 @@ interface Env {
   LOCAL_AI_MODEL?: string;
   // リマインダー drain（外部スケジューラ）保護用。
   INTERNAL_KEY?: string;
+  // オートパイロット：GitHub OAuth App（device flow でトークン自動取得）。公開 client_id（秘密ではない）。
+  GITHUB_OAUTH_CLIENT_ID?: string;
 }
 
 type Runtime = import("@astrojs/cloudflare").Runtime<Env>;

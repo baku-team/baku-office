@@ -121,7 +121,7 @@ export async function runAgent(ctx: Ctx, owner: string, text: string, image?: { 
   // マルチエージェント（Pro 以上）：スーパーバイザー道具を提示。
   const ent = await cachedEntitlement(env).catch(() => "free" as const);
   const isPro = atLeast(ent, "pro");
-  // サーバー自治（Pro＋opt-in＋トークン有＋管理者）：CF/GitHub の限定ツールを提示。
+  // オートパイロット（Pro＋opt-in＋トークン有＋管理者）：CF/GitHub の限定ツールを提示。
   const autonomy = isPro && role === "admin" && (await autonomyReady(env).catch(() => false));
   const decls = [...partDecls, ...CORE_TOOLS, ...GEMINI_TOOLS, ...(hasClaude ? CLAUDE_TOOLS : []), ...(isPro ? MULTI_TOOLS : []), ...(autonomy ? AUTONOMY_TOOLS : []), ...(enabledSkills.length ? [skillTool(enabledSkills.map((s) => s.name))] : []), ...capDecls];
   // 自己認識：有効な追加能力＋団体のカスタム指示（口調・人格・回答形式）をシステム文脈へ。安全制約は不変。
