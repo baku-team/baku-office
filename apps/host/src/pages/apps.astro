@@ -6,9 +6,10 @@ const { getHostSession } = await import("../lib/hostauth.ts");
 const ses = await getHostSession(env, Astro.request);
 if (!ses?.isAdmin) return Astro.redirect("/login", 302);
 
-const { listApps, usageByApp, BUILTIN_APP_IDS } = await import("../lib/registry.ts");
+const { listApps, usageByApp, appStoreMeta, BUILTIN_APP_IDS } = await import("../lib/registry.ts");
 const apps = await listApps(env);
 const usage = await usageByApp(env);
+const storeMeta = await appStoreMeta(env);
 const usageMap = new Map(usage.map((u) => [u.app_id, u]));
 const builtin = new Set(BUILTIN_APP_IDS);
 // 標準同梱アプリ（コア・配布対象外）。利用状況のみ表示。
@@ -22,20 +23,23 @@ const fmt = (s: number | null) => (s ? new Date(s * 1000).toISOString().slice(0,
   <p class="muted">各リポで作成されたアプリの<strong>存在（レジストリ）</strong>と、<strong>利用状況</strong>（どのクライアントがどの版を使っているか・PIIなし）を中枢で管理します。</p>
 
   <h2>レジストリ（公開アプリ）</h2>
-  <div class="table-wrap"><table><thead><tr><th>ID</th><th>名称</th><th>版</th><th>分類</th><th>権限</th><th>リポ</th><th>状態</th><th>導入数(有効)</th><th>操作</th></tr></thead><tbody>
-    {apps.map((a) => { const u = usageMap.get(a.id); return (
+  <div class="table-wrap"><table><thead><tr><th>ID</th><th>名称</th><th>版</th><th>状態</th><th>ストア</th><th>最低プラン</th><th>DL数</th><th>★平均(件)</th><th>導入(有効)</th><th>操作</th></tr></thead><tbody>
+    {apps.map((a) => { const u = usageMap.get(a.id); const m = storeMeta[a.id]; return (
       <tr data-id={a.id}>
-        <td><code>{a.id}</code></td><td>{a.name}</td><td>{a.version}</td><td>{a.category ?? "—"}</td>
-        <td class="muted" style="font-size:.8rem">{(JSON.parse(a.permissions || "[]") as string[]).join(" / ") || "—"}</td>
-        <td>{a.repo_url ? <a href={a.repo_url} target="_blank" rel="noreferrer">repo</a> : "—"}</td>
+        <td><code>{a.id}</code></td><td>{a.name}</td><td>{a.version}</td>
         <td><span class="pill" style={a.status === "approved" ? "background:#dcfce7;color:#166534" : a.status === "blocked" ? "background:#fee2e2;color:#b91c1c" : ""}>{a.status}</span></td>
+        <td>{m?.listed ? "掲載中" : "非掲載"}</td>
+        <td>{m?.min_entitlement ?? "free"}</td>
+        <td>{m?.downloads ?? 0}</td>
+        <td>{m?.reviews ? `${m.avg}(${m.reviews})` : "—"}</td>
         <td>{u ? `${u.installs}(${u.active})` : 0}</td>
         <td>
           <button class="btn btn-ghost st" data-st="approved">承認</button>
           <button class="btn btn-ghost st" data-st="blocked">停止</button>
+          <button class="btn btn-ghost lst" data-lst={m?.listed ? "0" : "1"}>{m?.listed ? "掲載OFF" : "掲載ON"}</button>
         </td>
       </tr>); })}
-    {apps.length === 0 && (<tr><td colspan="9" class="muted">レジストリは空です。下のフォームから登録してください。</td></tr>)}
+    {apps.length === 0 && (<tr><td colspan="10" class="muted">レジストリは空です。下のフォームから登録してください。</td></tr>)}
   </tbody></table></div>
 
   {builtinUsage.length > 0 && (
@@ -72,6 +76,7 @@ const fmt = (s: number | null) => (s ? new Date(s * 1000).toISOString().slice(0,
     document.querySelectorAll("tr[data-id]").forEach((tr) => {
       const id = tr.getAttribute("data-id");
       tr.querySelectorAll(".st").forEach((b) => b.addEventListener("click", async (e) => { const r = await api({ _action: "status", id, status: e.currentTarget.dataset.st }, e.currentTarget); if (r) location.reload(); }));
+      tr.querySelector(".lst")?.addEventListener("click", async (e) => { const r = await api({ _action: "set_listed", id, listed: e.currentTarget.dataset.lst === "1" }, e.currentTarget); if (r) location.reload(); });
     });
     document.getElementById("reg").addEventListener("click", async (e) => {
       const perms = (document.getElementById("r-perms").value || "").split(",").map((s) => s.trim()).filter(Boolean);

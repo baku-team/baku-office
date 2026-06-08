@@ -25,6 +25,11 @@ const launch = registeredParts().filter((p) => installed.has(p.id) && (p.menu?.l
 const { listExternalApps, listDrafts } = await import("../lib/external-apps.ts");
 const externalApps = isAdminOrg ? await listExternalApps(ctx) : [];
 const drafts = isAdminOrg ? await listDrafts(ctx) : [];
+// ストア（ホスト主体）：プラン充足の掲載アプリ。提供者は自分のアプリを公開設定できる。
+const { storeCatalog, myApps } = await import("../lib/store.ts");
+const store = await storeCatalog(env).catch(() => []);
+const mine = isAdminOrg ? await myApps(env).catch(() => []) : [];
+const ENT_OPTS = ["free", "plus", "pro", "nonprofit", "enterprise"];
 ---
 <App title="アプリ" active="/apps">
   <h1>アプリ</h1>
@@ -36,12 +41,51 @@ const drafts = isAdminOrg ? await listDrafts(ctx) : [];
         <strong>{l.label}</strong><div class="muted" style="font-size:.8rem">{l.app}</div>
       </a>
     ))}
-    {launch.length === 0 && (<p class="muted">起動できるアプリがありません。下のマーケットから導入してください。</p>)}
+    {launch.length === 0 && (<p class="muted">起動できるアプリがありません。下の「アプリ管理」や「ストア」から追加してください。</p>)}
   </div>
+
+  <h2>ストア</h2>
+  <p class="muted">ホストが配信する公開アプリ。お使いのプランで入手できるものが表示されます（DL数・評価順）。</p>
+  <div class="grid">
+    {store.map((a) => (
+      <div class="card" data-store={a.id}>
+        <strong>{a.name}</strong> <span class="muted">v{a.version}{a.category ? `・${a.category}` : ""}</span>
+        {a.badges.map((bd) => (<span class="pill" style="margin-left:4px;background:#fbf6ed;color:#b8893b">{bd}</span>))}
+        {a.description && <div class="muted" style="font-size:.85rem;margin-top:2px">{a.description}</div>}
+        <div class="muted" style="font-size:.8rem;margin-top:4px">⬇ {a.downloads}　★ {a.avg_rating || "—"}（{a.reviews}）{a.min_entitlement !== "free" ? `　要${a.min_entitlement}` : ""}</div>
+        <div class="row" style="margin-top:6px">
+          <button class="btn btn-primary btn-sm st-get" style="flex:0 0 auto">入手</button>
+          <select class="st-rate" style="flex:0 0 auto"><option value="">評価…</option><option value="5">★5</option><option value="4">★4</option><option value="3">★3</option><option value="2">★2</option><option value="1">★1</option></select>
+        </div>
+      </div>
+    ))}
+    {store.length === 0 && (<p class="muted">公開中のアプリはありません。</p>)}
+  </div>
+
+  {isAdminOrg && mine.length > 0 && (
+    <>
+      <h2>自分の提供アプリ（ストア公開）</h2>
+      <div class="card">
+        <p class="muted">承認済みのアプリを任意でストアに公開できます。DL可能な最低プランも設定します。</p>
+        {mine.map((a) => (
+          <div class="field" data-mine={a.id}>
+            <strong>{a.name}</strong> <span class="muted">v{a.version}・{a.status}・⬇{a.downloads}・★{a.avg || "—"}</span>
+            {a.status === "approved" ? (
+              <span class="row" style="margin-top:4px;align-items:center">
+                <label><input type="checkbox" class="m-listed" checked={a.listed === 1} /> ストアに公開</label>
+                <select class="m-ent" style="flex:0 0 auto">{ENT_OPTS.map((o) => (<option value={o} selected={a.min_entitlement === o}>{o}</option>))}</select>
+                <button class="btn btn-primary btn-sm m-save" style="flex:0 0 auto">保存</button>
+              </span>
+            ) : (<span class="muted" style="font-size:.8rem">（承認待ち。ホスト承認後に公開できます）</span>)}
+          </div>
+        ))}
+      </div>
+    </>
+  )}
 
   {isAdminOrg && (
     <>
-      <h2>マーケット（導入・削除）</h2>
+      <h2>アプリ管理（導入・削除）</h2>
       <div class="card">
         <p class="muted">使うアプリを選びます。外すと画面・道具とも消えます。<strong>AIチャットは Plus 以上で必須</strong>。</p>
         {cat.map((p) => (
@@ -104,6 +148,22 @@ const drafts = isAdminOrg ? await listDrafts(ctx) : [];
       const id = el.getAttribute("data-draft");
       el.querySelector(".d-submit")?.addEventListener("click", async (e) => { const r = await window.bo.api("/api/settings", { _action: "submit_draft", draftId: id }, { btn: e.currentTarget, successMsg: "公開申請しました（ホスト承認待ち）" }); if (r.ok) setTimeout(() => location.reload(), 800); });
       el.querySelector(".d-del")?.addEventListener("click", async (e) => { const r = await window.bo.api("/api/settings", { _action: "delete_draft", draftId: id }, { btn: e.currentTarget, successMsg: "削除しました" }); if (r.ok) setTimeout(() => location.reload(), 500); });
+    });
+    // ストア：入手（DL）・評価
+    document.querySelectorAll("[data-store]").forEach((el) => {
+      const id = el.getAttribute("data-store");
+      el.querySelector(".st-get")?.addEventListener("click", async (e) => { const r = await window.bo.api("/api/settings", { _action: "fetch_app", appId: id }, { btn: e.currentTarget, successMsg: "入手しました（アプリ管理で有効化できます）" }); if (r.ok) setTimeout(() => location.reload(), 800); });
+      el.querySelector(".st-rate")?.addEventListener("change", async (e) => { const rating = e.currentTarget.value; if (!rating) return; const r = await window.bo.api("/api/store", { _action: "rate", appId: id, rating: Number(rating) }, { btn: e.currentTarget, successMsg: "評価しました" }); if (r.ok) setTimeout(() => location.reload(), 600); });
+    });
+    // 自分の提供アプリ：ストア公開設定
+    document.querySelectorAll("[data-mine]").forEach((el) => {
+      const id = el.getAttribute("data-mine");
+      el.querySelector(".m-save")?.addEventListener("click", async (e) => {
+        const listed = el.querySelector(".m-listed")?.checked || false;
+        const minEntitlement = el.querySelector(".m-ent")?.value || "free";
+        const r = await window.bo.api("/api/store", { _action: "set_listed", appId: id, listed, minEntitlement }, { btn: e.currentTarget, successMsg: "公開設定を保存しました" });
+        if (r.ok) setTimeout(() => location.reload(), 600);
+      });
     });
   </script>
 </App>
