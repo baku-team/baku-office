@@ -11,8 +11,8 @@ const KV_GH_REPO = "gh_repo";        // owner/repo（非秘匿）
 // できること/できないことのポリシー（自治有効時に agent SYSTEM へ注入＝AIが可否を理解する）。
 export const AUTONOMY_POLICY =
   "【オートパイロット（この団体自身のCloudflare/GitHubを運用代行）】\n" +
-  "できること：CFのKV/D1リソースの一覧・作成、Deploy Hookによるデプロイ、GitHubリポの読取・ブランチ作成・非コアファイルのコミット・PR作成。\n" +
-  "できないこと（コア損害＝ツール自体が無い・絶対に試みない）：アカウントや本番DB/KVの削除、リポジトリ削除、force-push、main等の保護ブランチへの直接コミット、課金/プラン/メンバー権限の変更、シークレット/トークンの開示・外部送信、他団体・他テナントへの操作。\n" +
+  "できること：CFのKV/D1リソースの一覧・作成、Deploy Hookによるデプロイ、GitHubリポの読取・ブランチ作成・非コアファイルのコミット・PR作成、PRのマージ（CI/チェックが全て成功のときのみ・squash）。\n" +
+  "できないこと（コア損害＝ツール自体が無い・絶対に試みない）：アカウントや本番DB/KVの削除、リポジトリ削除、force-push、main等の保護ブランチへの直接コミット、チェック未通過/コンフリクトのままのマージ、課金/プラン/メンバー権限の変更、シークレット/トークンの開示・外部送信、他団体・他テナントへの操作。\n" +
   "不可逆・影響の大きい操作（デプロイ、リソース作成、PR）は実行前に要点を述べ、ユーザーの意図に沿うときだけ行う。";
 
 export async function isAutonomyOn(env: Env): Promise<boolean> {
@@ -188,6 +188,24 @@ export async function ghOpenPr(env: Env, head: string, title: string, body?: str
   const r = await gh(env, "POST", "/pulls", { title: title || head, head, base, body: body ?? "" });
   return r.ok ? `PRを作成しました：${r.data.html_url}` : `PR作成失敗：${r.error}`;
 }
+// PRのマージ（CI/チェックが全て success のときのみ・squash）。チェック未通過/コンフリクト/チェック無しは拒否。
+export async function ghMergePr(env: Env, number: number): Promise<string> {
+  const pr = await gh(env, "GET", `/pulls/${number}`);
+  if (!pr.ok) return `PR取得失敗：${pr.error}`;
+  if (pr.data.state !== "open") return "オープンなPRではありません。";
+  if (pr.data.mergeable === false) return "コンフリクトがあり自動マージできません。解消後に再依頼してください。";
+  const sha = pr.data.head?.sha as string;
+  const cr = await gh(env, "GET", `/commits/${sha}/check-runs`);
+  const runs = (cr.ok ? cr.data.check_runs : []) as { name: string; status: string; conclusion: string | null }[];
+  const st = await gh(env, "GET", `/commits/${sha}/status`);
+  const statuses = (st.ok ? st.data.statuses : []) as { context: string; state: string }[];
+  if ((runs?.length ?? 0) + (statuses?.length ?? 0) === 0) return "CI/チェックが見つからないため自動マージしません（安全のため手動マージしてください）。";
+  const badRun = (runs ?? []).find((r) => r.status !== "completed" || !["success", "neutral", "skipped"].includes(r.conclusion ?? ""));
+  if (badRun) return `チェック「${badRun.name}」が未通過のためマージしません（${badRun.conclusion ?? badRun.status}）。`;
+  if (st.ok && (statuses?.length ?? 0) > 0 && st.data.state !== "success") return `コミットステータスが ${st.data.state} のためマージしません。`;
+  const m = await gh(env, "PUT", `/pulls/${number}/merge`, { merge_method: "squash" });
+  return m.ok ? `PR #${number} を squash マージしました（チェック成功を確認済み）。本番デプロイが走る場合があります。` : `マージ失敗：${m.error}`;
+}
 
 // 監査つき実行ディスパッチ（agent から呼ぶ）。
 export async function runAutonomyTool(env: Env, name: string, a: Record<string, unknown>): Promise<string> {
@@ -201,6 +219,7 @@ export async function runAutonomyTool(env: Env, name: string, a: Record<string, 
     case "gh_create_branch": out = await ghCreateBranch(env, String(a.name ?? "")); break;
     case "gh_commit_file": out = await ghCommitFile(env, String(a.branch ?? ""), String(a.path ?? ""), String(a.content ?? ""), String(a.message ?? "")); break;
     case "gh_open_pr": out = await ghOpenPr(env, String(a.head ?? ""), String(a.title ?? ""), a.body ? String(a.body) : undefined); break;
+    case "gh_merge_pr": out = await ghMergePr(env, Number(a.number) || 0); break;
     default: return "未知の自治ツール";
   }
   await logDiag(env, "info", "other", `自治ツール ${name}：${out.slice(0, 120)}`).catch(() => {});
@@ -217,4 +236,5 @@ export const AUTONOMY_TOOLS = [
   { name: "gh_create_branch", description: "新しいブランチを作成（既定ブランチから分岐）", parameters: { type: "object", properties: { name: { type: "string" } }, required: ["name"] } },
   { name: "gh_commit_file", description: "ブランチに非コアファイルをコミット（main直/コア領域は禁止）", parameters: { type: "object", properties: { branch: { type: "string" }, path: { type: "string" }, content: { type: "string" }, message: { type: "string" } }, required: ["branch", "path", "content"] } },
   { name: "gh_open_pr", description: "ブランチから既定ブランチへPRを作成", parameters: { type: "object", properties: { head: { type: "string" }, title: { type: "string" }, body: { type: "string" } }, required: ["head", "title"] } },
+  { name: "gh_merge_pr", description: "PRをマージ（CI/チェックが全て成功のときのみ・squash）。未通過/コンフリクト/チェック無しは拒否", parameters: { type: "object", properties: { number: { type: "number", description: "PR番号" } }, required: ["number"] } },
 ];
