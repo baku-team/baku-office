@@ -26,6 +26,7 @@ const groups: Group[] = [
   { title: "カスタマイズ・高度な設定", items: [
     { href: "/settings/advanced", label: "高度なオプション", desc: "AIエンジン・カスタム指示・KV上限・Workers Paid", show: isAdminOrg && hasPlus },
     { href: "/settings/domain", label: "カスタムドメイン", desc: "独自ドメインで公開（Plus以上）", show: isAdminOrg && hasPlus },
+    { href: "/settings/a2a", label: "A2A（団体間連携）", desc: "他団体エージェントと相互同意で連携（Pro以上）", show: isAdminOrg && atLeast(entitlement, "pro") },
   ] },
   { title: "運用・サポート", items: [
     { href: "/review", label: "共有承認", desc: "個人→組織の承認", show: ses.role === "admin" || ses.role === "accounting" || ses.role === "clerical" },
