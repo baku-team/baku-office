@@ -7,6 +7,9 @@ import { memoPart } from "./memo.ts";
 import { remindersPart } from "./reminders.ts";
 import { knowledgePart } from "./knowledge.ts";
 import { membersPart } from "./members.ts";
+import { sitePart } from "./site.ts";
+import { importPart } from "./import.ts";
+import { brandingPart } from "./branding.ts";
 
 export function registerBuiltinParts(): void {
   registerPart(chatApp);
@@ -15,6 +18,9 @@ export function registerBuiltinParts(): void {
   registerPart(remindersPart);
   registerPart(knowledgePart);
   registerPart(membersPart);
+  registerPart(sitePart);
+  registerPart(importPart);
+  registerPart(brandingPart);
 }
 
 registerBuiltinParts();

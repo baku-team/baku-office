@@ -1,0 +1,66 @@
+---
+export const prerender = false;
+import App from "../../layouts/App.astro";
+import { atLeast } from "@baku-office/shared";
+const env = Astro.locals.runtime.env;
+const { getSession } = await import("../../lib/auth.ts");
+const ses = await getSession(env, Astro.request);
+if (!ses || ses.role !== "admin" || ses.ctx !== "org") return Astro.redirect("/login", 302);
+const entitlement = await (await import("../../lib/client.ts")).cachedEntitlement(env);
+const hasPlus = atLeast(entitlement, "plus");
+const { getCustomDomain } = await import("../../core/custom-domain.ts");
+const cfg = hasPlus ? await getCustomDomain(Astro.locals.ctx) : null;
+const t = (n: number) => new Date(n * 1000).toLocaleString("ja-JP");
+---
+<App title="カスタムドメイン" active="/settings">
+  <h1>カスタムドメイン</h1>
+  {!hasPlus && (
+    <div class="card">
+      <div class="banner banner-warn">この機能は <strong>Plus 以上</strong>のプランで利用できます。</div>
+      <p class="muted">独自ドメイン（例 <code>office.example.org</code>）でアプリを公開できます。</p>
+      <a class="btn btn-primary" href="/billing">プラン・課金へ</a>
+    </div>
+  )}
+  {hasPlus && (
+    <Fragment>
+      <p class="muted">アプリを独自ドメインで公開します。ここで希望ドメインを保存し、実際の紐付けは下記手順に従って <strong>あなたの Cloudflare アカウント</strong>で行ってください（当社はあなたのアカウントに入りません）。</p>
+
+      <div class="card">
+        <div class="field"><label>カスタムドメイン<input id="cd" value={cfg?.domain ?? ""} placeholder="office.example.org" /></label></div>
+        {cfg && (<p class="muted" style="font-size:.82rem">登録：{cfg.domain}（保存 {t(cfg.registeredAt)}）</p>)}
+        <button class="btn btn-primary" id="saveDomain">保存</button>
+        <p class="muted" style="font-size:.82rem;margin-top:.4rem">空欄で保存すると設定を解除します。</p>
+      </div>
+
+      <h2>紐付け手順（Cloudflare ダッシュボード）</h2>
+      <div class="card">
+        <ol style="margin:0;padding-left:1.2rem;line-height:1.9">
+          <li>Cloudflare ダッシュボード → <strong>Workers &amp; Pages</strong> → このアプリの Worker（<code>baku-office-app</code>）を開く。</li>
+          <li><strong>Settings → Domains &amp; Routes → Add → Custom Domain</strong> を選び、上で保存したドメインを入力。</li>
+          <li>ドメインが Cloudflare で管理されていれば、DNS と証明書は自動で設定されます（数分〜）。</li>
+          <li>反映後、独自ドメインでアプリが開けることを確認してください。</li>
+        </ol>
+        <p class="muted" style="font-size:.82rem;margin-top:.5rem">※ Worker への紐付けはお客様の Cloudflare 操作です。当社は手順案内のみを行います。</p>
+      </div>
+
+      <h2>ドメインをお持ちでない場合</h2>
+      <div class="banner banner-info">
+        ドメインは <strong>Cloudflare Registrar</strong> で取得すると、上記の紐付けがスムーズです（原価提供・更新も簡単）。
+        <a href="https://www.cloudflare.com/products/registrar/" target="_blank" rel="noopener">Cloudflare Registrar を見る</a>。
+        もちろん他社で取得済み／取得するドメインでも、Cloudflare に追加すれば利用できます。
+      </div>
+
+      <script slot="scripts" is:inline>
+        (function () {
+          const btn = document.getElementById("saveDomain");
+          if (!btn) return;
+          btn.addEventListener("click", async (e) => {
+            const domain = document.getElementById("cd").value.trim();
+            const r = await window.bo.api("/api/settings", { _action: "custom_domain", domain }, { btn: e.currentTarget, successMsg: "保存しました" });
+            if (r.ok) setTimeout(() => location.reload(), 700);
+          });
+        })();
+      </script>
+    </Fragment>
+  )}
+</App>

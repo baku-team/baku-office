@@ -28,79 +28,152 @@ let balance = 0;
 try { balance = (await env.DB.prepare("SELECT COALESCE(SUM(opening_balance),0) AS b FROM wallets").first<{ b: number }>())?.b ?? 0; } catch { /* 未マイグレ */ }
 const notices = check?.notices ?? [];
 const yen = (n: number) => "¥" + n.toLocaleString("ja-JP");
-// アプリ連携ウィジェット（有効アプリが提供：例 登録メンバー数・取引数）。
+// アプリ連携ウィジェット（有効アプリが提供：例 登録メンバー数・取引数）。span はアプリ側が指定。
 const { widgetsOf, enabledParts } = await import("../core/parts.ts");
-const widgetData: { title: string; value: string; sub?: string }[] = [];
+const widgetData: { title: string; value: string; sub?: string; span?: number }[] = [];
 for (const w of widgetsOf(enabledParts([..._inst]))) {
-  try { widgetData.push({ title: w.title, ...(await w.run(Astro.locals.ctx, ses.uid)) }); } catch { /* skip */ }
+  try { widgetData.push({ title: w.title, span: w.span, ...(await w.run(Astro.locals.ctx, ses.uid)) }); } catch { /* skip */ }
 }
+// ホームのセクション構成（団体ごと・並べ替え/非表示）。お知らせは固定で対象外。
+const { getHomeLayout, orderedSections, HOME_SECTIONS } = await import("../core/home.ts");
+const homeLayout = await getHomeLayout(Astro.locals.ctx).catch(() => null);
+const sections = orderedSections(homeLayout);
+const hiddenSet = new Set(homeLayout?.hidden ?? []);
+const clampSpan = (n?: number) => Math.max(1, Math.min(3, Number(n) || 1));
 ---
 <App title="ホーム" active="/">
   <Slot name="home-hero" />
-  <h1>ホーム</h1>
+  <div class="row" style="align-items:center;justify-content:space-between">
+    <h1 style="margin:0">ホーム</h1>
+    {isOrgAdmin && (<button class="btn btn-ghost" id="editHome" style="flex:0 0 auto">ホームを編集</button>)}
+  </div>
   <p class="muted">プラン：<span class="pill">{planLabel(entitlement)}</span> ／ {check ? "ホスト疎通OK" : "オフライン（キャッシュ表示）"}</p>
 
-  {notices.map((n) => (<div class={`banner ${n.severity === "critical" ? "banner-danger" : n.severity === "important" ? "banner-warn" : "banner-info"}`} data-sev={n.severity} data-id={n.id}>{n.body}</div>))}
+  {/* 固定セクション：baku-office からのお知らせ・重要なお知らせ（並べ替え/非表示の対象外・常に最上部）。 */}
+  <section class="home-fixed">
+    <h2>お知らせ</h2>
+    {notices.length === 0 && !updateAvailable && (<p class="muted">現在、新しいお知らせはありません。</p>)}
+    {notices.map((n) => (<div class={`banner ${n.severity === "critical" ? "banner-danger" : n.severity === "important" ? "banner-warn" : "banner-info"}`} data-sev={n.severity} data-id={n.id}>{n.body}</div>))}
+    {updateAvailable && (
+      <div class="banner banner-warn">🔔 新しいバージョン <strong>{check?.latestVersion}</strong> があります（現在 {APP_VERSION}）。{isOrgAdmin ? <a href="/settings/update">更新する</a> : "管理者にアプリの更新をご依頼ください。"}</div>
+    )}
+  </section>
 
-  {updateAvailable && (
-    <div class="banner banner-warn">🔔 新しいバージョン <strong>{check?.latestVersion}</strong> があります（現在 {APP_VERSION}）。{isOrgAdmin ? <a href="/settings/update">更新する</a> : "管理者にアプリの更新をご依頼ください。"}</div>
-  )}
+  {/* 並べ替え/非表示できるセクション群（団体ごと）。 */}
+  {sections.map((sec) => (
+    sec === "summary" ? (
+      <section data-sec="summary">
+        <div class="grid">
+          <div class="card"><div class="label">口座残高（期首合計）</div><div class="num">{yen(balance)}</div></div>
+          <div class="card"><div class="label">当月収支</div><div class="num">¥0</div><div class="muted">会計で登録</div></div>
+          <div class="card"><div class="label">未処理伝票</div><div class="num">0</div></div>
+          <div class="card"><div class="label">プラン / ライセンス</div><div class="num" style="font-size:1.1rem">{planLabel(entitlement)}</div></div>
+        </div>
+      </section>
+    ) : sec === "widgets" ? (
+      widgetData.length > 0 && (
+        <section data-sec="widgets">
+          <h2>アプリの状況</h2>
+          <div class="grid wgrid">
+            {widgetData.map((w) => (
+              <div class="card" style={`grid-column:span ${clampSpan(w.span)}`}><div class="label">{w.title}</div><div class="num">{w.value}</div>{w.sub && <div class="muted" style="font-size:.82rem">{w.sub}</div>}</div>
+            ))}
+          </div>
+        </section>
+      )
+    ) : sec === "storage" ? (
+      <section data-sec="storage">
+        <h2>ストレージ使用量</h2>
+        {nearFull.map((s) => (<div class="banner banner-warn">⚠️ <strong>{s.label}</strong> が上限の {pct(s.used, s.limit)}% に達しています。{hintText[s.hint]}</div>))}
+        <div class="grid">
+          {storage.map((s) => (
+            <div class="card">
+              <div class="label">{s.label}{!s.enabled && (s.key === "r2" ? "（未使用）" : s.key === "drive" ? "（未連携）" : "")}</div>
+              <div class="gauge"><div class={`gfill ${pct(s.used, s.limit) >= 80 ? "hot" : ""}`} style={`width:${pct(s.used, s.limit)}%`}></div></div>
+              <div class="muted" style="font-size:.82rem;margin-top:4px">{s.used < 0 ? "計測不可" : `${fmtBytes(s.used)} / ${fmtBytes(s.limit)}（${pct(s.used, s.limit)}%）`}</div>
+              {(s.hint === "paid" || s.hint === "r2") && (<div class="muted" style="font-size:.74rem;margin-top:2px"><a href={s.hint === "r2" ? "/usage" : "/settings/advanced"}>{s.hint === "r2" ? "R2 を有効化" : "Workers Paid で拡張"}</a></div>)}
+              {s.key === "drive" && !s.enabled && (<div class="muted" style="font-size:.74rem;margin-top:2px"><a href="/drive">連携する</a></div>)}
+            </div>
+          ))}
+        </div>
+      </section>
+    ) : sec === "quicklinks" ? (
+      <section data-sec="quicklinks">
+        <h2>できること</h2>
+        <div class="grid">
+          <a class="card" href="/accounting" style="text-decoration:none;color:inherit"><strong>会計</strong><div class="muted">入出金・出納帳・収支・CSV</div></a>
+          <a class="card" href="/files" style="text-decoration:none;color:inherit"><strong>ファイル</strong><div class="muted">アップロード・共有</div></a>
+          <a class="card" href="/minutes" style="text-decoration:none;color:inherit"><strong>議事録</strong><div class="muted">作成・一覧</div></a>
+          <a class="card" href="/apps" style="text-decoration:none;color:inherit"><strong>アプリ</strong><div class="muted">機能の導入・開発</div></a>
+        </div>
+      </section>
+    ) : null
+  ))}
 
-  <div class="grid">
-    <div class="card"><div class="label">口座残高（期首合計）</div><div class="num">{yen(balance)}</div></div>
-    <div class="card"><div class="label">当月収支</div><div class="num">¥0</div><div class="muted">会計で登録</div></div>
-    <div class="card"><div class="label">未処理伝票</div><div class="num">0</div></div>
-    <div class="card"><div class="label">プラン / ライセンス</div><div class="num" style="font-size:1.1rem">{planLabel(entitlement)}</div></div>
-  </div>
-
-  {widgetData.length > 0 && (
-    <>
-      <h2>アプリの状況</h2>
-      <div class="grid">
-        {widgetData.map((w) => (
-          <div class="card"><div class="label">{w.title}</div><div class="num">{w.value}</div>{w.sub && <div class="muted" style="font-size:.82rem">{w.sub}</div>}</div>
+  {/* ホーム編集モーダル（別ウィンドウ）：セクションの表示/非表示・並べ替え。 */}
+  {isOrgAdmin && (
+    <div class="modal" id="homeModal"><div class="box">
+      <h2 style="margin-top:0;border:0">ホームの表示を編集</h2>
+      <p class="muted" style="font-size:.85rem">セクションの表示/非表示と並び順を変更します（お知らせは固定）。</p>
+      <div id="secList" class="sec-list">
+        {HOME_SECTIONS.map((s) => (
+          <div class="sec-row" data-id={s.id}>
+            <label style="flex:1"><input type="checkbox" class="sec-on" checked={!hiddenSet.has(s.id)} /> {s.label}</label>
+            <button class="btn btn-sm sec-up" title="上へ">↑</button>
+            <button class="btn btn-sm sec-down" title="下へ">↓</button>
+          </div>
         ))}
       </div>
-    </>
+      <div class="row" style="margin-top:1rem">
+        <button class="btn btn-primary" id="saveHome" style="flex:1">保存</button>
+        <button class="btn btn-ghost" id="closeHome" style="flex:0 0 auto">閉じる</button>
+      </div>
+    </div></div>
   )}
 
-  <h2>ストレージ使用量</h2>
-  {nearFull.map((s) => (<div class="banner banner-warn">⚠️ <strong>{s.label}</strong> が上限の {pct(s.used, s.limit)}% に達しています。{hintText[s.hint]}</div>))}
-  <div class="grid">
-    {storage.map((s) => (
-      <div class="card">
-        <div class="label">{s.label}{!s.enabled && (s.key === "r2" ? "（未使用）" : s.key === "drive" ? "（未連携）" : "")}</div>
-        <div class="gauge"><div class={`gfill ${pct(s.used, s.limit) >= 80 ? "hot" : ""}`} style={`width:${pct(s.used, s.limit)}%`}></div></div>
-        <div class="muted" style="font-size:.82rem;margin-top:4px">{s.used < 0 ? "計測不可" : `${fmtBytes(s.used)} / ${fmtBytes(s.limit)}（${pct(s.used, s.limit)}%）`}</div>
-        {(s.hint === "paid" || s.hint === "r2") && (<div class="muted" style="font-size:.74rem;margin-top:2px"><a href="/settings/advanced">{s.hint === "r2" ? "R2 を有効化" : "Workers Paid で拡張"}</a></div>)}
-        {s.key === "drive" && !s.enabled && (<div class="muted" style="font-size:.74rem;margin-top:2px"><a href="/drive">連携する</a></div>)}
-      </div>
-    ))}
-  </div>
-
-  <h2>できること</h2>
-  <div class="grid">
-    <a class="card" href="/accounting" style="text-decoration:none;color:inherit"><strong>会計</strong><div class="muted">入出金・出納帳・収支・CSV</div></a>
-    <a class="card" href="/files" style="text-decoration:none;color:inherit"><strong>ファイル</strong><div class="muted">アップロード・共有</div></a>
-    <a class="card" href="/minutes" style="text-decoration:none;color:inherit"><strong>議事録</strong><div class="muted">作成・一覧</div></a>
-    <a class="card" href="/settings/keys" style="text-decoration:none;color:inherit"><strong>連携設定</strong><div class="muted">Gemini/LINE/Claude</div></a>
-  </div>
+  <div class="modal" id="critModal"><div class="box"><h2 style="margin-top:0;border:0">重要なお知らせ</h2><div id="critBody"></div><button class="btn btn-primary" id="critAck" style="margin-top:1rem">確認しました</button></div></div>
 
   <style>
     .gauge { height: 8px; background: #eef1f5; border-radius: 4px; overflow: hidden; margin-top: 6px; }
     .gfill { height: 100%; background: #14365c; border-radius: 4px; transition: width .3s; }
     .gfill.hot { background: #b4541a; }
+    .wgrid { grid-auto-flow: row dense; }
+    .sec-list { display: flex; flex-direction: column; gap: 6px; }
+    .sec-row { display: flex; align-items: center; gap: 6px; border: 1px solid #dde3ea; border-radius: 6px; padding: 6px 8px; }
+    .sec-row.off { opacity: .55; }
   </style>
 
-  <div class="modal" id="critModal"><div class="box"><h2 style="margin-top:0;border:0">重要なお知らせ</h2><div id="critBody"></div><button class="btn btn-primary" id="critAck" style="margin-top:1rem">確認しました</button></div></div>
-
   <script slot="scripts" is:inline>
-    const crit = [...document.querySelectorAll('.banner[data-sev="critical"]')].filter((n) => !localStorage.getItem("ack:" + n.dataset.id));
-    if (crit.length) {
-      const m = document.getElementById("critModal");
-      document.getElementById("critBody").innerHTML = crit.map((n) => "<p>" + n.textContent + "</p>").join("");
-      m.classList.add("open");
-      document.getElementById("critAck").onclick = () => { crit.forEach((n) => localStorage.setItem("ack:" + n.dataset.id, "1")); m.classList.remove("open"); window.bo.toast("確認しました"); };
-    }
+    (function () {
+      // 重要なお知らせの確認モーダル。
+      const crit = [...document.querySelectorAll('.banner[data-sev="critical"]')].filter((n) => !localStorage.getItem("ack:" + n.dataset.id));
+      if (crit.length) {
+        const m = document.getElementById("critModal");
+        document.getElementById("critBody").innerHTML = crit.map((n) => "<p>" + n.textContent + "</p>").join("");
+        m.classList.add("open");
+        document.getElementById("critAck").onclick = () => { crit.forEach((n) => localStorage.setItem("ack:" + n.dataset.id, "1")); m.classList.remove("open"); window.bo.toast("確認しました"); };
+      }
+      // ホーム編集（管理者のみ要素が存在）。
+      const edit = document.getElementById("editHome");
+      const modal = document.getElementById("homeModal");
+      if (edit && modal) {
+        const list = document.getElementById("secList");
+        const refresh = () => list.querySelectorAll(".sec-row").forEach((r) => r.classList.toggle("off", !r.querySelector(".sec-on").checked));
+        edit.addEventListener("click", () => { modal.classList.add("open"); refresh(); });
+        document.getElementById("closeHome")?.addEventListener("click", () => modal.classList.remove("open"));
+        list.querySelectorAll(".sec-row").forEach((row) => {
+          row.querySelector(".sec-on")?.addEventListener("change", refresh);
+          row.querySelector(".sec-up")?.addEventListener("click", () => { const p = row.previousElementSibling; if (p) list.insertBefore(row, p); });
+          row.querySelector(".sec-down")?.addEventListener("click", () => { const n = row.nextElementSibling; if (n) list.insertBefore(n, row); });
+        });
+        document.getElementById("saveHome")?.addEventListener("click", async (e) => {
+          const rows = [...list.querySelectorAll(".sec-row")];
+          const order = rows.map((r) => r.dataset.id);
+          const hidden = rows.filter((r) => !r.querySelector(".sec-on").checked).map((r) => r.dataset.id);
+          const r = await window.bo.api("/api/settings", { _action: "home_layout", layout: { order, hidden } }, { btn: e.currentTarget, successMsg: "ホームの表示を保存しました" });
+          if (r.ok) setTimeout(() => location.reload(), 600);
+        });
+      }
+    })();
   </script>
 </App>

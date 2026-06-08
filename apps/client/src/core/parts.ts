@@ -2,7 +2,7 @@
 // パーツ＝業務モジュール。ここではエージェント道具の登録のみ（migrations/routes は後続Phase）。
 // コアのエージェントは「登録された道具」を宣言・実行する＝コア/パーツ分離の実体。
 import type { Ctx } from "./ports.ts";
-import type { Role } from "@baku-office/shared";
+import type { Role, Entitlement } from "@baku-office/shared";
 import type { NavItem } from "./nav.ts";
 import type { Permission, AppAction } from "./apps.ts";
 
@@ -20,6 +20,7 @@ export interface AgentTool {
 export interface AppWidget {
   id: string;
   title: string;
+  span?: number; // ホームでの表示幅（列数 1〜3・既定1）。アプリ側がウィジェットの大きさを制御。
   run(ctx: Ctx, owner: string): Promise<{ value: string; sub?: string }>;
 }
 
@@ -35,6 +36,7 @@ export interface Part {
   actions?: AppAction[]; // アプリ間連動で他アプリへ公開する操作
   menu?: NavItem[]; // 第2層：このパーツが提供するナビ項目（UIパーツ用）。
   widgets?: AppWidget[]; // ホームに出す連携ウィジェット（例 総会員数・当月収支）。
+  minPlan?: Entitlement; // このアプリの利用に必要な最低プラン（launcher/マーケットの表示ゲート。未指定=Free）。
 }
 
 // 有効パーツが提供するホームウィジェットを集約。

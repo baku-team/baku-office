@@ -23,9 +23,9 @@ export interface AppAction {
 }
 
 // 公開カタログ（マーケット／設定UI用のマニフェスト要約）。
-export function appCatalog(): { id: string; name: string; version: string; description?: string; category?: string; permissions: readonly Permission[]; actions: string[] }[] {
+export function appCatalog(): { id: string; name: string; version: string; description?: string; category?: string; minPlan?: import("@baku-office/shared").Entitlement; permissions: readonly Permission[]; actions: string[] }[] {
   return registeredParts().map((p) => ({
-    id: p.id, name: p.name, version: p.version, description: p.description, category: p.category,
+    id: p.id, name: p.name, version: p.version, description: p.description, category: p.category, minPlan: p.minPlan,
     permissions: p.permissions ?? [], actions: (p.actions ?? []).map((a) => a.name),
   }));
 }
