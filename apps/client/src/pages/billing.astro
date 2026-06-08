@@ -28,6 +28,12 @@ try { stripe = ((await (await hostFetch(env, "/api/billing/status")).json()) as 
     {entitlement === "test" && (<p class="muted" style="margin-top:.5rem">テスト権限（全機能解放）が付与されています。</p>)}
   </div>
   <div class="card" style="margin-top:1rem">
+    <h2 style="margin-top:0;border:0">NonProfit（非営利団体・全機能無料）</h2>
+    {entitlement === "nonprofit"
+      ? <p class="muted">NonProfit（全機能・無料）が有効です。ご不明点は担当窓口へ。</p>
+      : <p class="muted">非営利団体は、ホスト審査の通過で<strong>全機能を無料</strong>で利用できます。お申し込みは<strong>申込画面の「非営利団体として申し込む」</strong>から（既に導入済みの場合は当社までお問い合わせください）。承認まではFree相当で利用できます。</p>}
+  </div>
+  <div class="card" style="margin-top:1rem">
     <h2 style="margin-top:0;border:0">エンタープライズ（大企業・組織向け）</h2>
     {entitlement === "enterprise"
       ? <p class="muted">エンタープライズ（全機能解放）が有効です。ご相談は担当窓口へ。</p>

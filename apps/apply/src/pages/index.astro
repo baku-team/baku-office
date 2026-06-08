@@ -61,6 +61,16 @@ const deployUrl = "https://deploy.workers.cloudflare.com/?url=https://github.com
         <div class="field"><label>代表者名</label><input id="contactName" /></div>
         <div class="field"><label>連絡先メール（<strong>ログインに使う Google アカウントのメール</strong>）</label><input id="contactEmail" type="email" required placeholder="例：team@your-domain.com（Googleアカウント）" /></div>
         <p class="muted">まずは <strong>無料（Free）</strong> で開始します。AI（Plus）やエージェント（Pro）への切替は、導入後に<strong>管理画面「プラン・課金」</strong>からいつでも行えます。</p>
+
+        <div class="field" style="border-top:1px dashed #e3e8ee;padding-top:10px;margin-top:6px">
+          <label style="flex-direction:row;align-items:center;gap:6px"><input type="checkbox" id="npChk" style="width:auto" /> <strong>非営利団体として申し込む</strong>（全機能を無料で利用・<span class="muted">ホスト審査あり</span>）</label>
+        </div>
+        <div id="npFields" hidden>
+          <div class="field"><label>団体種別</label><input id="npType" placeholder="NPO法人 / 教育機関 / 宗教法人 / ボランティア 等" /></div>
+          <div class="field"><label>認証番号・証明書類URL</label><input id="npDoc" placeholder="NPO認証番号、または証明書類のURL" /></div>
+          <div class="field"><label>用途・団体説明</label><input id="npDesc" placeholder="活動内容と利用目的を簡潔に" /></div>
+          <p class="muted">※ NonProfit は申込後にホストが審査します。<strong>承認まではFree相当</strong>で利用でき、承認されると全機能が解放されます。</p>
+        </div>
         <button class="btn" id="submit">無料で申し込む</button>
       </div>
 
@@ -79,8 +89,13 @@ const deployUrl = "https://deploy.workers.cloudflare.com/?url=https://github.com
       }
       function busy(btn, on) { if (!btn) return; if (on) { btn.disabled = true; btn.dataset.label = btn.innerHTML; btn.innerHTML = '<span class="spin"></span>処理中…'; } else { btn.disabled = false; if (btn.dataset.label) btn.innerHTML = btn.dataset.label; } }
 
+      document.getElementById("npChk").addEventListener("change", (e) => { document.getElementById("npFields").hidden = !e.currentTarget.checked; });
+
       document.getElementById("submit").addEventListener("click", async (e) => {
         const body = { orgName: orgName.value, contactName: contactName.value, contactEmail: contactEmail.value };
+        if (document.getElementById("npChk").checked) {
+          body.nonprofit = { orgType: document.getElementById("npType").value, docRef: document.getElementById("npDoc").value, description: document.getElementById("npDesc").value };
+        }
         if (!body.orgName) { toast("団体名を入力してください", "err"); return; }
         if (!body.contactEmail) { toast("連絡先メール（ログインに使う Google アカウント）を入力してください", "err"); return; }
         const btn = e.currentTarget; busy(btn, true);
@@ -98,7 +113,9 @@ const deployUrl = "https://deploy.workers.cloudflare.com/?url=https://github.com
         const durl = j.deployUrl || deployUrl;
         out.innerHTML =
           '<h2><span class="ok">✅ 申込が完了しました</span></h2>' +
-          '<p class="muted">プラン：<strong>Free（無料）</strong>で開始（後から管理画面でアップグレード可）</p>' +
+          (body.nonprofit
+            ? '<p class="muted">プラン：<strong>NonProfit（審査待ち）</strong>。承認まではFree相当で利用でき、ホスト承認後に全機能が解放されます。</p>'
+            : '<p class="muted">プラン：<strong>Free（無料）</strong>で開始（後から管理画面でアップグレード可）</p>') +
           '<h2>③ アプリを導入（下のボタンを押すだけ）</h2>' +
           '<ol class="steps">' +
           '<li><strong>デプロイ（入力は不要です）</strong><br><span class="muted">Cloudflare と GitHub にログインすると、あなたの Cloudflare にアプリが作られます（鍵やURLの入力は不要）。</span><br><br>' +
