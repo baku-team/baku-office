@@ -1,6 +1,6 @@
 // オートパイロット（Pro・opt-in・管理者）：団体自身の Cloudflare/GitHub を、破壊的（コア損害）以外の範囲でAIに任せる。
 // 方針：read/create 中心。削除・force-push・課金/権限変更・シークレット開示・他テナントは「ツール自体を提供しない」。
-import { getApiKey, saveApiKey } from "./client.ts";
+import { getApiKey, saveApiKey, hostFetch } from "./client.ts";
 import { getDeployHook } from "./update.ts";
 import { logDiag } from "./diag.ts";
 
@@ -58,10 +58,23 @@ export async function cfDetectAccount(token: string): Promise<string | null> {
 
 // ===== GitHub OAuth デバイスフロー（PAT作成不要・コード入力だけで接続） =====
 const GH_SCOPE = "repo";
-export function ghDeviceAvailable(env: Env): boolean { return !!env.GITHUB_OAUTH_CLIENT_ID; }
+
+// 公開 client_id の解決：env → KVキャッシュ → ホスト配布(/api/gh-client-id)。
+// ＝各団体での設定不要。ホストに一度設定すれば全クライアントが自動取得する。
+export async function resolveGhClientId(env: Env): Promise<string> {
+  if (env.GITHUB_OAUTH_CLIENT_ID) return env.GITHUB_OAUTH_CLIENT_ID;
+  const cached = await env.LICENSE.get("gh_client_id");
+  if (cached) return cached;
+  try {
+    const r = await hostFetch(env, "/api/gh-client-id");
+    if (r.ok) { const j = (await r.json()) as { clientId?: string }; if (j.clientId) { await env.LICENSE.put("gh_client_id", j.clientId, { expirationTtl: 86400 }); return j.clientId; } }
+  } catch { /* offline */ }
+  return "";
+}
+export async function ghDeviceAvailable(env: Env): Promise<boolean> { return !!(await resolveGhClientId(env)); }
 
 export async function ghDeviceStart(env: Env): Promise<{ ok: boolean; user_code?: string; verification_uri?: string; device_code?: string; interval?: number; error?: string }> {
-  const cid = env.GITHUB_OAUTH_CLIENT_ID;
+  const cid = await resolveGhClientId(env);
   if (!cid) return { ok: false, error: "GitHub接続は未設定です（手動トークンをご利用ください）" };
   try {
     const r = await fetch("https://github.com/login/device/code", { method: "POST", headers: { accept: "application/json", "content-type": "application/json", "user-agent": "baku-office" }, body: JSON.stringify({ client_id: cid, scope: GH_SCOPE }) });
@@ -71,7 +84,7 @@ export async function ghDeviceStart(env: Env): Promise<{ ok: boolean; user_code?
   } catch (e) { return { ok: false, error: (e as Error).message }; }
 }
 export async function ghDevicePoll(env: Env, deviceCode: string): Promise<{ ok: boolean; pending?: boolean; error?: string }> {
-  const cid = env.GITHUB_OAUTH_CLIENT_ID;
+  const cid = await resolveGhClientId(env);
   if (!cid) return { ok: false, error: "未設定" };
   try {
     const r = await fetch("https://github.com/login/oauth/access_token", { method: "POST", headers: { accept: "application/json", "content-type": "application/json", "user-agent": "baku-office" }, body: JSON.stringify({ client_id: cid, device_code: deviceCode, grant_type: "urn:ietf:params:oauth:grant-type:device_code" }) });
