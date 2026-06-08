@@ -51,6 +51,10 @@ writeFileSync(
 );
 copyFileSync(join(root, "deploy", "prebuild-update.mjs"), join(out, "prebuild-update.mjs"));
 copyFileSync(join(root, "deploy", "postdeploy.mjs"), join(out, "postdeploy.mjs"));
+// CI チェック（GitHub Actions）を同梱＝全配布リポに自動で「チェック」が付き、オートパイロットの
+// マージ（CI成功時のみ）が機能する。テンプレ /generate での複製には GITHUB_TOKEN の workflow スコープが必要。
+mkdirSync(join(out, ".github", "workflows"), { recursive: true });
+copyFileSync(join(root, "deploy", "ci.workflow.yml"), join(out, ".github", "workflows", "ci.yml"));
 writeFileSync(join(out, "VERSION"), VERSION + "\n");
 
 console.log(`完了：${out}`);
