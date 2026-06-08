@@ -9,6 +9,7 @@ if (!ses) return Astro.redirect("/login", 302);
 const { cachedEntitlement } = await import("../lib/client.ts");
 const entitlement = await cachedEntitlement(env).catch(() => "free" as const);
 const hasPlus = atLeast(entitlement, "plus");
+const hasPro = atLeast(entitlement, "pro");
 // claude はキー登録時のみ実用。選択肢は出すが、未設定なら gemini にフォールバックする（サーバ側）。
 const { listSessions } = await import("../lib/chat-sessions.ts");
 const sessions = hasPlus ? await listSessions(Astro.locals.ctx, ses.uid).catch(() => []) : [];
@@ -52,10 +53,16 @@ const skills = hasPlus && isOrgAdmin ? await listSkills(env).catch(() => []) : [
             </label>
           </div>
           <div id="log"></div>
+          {hasPro && (
+            <label class="muted" style="font-size:.8rem;display:flex;align-items:center;gap:6px;margin-top:8px">
+              <input type="checkbox" id="bgrun" /> バックグラウンドで実行（重い・多段の依頼向け。完了するとこの会話に結果が追記されます）
+            </label>
+          )}
           <div class="cinput">
             <textarea id="msg" placeholder="メッセージを入力（Ctrl/⌘+Enter で送信）"></textarea>
             <button class="btn btn-primary" id="send" style="flex:0 0 auto">送信</button>
           </div>
+          {hasPro && (<p class="muted" style="font-size:.76rem;margin-top:6px">複雑な依頼は内部で役割ごとの子エージェントに分担・並列処理します（無料枠は並列2まで。上限は設定→高度なオプションで拡張）。</p>)}
         </section>
       </div>
 
@@ -151,7 +158,8 @@ const skills = hasPlus && isOrgAdmin ? await listSkills(env).catch(() => []) : [
           const ta = document.getElementById("msg");
           const text = ta.value.trim(); if (!text) return;
           addMsg("u", text); ta.value = "";
-          const r = await window.bo.api("/api/chat", { message: text, sessionId: sessionId || undefined, model: sel.value }, { btn: document.getElementById("send"), successMsg: null });
+          const background = !!document.getElementById("bgrun")?.checked;
+          const r = await window.bo.api("/api/chat", { message: text, sessionId: sessionId || undefined, model: sel.value, background }, { btn: document.getElementById("send"), successMsg: null });
           if (r.ok) {
             addMsg("a", r.data.reply);
             const isNew = !sessionId;

@@ -1,11 +1,13 @@
 // Proプランの会計・庶務エージェント（設計書§2/付録B）。
 // Gemini function-calling のツールループで、新データモデル（personal_items/knowledge/reminders/users）を操作。
 // APIキーは連携設定の暗号KVから復号して使用。
-import { getApiKey } from "./client.ts";
-import type { Role } from "@baku-office/shared";
+import { getApiKey, cachedEntitlement } from "./client.ts";
+import { type Role, atLeast } from "@baku-office/shared";
 import type { Ctx } from "../core/ports.ts";
 import { enabledParts, toolsOf, enabledPartIds, type AgentTool } from "../core/parts.ts";
-import { runToolLoop, type ToolDecl, type Turn } from "../core/ai.ts";
+import { runToolLoop, type ToolDecl, type Turn, type ChatModel } from "../core/ai.ts";
+import { ROLES, toolsForRole, normalizeRole, ROLE_LIST } from "./multi-agent.ts";
+import { maxParallelAgents, agentMaxHops } from "./settings.ts";
 import { localChatModel } from "../core/models/local.ts";
 import { geminiModel } from "../core/models/gemini.ts";
 import { claudeModel } from "../core/models/claude.ts";
@@ -39,6 +41,11 @@ const GEMINI_TOOLS = [
 ];
 const CLAUDE_TOOLS = [
   { name: "make_document", description: "資料を生成（type=md/csv/txt）してDLリンクを返す", parameters: { type: "object", properties: { type: { type: "string" }, title: { type: "string" }, content: { type: "string" } }, required: ["title", "content"] } },
+];
+// マルチエージェント（Pro 以上）：スーパーバイザーが子エージェントへ委譲する道具。
+const MULTI_TOOLS = [
+  { name: "run_subagent", description: `専門の子エージェントに1つのタスクを委譲して結果を得る（役割: ${ROLE_LIST}）`, parameters: { type: "object", properties: { role: { type: "string" }, task: { type: "string", description: "委譲する具体的なタスク" } }, required: ["role", "task"] } },
+  { name: "run_team", description: "複数タスクを子エージェントに同時並行で委譲し、結果をまとめて得る（独立タスクの並列処理に使う）", parameters: { type: "object", properties: { tasks: { type: "array", items: { type: "object", properties: { role: { type: "string" }, task: { type: "string" } }, required: ["role", "task"] } } }, required: ["tasks"] } },
 ];
 // 高度なオプション：有効化済みのユーザー追加スキル（要Claudeキー）。
 function skillTool(names: string[]) {
@@ -103,41 +110,74 @@ export async function runAgent(ctx: Ctx, owner: string, text: string, image?: { 
   const capDecls = caps.map((c) => CAP_TOOLS[c.capability]).filter(Boolean);
   if (caps.some((c) => c.capability === "video_gen")) capDecls.push(VIDEO_STATUS_TOOL);
   // 道具宣言：団体が有効化したパーツの業務道具（§5）＋コア組み込み＋API依存（キーがある時だけ）。
-  const activeTools = toolsOf(enabledParts(await enabledPartIds(ctx)));
+  const parts = enabledParts(await enabledPartIds(ctx));
+  const activeTools = toolsOf(parts);
   const partDecls = activeTools.map((t) => ({ name: t.name, description: t.description, parameters: t.parameters }));
-  const decls = [...partDecls, ...CORE_TOOLS, ...GEMINI_TOOLS, ...(hasClaude ? CLAUDE_TOOLS : []), ...(enabledSkills.length ? [skillTool(enabledSkills.map((s) => s.name))] : []), ...capDecls];
+  // マルチエージェント（Pro 以上）：スーパーバイザー道具を提示。
+  const ent = await cachedEntitlement(env).catch(() => "free" as const);
+  const isPro = atLeast(ent, "pro");
+  const decls = [...partDecls, ...CORE_TOOLS, ...GEMINI_TOOLS, ...(hasClaude ? CLAUDE_TOOLS : []), ...(isPro ? MULTI_TOOLS : []), ...(enabledSkills.length ? [skillTool(enabledSkills.map((s) => s.name))] : []), ...capDecls];
   // 自己認識：有効な追加能力＋団体のカスタム指示（口調・人格・回答形式）をシステム文脈へ。安全制約は不変。
   const capInfo = await capabilitySummary(env);
   const custom = await getCustomPrompt(env);
-  const sys = [SYSTEM, capInfo, custom && `団体の追加指示（口調・人格・回答形式など。安全制約は変更しない）:\n${custom}`].filter(Boolean).join("\n");
+  const multiNote = isPro ? "複雑な依頼は役割ごとに run_subagent へ委譲し、独立した複数タスクは run_team で並列化して、結果を統合して答える。" : "";
+  const sys = [SYSTEM, multiNote, capInfo, custom && `団体の追加指示（口調・人格・回答形式など。安全制約は変更しない）:\n${custom}`].filter(Boolean).join("\n");
 
   const history = opts.history ?? [];
   const want = opts.model; // チャットごとのモデル選択（gemini/claude/local）。未指定は設定/キーで自動。
-  const exec = (n: string, a: Record<string, unknown>) => execTool(ctx, owner, baseUrl, n, a, role, activeTools);
-  const toolDecls = decls as ToolDecl[];
 
-  // ローカルLLM（OAI互換・外部キー不要）。明示選択 or（外部キー無し＋URL設定）。
+  // 使うモデルを1つに解決（予算チェック込み）。pause 時は文言を返して終了。
+  let model: ChatModel | null = null;
+  let provider: "gemini" | "claude" | "local" = "gemini";
   if ((want === "local" || (!geminiKey && !claudeKey)) && env.LOCAL_AI_BASE_URL) {
-    const model = localChatModel(env.LOCAL_AI_BASE_URL, env.LOCAL_AI_MODEL ?? "llama3.1");
-    return runToolLoop(model, sys, { text: text || "（依頼）", image }, toolDecls, exec, 4, history);
+    model = localChatModel(env.LOCAL_AI_BASE_URL, env.LOCAL_AI_MODEL ?? "llama3.1");
+    provider = "local";
+  } else {
+    const useClaude = !!claudeKey && (want === "claude" || (!want && (engine === "claude" || !geminiKey))) && !image;
+    if (useClaude) {
+      const b = await overBudget(env, "claude");
+      if (b === "pause") return "Claudeの今月の利用上限に達しました（設定 → API使用量 で変更できます）。";
+      if (b !== "switch_free") { await recordUsage(env, "claude"); model = claudeModel(claudeKey!); provider = "claude"; }
+      else if (!geminiKey) return "Claudeの上限に達しました（Gemini未設定のため停止）。設定で上限を変更してください。";
+    }
+    if (!model) {
+      if (!geminiKey) return "選択中のエンジンが未設定です。『設定 → 連携設定』で Gemini APIキーを登録するか、エンジンを Claude に切り替えてください。";
+      const gb = await overBudget(env, "gemini");
+      if (gb !== "ok") return "Geminiの今月の利用上限に達しました（設定 → API使用量 で変更できます）。";
+      await recordUsage(env, "gemini"); model = geminiModel(geminiKey); provider = "gemini";
+    }
+  }
+  const first = { text: text || "（依頼）", image: provider === "claude" ? undefined : image };
+
+  // 子エージェント起動（同じモデルを使い回す）。役割の道具だけを見せ、ネスト委譲は不可。
+  const subDeclsFor = (subTools: AgentTool[]) => [
+    ...subTools.map((t) => ({ name: t.name, description: t.description, parameters: t.parameters })),
+    ...GEMINI_TOOLS, ...(hasClaude ? CLAUDE_TOOLS : []),
+  ] as ToolDecl[];
+  async function spawn(roleStr: string, task: string): Promise<string> {
+    const roleKey = normalizeRole(roleStr);
+    const subTools = toolsForRole(roleKey, parts);
+    const subExec = (n: string, a: Record<string, unknown>) => execTool(ctx, owner, baseUrl, n, a, role, subTools);
+    await recordUsage(env, provider); // 子エージェント分のコストも計上
+    return runToolLoop(model!, `${ROLES[roleKey].system}\n割り当てられたタスクのみを遂行し、結果を簡潔に返す。`, { text: task || "（タスク）" }, subDeclsFor(subTools), subExec, 3, []);
   }
 
-  // エンジン選択：明示モデル優先／無ければ設定(engine)・キー有無。画像は Gemini パスのみ対応。
-  const useClaude = !!claudeKey && (want === "claude" || (!want && (engine === "claude" || !geminiKey))) && !image;
-  if (useClaude) {
-    const b = await overBudget(env, "claude");
-    if (b === "pause") return "Claudeの今月の利用上限に達しました（設定 → API使用量 で変更できます）。";
-    if (b !== "switch_free") {
-      await recordUsage(env, "claude");
-      return runToolLoop(claudeModel(claudeKey!), sys, { text: text || "（依頼）" }, toolDecls, exec, 4, history);
+  const cap = await maxParallelAgents(env);
+  // スーパーバイザーの exec：マルチエージェント道具を捌き、それ以外は通常の execTool。
+  const exec = async (n: string, a: Record<string, unknown>): Promise<string> => {
+    if (isPro && n === "run_subagent") return spawn(String(a.role ?? "general"), String(a.task ?? ""));
+    if (isPro && n === "run_team") {
+      const tasks = (Array.isArray(a.tasks) ? a.tasks : []) as { role?: string; task?: string }[];
+      const run = tasks.slice(0, cap);
+      const out = await Promise.all(run.map((t) => spawn(String(t.role ?? "general"), String(t.task ?? ""))));
+      const over = tasks.length > cap ? `\n\n（同時実行は最大${cap}件のため ${tasks.length - cap} 件は省略しました。Workers Paid で上限を拡張できます）` : "";
+      return out.map((r, i) => `【${normalizeRole(String(run[i].role ?? "general"))}】\n${r}`).join("\n\n") + over;
     }
-    if (!geminiKey) return "Claudeの上限に達しました（Gemini未設定のため停止）。設定で上限を変更してください。";
-  }
-  if (!geminiKey) return "選択中のエンジンが未設定です。『設定 → 連携設定』で Gemini APIキーを登録するか、エンジンを Claude に切り替えてください。";
-  const gb = await overBudget(env, "gemini");
-  if (gb !== "ok") return "Geminiの今月の利用上限に達しました（設定 → API使用量 で変更できます）。";
-  await recordUsage(env, "gemini");
-  return runToolLoop(geminiModel(geminiKey), sys, { text: text || "（依頼）", image }, toolDecls, exec, 4, history);
+    return execTool(ctx, owner, baseUrl, n, a, role, activeTools);
+  };
+
+  const hops = await agentMaxHops(env);
+  return runToolLoop(model, sys, first, decls as ToolDecl[], exec, hops, history);
 }
 
 // LINE署名検証（HMAC-SHA256・定数時間比較）。
