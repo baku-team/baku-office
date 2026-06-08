@@ -20,6 +20,8 @@ interface Env {
   GITHUB_OWNER?: string;         // 例 "baku-team"
   GITHUB_TEMPLATE_REPO?: string; // 例 "baku-office-app"
   HOST_BASE_URL?: string;        // report.json に焼く当社ホストURL
+  // オートパイロット：GitHub OAuth App の公開 client_id（device flow）。ここに一度だけ設定すれば全クライアントが自動取得。
+  GITHUB_OAUTH_CLIENT_ID?: string;
   // secrets（wrangler secret put）
   GITHUB_TOKEN?: string; // repo 作成（Administration:write）＋Contents:write
   SIGNING_JWK?: string; // ライセンス署名（Ed25519秘密鍵JWK）
