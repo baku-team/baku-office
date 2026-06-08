@@ -1,7 +1,7 @@
 import type { APIRoute } from "astro";
 import { importVerifyKey, verifyEnvelope, payloadOf, type Envelope } from "@baku-office/shared";
 import { getVerifyJwk, nowSec } from "../../../lib/client.ts";
-import { getExposedActions } from "../../../lib/a2a.ts";
+import { getExposedActions, getGroupExposed } from "../../../lib/a2a.ts";
 import { logDiag } from "../../../lib/diag.ts";
 
 export const prerender = false;
@@ -20,21 +20,22 @@ export const POST: APIRoute = async ({ request, locals }) => {
   if (!jwk) return json({ ok: false, error: "検証鍵が未設定" }, 503);
   if (!(await verifyEnvelope(await importVerifyKey(jwk), envlp))) return json({ ok: false, error: "署名検証に失敗" }, 401);
 
-  const p = payloadOf(envlp) as { from?: string; appId?: string; action?: string; args?: Record<string, unknown>; exp?: number };
+  const p = payloadOf(envlp) as { from?: string; groupId?: string; appId?: string; action?: string; args?: Record<string, unknown>; exp?: number };
   if (!p || typeof p.exp !== "number" || p.exp < nowSec()) return json({ ok: false, error: "期限切れ" }, 401);
   const appId = String(p.appId ?? ""); const action = String(p.action ?? "");
   if (!appId || !action) return json({ ok: false, error: "appId/action が必要" }, 400);
 
-  // 公開を許可したアクションのみ実行（団体側の allowlist）。
-  const exposed = await getExposedActions(ctx);
+  // 公開を許可したアクションのみ実行。グループ経由(groupId あり)はグループ別 allowlist、1:1 はグローバル allowlist。
+  const groupId = p.groupId ? String(p.groupId) : "";
+  const exposed = groupId ? await getGroupExposed(ctx, groupId) : await getExposedActions(ctx);
   if (!exposed.includes(`${appId}.${action}`)) {
-    await logDiag(env, "warn", "other", `A2A 未公開アクション拒否: ${appId}.${action}（from ${p.from ?? "?"}）`);
+    await logDiag(env, "warn", "other", `A2A 未公開アクション拒否: ${appId}.${action}（from ${p.from ?? "?"}${groupId ? ` / group ${groupId}` : ""}）`);
     return json({ ok: false, error: "このアクションは公開されていません" }, 403);
   }
 
   try {
     const result = await ctx.apps.call(appId, action, p.args ?? {}); // caller 無し＝外部許可（allowlist で統制）
-    await logDiag(env, "info", "other", `A2A 実行: ${appId}.${action}（from ${p.from ?? "?"}）`);
+    await logDiag(env, "info", "other", `A2A 実行: ${appId}.${action}（from ${p.from ?? "?"}${groupId ? ` / group ${groupId}` : ""}）`);
     return json({ ok: true, result });
   } catch (e) {
     return json({ ok: false, error: (e as Error).message ?? "実行に失敗" }, 400);

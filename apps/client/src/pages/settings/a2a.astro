@@ -13,11 +13,16 @@ const licenseId = hasPro ? (await getLicenseId(env)) ?? "" : "";
 
 await import("../../parts/index.ts");
 const { appCatalog } = await import("../../core/apps.ts");
-const { getExposedActions, a2aHost } = await import("../../lib/a2a.ts");
+const { getExposedActions, getGroupExposed, a2aHost, groupHost } = await import("../../lib/a2a.ts");
 const cat = hasPro ? appCatalog().filter((a) => a.actions.length > 0) : [];
 const exposed = hasPro ? new Set(await getExposedActions(Astro.locals.ctx)) : new Set<string>();
 const list = hasPro ? ((await a2aHost(env, "list").catch(() => ({}))) as { connections?: { id: string; partner: string | null; status: string }[] }) : {};
 const conns = list.connections ?? [];
+// グループ一覧＋各グループの公開アクション。
+const glist = hasPro ? ((await groupHost(env, "list").catch(() => ({}))) as { groups?: { id: string; name: string | null; owner: boolean; members: { license: string; label: string | null }[] }[] }) : {};
+const groups = glist.groups ?? [];
+const groupExposed: Record<string, Set<string>> = {};
+for (const g of groups) groupExposed[g.id] = new Set(await getGroupExposed(Astro.locals.ctx, g.id));
 ---
 <App title="A2A（団体間連携）" active="/settings">
   <h1>A2A（他団体エージェント連携）</h1>
@@ -62,6 +67,33 @@ const conns = list.connections ?? [];
         <button class="btn btn-primary" id="saveExp">公開アクションを保存</button>
       </div>
 
+      <h2>グループ（3団体以上）</h2>
+      <div class="card">
+        <p class="muted">グループを作成して招待コードを配る／相手のコードで参加。グループ内では特定メンバー呼び出しと全員同報ができます。公開アクションは<strong>グループごと</strong>に設定します。</p>
+        <div class="row"><input id="gname" placeholder="グループ名（任意）" /><button class="btn btn-primary" id="mkgroup" style="flex:0 0 auto">グループ作成</button><span id="gout" class="muted"></span></div>
+        <div class="row" style="margin-top:.5rem"><input id="gjoin" placeholder="グループコード" /><button class="btn btn-primary" id="joingroup" style="flex:0 0 auto">参加</button></div>
+      </div>
+
+      {groups.map((g) => (
+        <div class="card" data-gid={g.id} style="margin-top:.6rem">
+          <div class="row" style="justify-content:space-between"><strong>{g.name || "（無名グループ）"}{g.owner ? "（作成者）" : ""}</strong><button class="btn btn-sm btn-danger gleave" style="flex:0 0 auto">脱退</button></div>
+          <p class="muted" style="font-size:.8rem">コード：<code>{g.id}</code> ／ メンバー：{g.members.map((m) => m.label || m.license).join("、")}</p>
+          <details>
+            <summary>このグループへ公開するアクション</summary>
+            {cat.length === 0 && (<p class="muted">公開できるアクションがありません。</p>)}
+            {cat.map((a) => (
+              <div class="field"><strong>{a.name}</strong>
+                {a.actions.map((act) => (
+                  <label style="display:block;margin-left:1rem;font-size:.9rem"><input type="checkbox" class="gexp-chk" value={`${a.id}.${act}`} checked={groupExposed[g.id]?.has(`${a.id}.${act}`)} /> {act}</label>
+                ))}
+              </div>
+            ))}
+            <button class="btn btn-primary gexp-save">このグループの公開アクションを保存</button>
+          </details>
+        </div>
+      ))}
+      {groups.length === 0 && (<p class="muted">グループはありません。</p>)}
+
       <script slot="scripts" is:inline>
         (function () {
           const api = (b, btn) => window.bo.api("/api/a2a/manage", b, { btn });
@@ -86,6 +118,31 @@ const conns = list.connections ?? [];
           document.getElementById("saveExp")?.addEventListener("click", async (e) => {
             const actions = [...document.querySelectorAll(".exp-chk")].filter((c) => c.checked).map((c) => c.value);
             await api({ _action: "expose", actions }, e.currentTarget);
+          });
+          // グループ
+          document.getElementById("mkgroup")?.addEventListener("click", async (e) => {
+            const name = document.getElementById("gname").value.trim();
+            const r = await api({ _action: "group_create", name }, e.currentTarget);
+            if (r.ok && r.data.groupId) { document.getElementById("gout").textContent = "コード：" + r.data.groupId; setTimeout(() => location.reload(), 800); }
+          });
+          document.getElementById("joingroup")?.addEventListener("click", async (e) => {
+            const groupId = document.getElementById("gjoin").value.trim();
+            if (!groupId) { window.bo.toast("グループコードを入力", "err"); return; }
+            const r = await api({ _action: "group_join", groupId }, e.currentTarget);
+            if (r.ok && r.data.ok) { window.bo.toast("参加しました"); setTimeout(() => location.reload(), 700); }
+            else window.bo.toast(r.data.error || "参加に失敗", "err");
+          });
+          document.querySelectorAll("[data-gid]").forEach((el) => {
+            const gid = el.dataset.gid;
+            el.querySelector(".gleave")?.addEventListener("click", async (e) => {
+              if (!confirm("このグループを脱退しますか？")) return;
+              const r = await api({ _action: "group_leave", groupId: gid }, e.currentTarget);
+              if (r.ok) setTimeout(() => location.reload(), 500);
+            });
+            el.querySelector(".gexp-save")?.addEventListener("click", async (e) => {
+              const actions = [...el.querySelectorAll(".gexp-chk")].filter((c) => c.checked).map((c) => c.value);
+              await api({ _action: "group_expose", groupId: gid, actions }, e.currentTarget);
+            });
           });
         })();
       </script>
