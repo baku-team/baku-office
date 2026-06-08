@@ -91,7 +91,7 @@ const clampSpan = (n?: number) => Math.max(1, Math.min(3, Number(n) || 1));
               <div class="label">{s.label}{!s.enabled && (s.key === "r2" ? "（未使用）" : s.key === "drive" ? "（未連携）" : "")}</div>
               <div class="gauge"><div class={`gfill ${pct(s.used, s.limit) >= 80 ? "hot" : ""}`} style={`width:${pct(s.used, s.limit)}%`}></div></div>
               <div class="muted" style="font-size:.82rem;margin-top:4px">{s.used < 0 ? "計測不可" : `${fmtBytes(s.used)} / ${fmtBytes(s.limit)}（${pct(s.used, s.limit)}%）`}</div>
-              {(s.hint === "paid" || s.hint === "r2") && (<div class="muted" style="font-size:.74rem;margin-top:2px"><a href={s.hint === "r2" ? "/usage" : "/settings/advanced"}>{s.hint === "r2" ? "R2 を有効化" : "Workers Paid で拡張"}</a></div>)}
+              {(s.hint === "paid" || s.hint === "r2") && (<div class="muted" style="font-size:.74rem;margin-top:2px"><a href="/settings/advanced">{s.hint === "r2" ? "R2 を有効化" : "Workers Paid で拡張"}</a></div>)}
               {s.key === "drive" && !s.enabled && (<div class="muted" style="font-size:.74rem;margin-top:2px"><a href="/drive">連携する</a></div>)}
             </div>
           ))}
