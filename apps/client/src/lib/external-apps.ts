@@ -1,6 +1,6 @@
 // 外部アプリ：レジストリからの署名検証付き取り込み（ランタイム型）＋ AI生成ドラフト→申請。
 import type { Ctx } from "../core/ports.ts";
-import { hostFetch, getVerifyJwk, getLicenseId } from "./client.ts";
+import { hostFetch, getVerifyJwk, getLicenseId, getToken } from "./client.ts";
 import { importVerifyKey, verifyEnvelope, payloadOf, randomId } from "@baku-office/shared";
 import { nowSec } from "./accounting.ts";
 import { preflight, type PreflightResult } from "./preflight.ts";
@@ -10,9 +10,11 @@ type AppPkg = { id: string; name: string; version: string; permissions?: string[
 // レジストリから署名付きパッケージを取得し、ホスト公開鍵で検証して取り込む（再デプロイ不要）。
 export async function fetchAndInstall(ctx: Ctx, id: string): Promise<{ ok: boolean; error?: string }> {
   const env = ctx.env;
+  const token = await getToken(env);
+  if (!token) return { ok: false, error: "ライセンス未取得" };
   let r: Response;
-  try { r = await hostFetch(env, "/api/registry/fetch?id=" + encodeURIComponent(id)); } catch { return { ok: false, error: "ホストへ接続できません" }; }
-  if (!r.ok) return { ok: false, error: "取得に失敗しました（承認済みアプリのみ取得可）" };
+  try { r = await hostFetch(env, "/api/registry/fetch", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ token, id }) }); } catch { return { ok: false, error: "ホストへ接続できません" }; }
+  if (!r.ok) { const j = (await r.json().catch(() => ({}))) as { error?: string }; return { ok: false, error: j.error ?? "取得に失敗しました（承認済み・プラン充足が必要）" }; }
   const j = (await r.json().catch(() => ({}))) as { pkg?: string };
   if (!j.pkg) return { ok: false, error: "パッケージがありません" };
   const jwk = await getVerifyJwk(env);

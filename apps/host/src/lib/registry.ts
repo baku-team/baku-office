@@ -1,11 +1,23 @@
-// アプリ・レジストリ中枢（ホスト側）：存在するアプリの管理＋利用状況の集計＋署名付き配布。
+// アプリ・レジストリ中枢（ホスト側）：存在するアプリの管理＋利用状況の集計＋署名付き配布＋ストア。
 import { nowSec, signingJwk } from "./host.ts";
-import { signEnvelope, importSignKey } from "@baku-office/shared";
+import { signEnvelope, importSignKey, randomId, atLeast, openLicense, type Entitlement, type Envelope } from "@baku-office/shared";
+
+// ライセンストークン → {licenseId, 最新entitlement}（store/DL のプラン判定・なりすまし防止）。
+export async function callerFromToken(env: Env, token: string | undefined): Promise<{ licenseId: string; entitlement: Entitlement } | null> {
+  if (!token) return null;
+  let e: Envelope;
+  try { e = JSON.parse(atob(token)) as Envelope; } catch { return null; }
+  const p = await openLicense(signingJwk(env), e, nowSec());
+  if (!p) return null;
+  const lic = await env.DB.prepare("SELECT entitlement FROM licenses WHERE license_id=? AND status='active'").bind(p.licenseId).first<{ entitlement: string }>();
+  return { licenseId: p.licenseId, entitlement: (lic?.entitlement ?? p.entitlement) as Entitlement };
+}
 
 export type RegistryApp = {
   id: string; name: string; version: string; repo_url: string | null; publisher: string | null;
   category: string | null; permissions: string | null; description: string | null; status: string;
   definition: string | null; submitted_by: string | null;
+  listed?: number; min_entitlement?: string; // 0008 ストア（掲載/最低プラン）
   created_at: number; updated_at: number;
 };
 
@@ -79,6 +91,80 @@ export async function usageByApp(env: Env, activeWithinSec = 30 * 86400): Promis
      FROM app_usage GROUP BY app_id ORDER BY installs DESC`,
   ).bind(since).all<{ app_id: string; installs: number; active: number; versions: string }>();
   return results;
+}
+
+// ===== アプリストア（提供者が任意で公開・プラン別DL・DL数・評価・ランキング/バッジ） =====
+
+export type StoreApp = {
+  id: string; name: string; version: string; category: string | null; description: string | null;
+  permissions: string[]; min_entitlement: string; downloads: number; avg_rating: number; reviews: number; badges: string[];
+};
+
+// ストア掲載（提供者本人＝submitted_by かつ approved のみ）。
+export async function setListed(env: Env, appId: string, byLicense: string, listed: boolean, minEntitlement?: string): Promise<{ ok: boolean; error?: string }> {
+  const app = await getApp(env, appId);
+  if (!app) return { ok: false, error: "アプリが見つかりません" };
+  if (app.submitted_by !== byLicense) return { ok: false, error: "提供者のみ公開設定できます" };
+  if (app.status !== "approved") return { ok: false, error: "承認済みのアプリのみストアに公開できます" };
+  const me = ["free", "plus", "pro", "nonprofit", "enterprise", "test"].includes(String(minEntitlement)) ? String(minEntitlement) : app.min_entitlement;
+  await env.DB.prepare("UPDATE registry_apps SET listed=?, min_entitlement=?, updated_at=? WHERE id=?").bind(listed ? 1 : 0, me, nowSec(), appId).run();
+  return { ok: true };
+}
+// ホスト管理者による掲載可否の上書き。
+export async function hostSetListed(env: Env, appId: string, listed: boolean, minEntitlement?: string): Promise<void> {
+  const me = minEntitlement && ["free", "plus", "pro", "nonprofit", "enterprise", "test"].includes(minEntitlement) ? minEntitlement : undefined;
+  await env.DB.prepare("UPDATE registry_apps SET listed=?, min_entitlement=COALESCE(?,min_entitlement), updated_at=? WHERE id=?").bind(listed ? 1 : 0, me ?? null, nowSec(), appId).run();
+}
+
+async function statsFor(env: Env, appId: string): Promise<{ downloads: number; avg: number; reviews: number }> {
+  const d = await env.DB.prepare("SELECT COUNT(*) AS n FROM app_downloads WHERE app_id=?").bind(appId).first<{ n: number }>();
+  const r = await env.DB.prepare("SELECT COUNT(*) AS n, AVG(rating) AS a FROM app_reviews WHERE app_id=?").bind(appId).first<{ n: number; a: number | null }>();
+  return { downloads: d?.n ?? 0, avg: r?.a ? Math.round(r.a * 10) / 10 : 0, reviews: r?.n ?? 0 };
+}
+
+// ストア・カタログ（掲載中＋承認済み＋プラン充足）。DL数→評価でランキング、バッジ付与。
+export async function storeCatalog(env: Env, entitlement: Entitlement): Promise<StoreApp[]> {
+  const { results } = await env.DB.prepare("SELECT id,name,version,category,description,permissions,min_entitlement FROM registry_apps WHERE status='approved' AND listed=1").all<{ id: string; name: string; version: string; category: string | null; description: string | null; permissions: string; min_entitlement: string }>();
+  const out: StoreApp[] = [];
+  for (const a of results) {
+    if (!atLeast(entitlement, (a.min_entitlement || "free") as Entitlement)) continue; // プラン未満は出さない
+    const s = await statsFor(env, a.id);
+    const badges: string[] = [];
+    if (s.downloads >= 10) badges.push("人気");
+    if (s.avg >= 4.5 && s.reviews >= 3) badges.push("高評価");
+    out.push({ id: a.id, name: a.name, version: a.version, category: a.category, description: a.description, permissions: JSON.parse(a.permissions || "[]"), min_entitlement: a.min_entitlement || "free", downloads: s.downloads, avg_rating: s.avg, reviews: s.reviews, badges });
+  }
+  out.sort((x, y) => y.downloads - x.downloads || y.avg_rating - x.avg_rating);
+  return out;
+}
+
+// 自分が提供（submitted_by）したアプリ一覧（公開設定UI用・状態/掲載/統計つき）。
+export async function myApps(env: Env, licenseId: string): Promise<{ id: string; name: string; version: string; status: string; listed: number; min_entitlement: string; downloads: number; avg: number; reviews: number }[]> {
+  const { results } = await env.DB.prepare("SELECT id,name,version,status,listed,min_entitlement FROM registry_apps WHERE submitted_by=? ORDER BY updated_at DESC").bind(licenseId).all<{ id: string; name: string; version: string; status: string; listed: number; min_entitlement: string }>();
+  const out = [];
+  for (const a of results) { const s = await statsFor(env, a.id); out.push({ ...a, min_entitlement: a.min_entitlement || "free", downloads: s.downloads, avg: s.avg, reviews: s.reviews }); }
+  return out;
+}
+
+export async function recordDownload(env: Env, appId: string, licenseId: string): Promise<void> {
+  await env.DB.prepare("INSERT INTO app_downloads (id,app_id,license_id,downloaded_at) VALUES (?,?,?,?)").bind(randomId(8), appId, licenseId, nowSec()).run();
+}
+export async function rateApp(env: Env, appId: string, licenseId: string, rating: number, body?: string): Promise<{ ok: boolean; error?: string }> {
+  const r = Math.max(1, Math.min(5, Math.round(rating)));
+  if (!(await getApp(env, appId))) return { ok: false, error: "アプリが見つかりません" };
+  await env.DB.prepare("INSERT INTO app_reviews (app_id,license_id,rating,body,created_at) VALUES (?,?,?,?,?) ON CONFLICT(app_id,license_id) DO UPDATE SET rating=excluded.rating, body=excluded.body, created_at=excluded.created_at")
+    .bind(appId, licenseId, r, body ?? null, nowSec()).run();
+  return { ok: true };
+}
+export async function listReviews(env: Env, appId: string): Promise<{ rating: number; body: string | null; created_at: number }[]> {
+  return (await env.DB.prepare("SELECT rating,body,created_at FROM app_reviews WHERE app_id=? ORDER BY created_at DESC LIMIT 50").bind(appId).all<{ rating: number; body: string | null; created_at: number }>()).results;
+}
+// アプリの掲載可否＋DL最低プラン（管理画面表示用）。
+export async function appStoreMeta(env: Env): Promise<Record<string, { listed: number; min_entitlement: string; downloads: number; avg: number; reviews: number }>> {
+  const { results } = await env.DB.prepare("SELECT id,listed,min_entitlement FROM registry_apps").all<{ id: string; listed: number; min_entitlement: string }>();
+  const out: Record<string, { listed: number; min_entitlement: string; downloads: number; avg: number; reviews: number }> = {};
+  for (const a of results) { const s = await statsFor(env, a.id); out[a.id] = { listed: a.listed, min_entitlement: a.min_entitlement || "free", downloads: s.downloads, avg: s.avg, reviews: s.reviews }; }
+  return out;
 }
 
 // 申告文字列 "id:ver,id2:ver2" をパース。
