@@ -21,3 +21,22 @@ export async function setCustomPrompt(env: Env, s: string): Promise<string> {
   await env.LICENSE.put("custom_prompt", v);
   return v;
 }
+
+// Workers Paid（CF有料プラン）有効フラグ。管理者が「CFをPaidにした」と申告して上限を引き上げる。
+// CF側から自動検出はできないため自己申告。マルチエージェントの並列数・ジョブ規模・ホップ上限の引き上げに使う。
+export async function getWorkersPaid(env: Env): Promise<boolean> {
+  return (await env.LICENSE.get("workers_paid")) === "true";
+}
+export async function setWorkersPaid(env: Env, enabled: boolean): Promise<boolean> {
+  await env.LICENSE.put("workers_paid", enabled ? "true" : "false");
+  return enabled;
+}
+
+// マルチエージェントの同時実行上限（無料枠は subrequest/CPU 制約のため控えめ、Paid で拡張）。
+export async function maxParallelAgents(env: Env): Promise<number> {
+  return (await getWorkersPaid(env)) ? 5 : 2;
+}
+// スーパーバイザーのホップ上限（Paid でより多段の委譲を許可）。
+export async function agentMaxHops(env: Env): Promise<number> {
+  return (await getWorkersPaid(env)) ? 6 : 4;
+}

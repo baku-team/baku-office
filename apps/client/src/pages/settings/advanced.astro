@@ -8,7 +8,9 @@ const ses = await getSession(env, Astro.request);
 if (!ses || ses.role !== "admin" || ses.ctx !== "org") return Astro.redirect("/login", 302);
 const entitlement = await (await import("../../lib/client.ts")).cachedEntitlement(env);
 const hasPlus = atLeast(entitlement, "plus");
-const { getAiEngine, getCustomPrompt } = await import("../../lib/settings.ts");
+const hasPro = atLeast(entitlement, "pro");
+const { getAiEngine, getCustomPrompt, getWorkersPaid } = await import("../../lib/settings.ts");
+const workersPaid = hasPlus ? await getWorkersPaid(env) : false;
 const { hasApiKey } = await import("../../lib/client.ts");
 const engine = hasPlus ? await getAiEngine(env) : "gemini";
 const custom = hasPlus ? await getCustomPrompt(env) : "";
@@ -91,6 +93,29 @@ const curMax = hasPlus ? await maxUploadMb(env) : 5;
     )}
   </div>
 
+  <h2>マルチエージェント（Pro 以上）</h2>
+  {!hasPro && (
+    <div class="card"><p class="muted">複数の専門エージェントを役割分担・並列・バックグラウンドで動かす機能は <strong>Pro 以上</strong>で開放されます。<a href="/billing">プラン・課金へ</a></p></div>
+  )}
+  {hasPro && (
+    <div class="card">
+      <p class="muted">AIチャットが複雑な依頼を<strong>役割ごとの子エージェントに委譲（順次/並列）</strong>し、重い処理は<strong>バックグラウンド実行</strong>できます。実行規模は Cloudflare の枠に依存します。</p>
+      <div class="field"><label><input type="checkbox" id="wpaid" checked={workersPaid} /> <strong>Workers Paid を有効化済み</strong>（CFをPaidにしたらONにすると上限を引き上げます）</label></div>
+      <button class="btn btn-primary" id="saveWpaid">保存</button>
+      <div class="table-wrap" style="margin-top:.8rem"><table>
+        <thead><tr><th>項目</th><th>無料枠</th><th>Workers Paid</th></tr></thead>
+        <tbody>
+          <tr><td>並列エージェント上限</td><td>2</td><td>5</td></tr>
+          <tr><td>委譲ホップ上限</td><td>4</td><td>6</td></tr>
+          <tr><td>バックグラウンド・ジョブ</td><td>小規模（順次・少数）</td><td>大きめ・安定</td></tr>
+          <tr><td>A2A（他団体連携）</td><td colspan="2" class="ctr">Pro 以上（別途 連携設定）</td></tr>
+          <tr><td>目安サブリクエスト/リクエスト</td><td>〜50</td><td>〜1000</td></tr>
+        </tbody>
+      </table></div>
+      <p class="muted" style="font-size:.8rem">現在：<strong>{workersPaid ? "Workers Paid 有効（上限拡張）" : "無料枠（上限控えめ）"}</strong>。CF の Paid 化自体はダッシュボードで行います（下記）。重い処理が枠に当たる場合は AIチャットの「バックグラウンドで実行」をご利用ください。</p>
+    </div>
+  )}
+
   <h2>Workers Paid（CF有料プラン）への切替案内</h2>
   <div class="banner banner-info">無料枠では CPU時間・実行時間(waitUntil)・サブリクエスト数 等に上限があり、大きなファイル処理や生成でエラーになることがあります（<a href="/diagnostics">診断</a>）。安定運用には Cloudflareダッシュボードで <strong>Workers &amp; Pages → Plans → Workers Paid（月$5〜）</strong> に切り替えてください。データ・デプロイはそのまま、上限が大幅緩和されます。</div>
   </div>
@@ -111,6 +136,7 @@ const curMax = hasPlus ? await maxUploadMb(env) : 5;
         await window.bo.api("/api/settings", { _action: "custom_prompt", prompt }, { btn: e.currentTarget, successMsg: "カスタム指示を保存しました" });
       });
       document.getElementById("saveMax")?.addEventListener("click", async (e) => { const v = document.getElementById("maxmb").value; const r = await window.bo.api("/api/settings", { _action: "max_upload", mb: Number(v) }, { btn: e.currentTarget, successMsg: "上限を保存しました" }); if (r.ok) setTimeout(() => location.reload(), 600); });
+      document.getElementById("saveWpaid")?.addEventListener("click", async (e) => { const workersPaid = document.getElementById("wpaid").checked; const r = await window.bo.api("/api/settings", { _action: "workers_paid", workersPaid }, { btn: e.currentTarget, successMsg: "保存しました" }); if (r.ok) setTimeout(() => location.reload(), 600); });
     })();
   </script>
   )}

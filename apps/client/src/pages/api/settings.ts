@@ -1,7 +1,7 @@
 import type { APIRoute } from "astro";
 import { getSession } from "../../lib/auth.ts";
 import { setMaxUploadMb } from "../../lib/storage.ts";
-import { setAiEngine, setCustomPrompt } from "../../lib/settings.ts";
+import { setAiEngine, setCustomPrompt, setWorkersPaid } from "../../lib/settings.ts";
 import { setStorageLimits } from "../../lib/storage-usage.ts";
 import { partCatalog, enabledPartIds, setEnabledPartIds } from "../../core/parts.ts";
 import { setTheme } from "../../core/theme.ts";
@@ -20,7 +20,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
   const env = locals.runtime.env;
   const ses = await getSession(env, request);
   if (!ses || ses.role !== "admin" || ses.ctx !== "org") return json({ error: "管理者のみ" }, 403);
-  const b = (await request.json().catch(() => ({}))) as { _action?: string; mb?: number; engine?: string; prompt?: string; limits?: Record<string, number>; parts?: string[]; theme?: unknown; nav?: { hidden?: string[]; labels?: Record<string, string>; order?: string[] }; appId?: string; draftId?: string; layout?: { order?: string[]; hidden?: string[] }; domain?: string };
+  const b = (await request.json().catch(() => ({}))) as { _action?: string; mb?: number; engine?: string; prompt?: string; limits?: Record<string, number>; parts?: string[]; theme?: unknown; nav?: { hidden?: string[]; labels?: Record<string, string>; order?: string[] }; appId?: string; draftId?: string; layout?: { order?: string[]; hidden?: string[] }; domain?: string; workersPaid?: boolean };
   if (b._action === "max_upload") {
     const v = await setMaxUploadMb(env, Number(b.mb));
     return json({ ok: true, mb: v });
@@ -32,6 +32,10 @@ export const POST: APIRoute = async ({ request, locals }) => {
   if (b._action === "custom_prompt") {
     const v = await setCustomPrompt(env, String(b.prompt ?? ""));
     return json({ ok: true, prompt: v });
+  }
+  if (b._action === "workers_paid") {
+    const v = await setWorkersPaid(env, b.workersPaid === true);
+    return json({ ok: true, workersPaid: v });
   }
   if (b._action === "storage_limits") {
     const inc = b.limits ?? {};

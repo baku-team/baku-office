@@ -4,6 +4,7 @@ import { linePush } from "../../../lib/agent.ts";
 import { dueReminders, markReminderDone } from "../../../parts/reminders.ts";
 import { processSummaryJobs } from "../../../lib/media-ai.ts";
 import { pollVideoJobs } from "../../../lib/capabilities.ts";
+import { processAgentJobs } from "../../../lib/agent-jobs.ts";
 import { guardHeavy } from "../../../lib/diag.ts";
 import { getDriveBackup, backupToDrive } from "../../../lib/drive.ts";
 
@@ -18,6 +19,10 @@ export const POST: APIRoute = async ({ request, locals }) => {
   // 要約ジョブのステップ処理（Geminiキーがある時のみ進む）。CF制限時は診断記録。
   const g = await guardHeavy(env, "summary jobs", () => processSummaryJobs(env));
   const summarized = g.ok ? g.value : 0;
+
+  // マルチエージェントの長時間ジョブ（Pro・バックグラウンド実行）。CF制限時は診断記録。
+  const aj = await guardHeavy(env, "agent jobs", () => processAgentJobs(locals.ctx, new URL(request.url).origin));
+  const agentJobs = aj.ok ? aj.value : 0;
 
   const accessToken = await getApiKey(env, "line_token");
   // 動画ジョブのポーリング（完成→DL保存＋LINE通知）。
@@ -38,5 +43,5 @@ export const POST: APIRoute = async ({ request, locals }) => {
     if (dr.ok) driveBackup = dr.value;
   }
 
-  return json({ ok: true, sent, summarized, video, driveBackup });
+  return json({ ok: true, sent, summarized, video, agentJobs, driveBackup });
 };

@@ -31,8 +31,11 @@ export async function runToolLoop(
     const res = await model.turn(system, history, tools);
     if (!res.toolCalls?.length) return (res.text ?? "").trim() || "（応答が空でした）";
     history.push({ role: "assistant", text: res.text, toolCalls: res.toolCalls });
-    const results = [];
-    for (const c of res.toolCalls) results.push({ id: c.id, name: c.name, content: await exec(c.name, c.args) });
+    // 1ターンに複数の道具呼び出しが来たら並列実行（スーパーバイザーが子エージェントを同時 delegate＝並列）。
+    const calls = res.toolCalls;
+    const results = calls.length > 1
+      ? await Promise.all(calls.map(async (c) => ({ id: c.id, name: c.name, content: await exec(c.name, c.args) })))
+      : [{ id: calls[0].id, name: calls[0].name, content: await exec(calls[0].name, calls[0].args) }];
     history.push({ role: "tool", results });
   }
   return "処理が長くなりました。もう一度お試しください。";
