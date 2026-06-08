@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>baku-office 会計・庶務クラウドAIアシスタント 事業説明資料</title>
+<title>baku-office 自社専用AIの相棒 事業説明資料</title>
 <style>
   :root{
     --navy:#14365c; --navy-d:#0e2742; --gold:#b8893b; --gold-l:#d8b878;
@@ -118,6 +118,16 @@
   .pill.free{background:#eef1f5; color:var(--navy);}
   .pill.plus{background:#e7f1ec; color:var(--ok); border-color:#bcd9cb;}
   .pill.pro{background:#fbf6ed; color:var(--gold); border-color:#e6cfa0;}
+  .pill.test{background:#ecebff; color:#4b46c4; border-color:#cdcbf2;}
+
+  /* ---------- steps (numbered) ---------- */
+  .steps{counter-reset:stp; margin:3mm 0;}
+  .steps .s{position:relative; padding:2.5mm 0 2.5mm 12mm; border-bottom:1px dashed var(--line);}
+  .steps .s:last-child{border-bottom:none;}
+  .steps .s::before{counter-increment:stp; content:counter(stp); position:absolute; left:0; top:2.5mm;
+    width:8mm; height:8mm; line-height:8mm; text-align:center; border-radius:50%; background:var(--navy); color:#fff; font-weight:800; font-size:10pt;}
+  .steps .s b{color:var(--navy);}
+  .steps .s .d{font-size:9pt; color:var(--sub2);}
 
   .footer{position:absolute; bottom:10mm; left:16mm; right:16mm; display:flex; justify-content:space-between;
           font-size:8pt; color:var(--sub2); border-top:1px solid var(--line); padding-top:2mm;}
@@ -135,7 +145,7 @@
   .bub.a{align-self:flex-start; background:#eef1f5; color:#27313c; border-bottom-left-radius:2px;}
   .bub .who{display:block; font-size:7pt; opacity:.65; margin-bottom:.4mm;}
 
-  /* ---------- onboarding wizard mock ---------- */
+  /* ---------- mock UI ---------- */
   .stepper{display:flex; gap:0; margin:3mm 0 5mm;}
   .stepper .st{flex:1; text-align:center; font-size:8pt; color:var(--sub2);}
   .stepper .st .n{display:inline-block; width:7mm; height:7mm; line-height:7mm; border-radius:50%; background:var(--navy); color:#fff; font-weight:800; font-size:9pt;}
@@ -149,6 +159,12 @@
   .btnm{display:inline-block; background:var(--navy); color:#fff; border-radius:5px; padding:1.5mm 4mm; font-size:8.3pt; font-weight:700;}
   .chk{font-size:8.5pt; margin:1mm 0; color:#2a3a34;}
   .chk .c{color:var(--ok); font-weight:800;}
+  /* nav mock */
+  .navmock{display:flex; gap:2mm; margin:2mm 0 4mm;}
+  .navmock .ni{flex:1; text-align:center; border:1.5px solid var(--navy); border-radius:7px; padding:3mm 2mm; background:#fff;}
+  .navmock .ni .ic{font-size:14pt;}
+  .navmock .ni .t{font-weight:800; color:var(--navy); font-size:9.5pt; margin-top:1mm;}
+  .navmock .ni .d{font-size:7.6pt; color:var(--sub2); margin-top:.6mm;}
 
   @page{ size:A4; margin:0; }
   @media print{
@@ -163,20 +179,21 @@
 <section class="page cover">
   <div>
     <div class="eyebrow">SERVICE OVERVIEW ・ 事業説明資料</div>
-    <h1>会計・庶務の<br><span>クラウドAIアシスタント</span><br>baku-office</h1>
+    <h1>自社専用AIの<span>相棒</span>を、<br><span>丸ごと所有する。</span><br>baku-office</h1>
     <div class="lead">
-      団体ごとの Cloudflare 上に「自社専用の業務アプリ」を自己ホスト。会計・名簿・ファイル・予定・議事録を
-      Web 画面で扱い、Gemini／Claude を中核とした AI が集計・検索・文書作成を支援。
-      データは顧客自身が保有し、当社はライセンスと配布のみを担う、データ主権型 SaaS。
+      AIと対話しながら、自社の業務に必要な機能（アプリ）を自分で作り・載せ替え・育てる。
+      それを団体ごとの Cloudflare 上に「自社専用システム」として<b>丸ごと所有</b>できる基盤です。
+      データもコードも暗号鍵も顧客が保有し、当社はライセンスと配布のみを担います。
+      会計・庶務は、あらかじめ入っている機能の<b>一例</b>にすぎません。
     </div>
     <div class="chips">
-      <span>自己ホスト型（顧客アカウント）</span><span>データは顧客保有</span>
-      <span>会計・庶務コア</span><span>AIチャット & エージェント</span>
-      <span>LINE / Discord 連携</span><span>Cloudflare / Astro</span>
+      <span>自社で完全所有（顧客アカウント）</span><span>AIでアプリを作れる</span>
+      <span>何でも載るポータブルコア</span><span>フルクラウド〜オフライン</span>
+      <span>4画面のシンプルUI</span><span>Cloudflare / Astro</span>
     </div>
   </div>
   <div class="meta">
-    2026年6月　／　社内資料（社外秘）　／　正本：integrated_design_package v1.0
+    2026年6月　／　社内資料（社外秘）　／　正本：integrated_design_package v1.2
   </div>
 </section>
 
@@ -186,37 +203,40 @@
   <h2 class="sec">エグゼクティブサマリー</h2>
 
   <p class="lead-p">
-    baku-office は、<b>会計・庶務（バックオフィス）業務を丸ごと支援するクラウド業務アプリ</b>を、
-    団体ごとに<b>自社の Cloudflare アカウント上へ自己ホスト</b>して提供する SaaS です。
-    入出金・出納帳・収支計算書などの<b>会計コア</b>、名簿・ファイル・予定・議事録、そして
-    <b>AIチャット・エージェント</b>を、ブラウザの管理画面と LINE／Discord の両方から利用できます。
+    baku-office は、<b>「自社専用AIの相棒」を、団体が丸ごと所有するための基盤</b>です。
+    利用団体は、<b>AIと対話しながら自社に必要な機能（アプリ）を作り・載せ替え・育て</b>、それを
+    <b>自社の Cloudflare アカウント上へ自己ホスト</b>して所有します。出来合いのSaaSを借りるのではなく、
+    <b>自分たちのための相棒を所有する</b>——会計・名簿・議事録などの標準機能は、その上に載る<b>一例</b>です。
   </p>
 
   <div class="kpi" style="margin:6mm 0;">
-    <div class="k"><div class="n">2</div><div class="l">ホスト＋自己ホストの2層構成</div></div>
+    <div class="k"><div class="n">4</div><div class="l">画面（ホーム/AI/アプリ/設定）</div></div>
     <div class="k"><div class="n">1<span style="font-size:12pt;">click</span></div><div class="l">Deployボタンで導入</div></div>
-    <div class="k"><div class="n">3</div><div class="l">プラン（Free / Plus / Pro）</div></div>
+    <div class="k"><div class="n">∞</div><div class="l">AIで増やせる自作アプリ</div></div>
     <div class="k"><div class="n">0<span style="font-size:12pt;">円〜</span></div><div class="l">Freeはクレカ不要で稼働</div></div>
   </div>
 
-  <h3>特長</h3>
-  <div class="grid col2">
-    <div class="card soft"><div class="ico">📊</div><h4>会計・庶務をひとつに</h4>
-      <p>入出金登録・出納帳・収支計算書・予算書・科目別台帳・PDF/CSV 出力まで。名簿・ファイル・予定・議事録も同じ画面で。</p></div>
-    <div class="card soft"><div class="ico">🔒</div><h4>データは顧客が保有</h4>
-      <p>アプリも DB も顧客の Cloudflare アカウント内。当社は本文を保有・中継しない自己ホスト型。</p></div>
-    <div class="card soft"><div class="ico">🧠</div><h4>賢さ優先のAI</h4>
-      <p>通常は Gemini 無料枠、高度・機微は Claude（BYOK）。AIチャットが集計・検索・文書作成を実行。</p></div>
-    <div class="card soft"><div class="ico">🚀</div><h4>導入はワンクリック</h4>
-      <p>公開リポジトリの Deploy ボタン＋Googleログインによる自動アクティベーションで、すぐ稼働。</p></div>
+  <h3>3つの約束</h3>
+  <div class="grid col3">
+    <div class="card soft" style="border-color:var(--gold);"><div class="ico">🏠</div><h4>所有する</h4>
+      <p>アプリ・データ・暗号鍵は顧客の Cloudflare 内のみ。当社は到達経路を構造的に持たない。<b>解約してもアプリとデータは手元に残る</b>。</p></div>
+    <div class="card soft" style="border-color:var(--gold);"><div class="ico">🛠</div><h4>作る</h4>
+      <p>AIと話すだけで自社用の機能を<b>企画→4確認→実装→公開</b>。コードを書ける人がいなくても相棒を拡張できる。</p></div>
+    <div class="card soft" style="border-color:var(--gold);"><div class="ico">🌱</div><h4>育てる</h4>
+      <p>AIエージェントが自社の道具を操作し、使うほど業務に最適化。<b>フルクラウド〜オフライン</b>まで同一コードで動く。</p></div>
+  </div>
+
+  <div class="callout">
+    <b>技術の核＝ポータブルコア＋パーツ：</b>コア（DB・ストレージ・AI・エージェント・認証・アプリ管理）を抽象化し、
+    業務機能は<b>パーツ（＝アプリ）として後から載せ替え</b>。コアは「環境」も「業務」も知らないため<b>どこでも動き、何でも載る</b>。
   </div>
 
   <div class="callout gold">
-    <b>ビジネスモデル：</b>サブスクリプション（Free／Plus／Pro）。インフラ・AI・チャネルは<b>顧客が直接契約（BYOK）</b>し、
+    <b>ビジネスモデル：</b>サブスクリプション（Free／Plus／Pro＋検証用 test）。インフラ・AI・チャネルは<b>顧客が直接契約（BYOK）</b>し、
     当社は<b>ライセンス発行・配布・運用支援</b>を提供。データを預からないため、漏えい責任を構造的に抱えません。
   </div>
 
-  <div class="footer"><span>baku-office 会計・庶務クラウドAIアシスタント 事業説明資料</span><span>P.<span class="pg"></span></span></div>
+  <div class="footer"><span>baku-office 自社専用AIの相棒 事業説明資料</span><span>P.<span class="pg"></span></span></div>
 </section>
 
 <!-- ============ 02 差別化 ============ -->
@@ -224,36 +244,36 @@
   <div class="sec-no">02</div>
   <h2 class="sec">差別化ポイント ― なぜ選ばれるか</h2>
 
-  <p class="lead-p">機能の寄せ集めではなく、<b>「自己ホストのデータ主権」「組織の記憶」「会計コア×AI」「企業間連携」</b>という
+  <p class="lead-p">機能の寄せ集めではなく、<b>「丸ごと所有」「AIで自作できる」「組織の記憶」「何でも載るポータブルコア」「企業間連携」</b>という
   模倣しにくい強みを軸に差別化します。</p>
 
   <div class="grid col2">
-    <div class="card" style="border-color:var(--gold);"><div class="ico">🔐</div><h4>データを預からない自己ホスト</h4>
-      <p>アプリは顧客の Cloudflare に配備。データ・処理・AI 連携はすべて顧客側で完結＝<b>データ主権</b>。当社はライセンスと配布のみで本文に触れない。</p></div>
-    <div class="card" style="border-color:var(--gold);"><div class="ico">🧠</div><h4>辞めても消えない「団体の頭脳」</h4>
-      <p>多くのAIは個人・セッション単位で記憶が消える。本サービスは<b>団体スコープに会計・知識・意向を蓄積し人事異動を越えて継承</b>。引き継ぎ・属人化に直撃。</p></div>
-    <div class="card"><div class="ico">📊</div><h4>会計コア × AIチャット</h4>
-      <p>単なるチャットボットでなく、<b>出納帳・収支計算書という実データ</b>を AI が集計・検索し、文書（PDF/CSV/md/HTML）まで出力。</p></div>
+    <div class="card" style="border-color:var(--gold);"><div class="ico">🔐</div><h4>データもコードも「丸ごと所有」</h4>
+      <p>アプリは顧客の Cloudflare に配備。データ・処理・AI 連携はすべて顧客側で完結＝<b>データ主権</b>。当社はライセンスと配布のみで本文に触れず、<b>解約後も手元に残る</b>。</p></div>
+    <div class="card" style="border-color:var(--gold);"><div class="ico">🛠</div><h4>AIで自社の相棒を「作れる」</h4>
+      <p>多くのSaaSは決まった機能しか使えない。本サービスは<b>チャットで「〜するアプリを作って」と頼むと、企画→安全確認→公開</b>まで進む。自社業務に合わせて無限に拡張。</p></div>
+    <div class="card"><div class="ico">🧠</div><h4>辞めても消えない「団体の頭脳」</h4>
+      <p>個人・セッション単位で記憶が消えるAIと違い、<b>団体スコープに会計・知識・意向を蓄積し人事異動を越えて継承</b>。引き継ぎ・属人化に直撃。</p></div>
+    <div class="card"><div class="ico">🧩</div><h4>何でも載るポータブルコア</h4>
+      <p>コアは環境も業務も知らない設計。<b>フルクラウド〜完全オフライン（ローカルLLM）を同一コード</b>で。会計でも在庫でも予約でも、パーツを差し替えれば別の専用ツールに。</p></div>
     <div class="card"><div class="ico">📈</div><h4>長尾を高粗利で取れる構造</h4>
       <p>配布CIと自動マイグレーションで1社あたり運用コストが極小。インフラ・AI は顧客契約のため<b>当社原価はほぼゼロ</b>。中小・団体の長尾を低コストで面取り。</p></div>
-    <div class="card"><div class="ico">📱</div><h4>Web ＋ LINE/Discord の両対応</h4>
-      <p>腰を据えた作業は Web 管理画面、外出先や即時連絡は LINE／Discord。日本の LINE 基盤に最適化し、教育不要で使える。</p></div>
     <div class="card" style="border-color:var(--gold);"><div class="ico">🕸</div><h4>企業間連携＝ネットワーク効果</h4>
       <p>A2A で参加団体が増えるほど連携価値が増し、<b>模倣困難なモート</b>に育つ（Pro オプション）。</p></div>
   </div>
 
   <h3>差別化を「はかる」戦略</h3>
   <table>
-    <thead><tr><th style="width:30%;">打ち手</th><th>狙い</th></tr></thead>
+    <thead><tr><th style="width:34%;">打ち手</th><th>狙い</th></tr></thead>
     <tbody>
-      <tr><td class="em">看板を「会計が分かる団体の頭脳」に</td><td>機能列挙でなく「人が替わっても引き継ぐ会計・庶務の頭脳」で一点突破</td></tr>
-      <tr><td class="em">垂直テンプレ展開</td><td>団体プロファイル＋初期科目・ナレッジで業種別テンプレ（PTA・自治会・NPO・士業・店舗）を即戦力化</td></tr>
+      <tr><td class="em">看板を「自社の相棒を所有できる基盤」に</td><td>機能列挙でなく「AIで自作でき、人が替わっても引き継ぐ自社専用システムを所有」で一点突破</td></tr>
+      <tr><td class="em">垂直テンプレ＋AI自作</td><td>業種別テンプレ（PTA・自治会・NPO・士業・店舗）で即戦力化し、足りない機能はAIで自作</td></tr>
       <tr><td class="em">ネットワーク効果を育成</td><td>同業・取引先の A2A 連携を増やし乗り換えコストを上げる</td></tr>
-      <tr><td class="em">データ主権を訴求</td><td>自己ホスト・暗号化・移植可能を「囲い込まない安心」として信頼軸に</td></tr>
+      <tr><td class="em">所有・移植性を訴求</td><td>自己ホスト・暗号化・データ可搬を「囲い込まない安心」として信頼軸に</td></tr>
     </tbody>
   </table>
 
-  <div class="footer"><span>baku-office 会計・庶務クラウドAIアシスタント 事業説明資料</span><span>P.<span class="pg"></span></span></div>
+  <div class="footer"><span>baku-office 自社専用AIの相棒 事業説明資料</span><span>P.<span class="pg"></span></span></div>
 </section>
 
 <!-- ============ 03 課題と価値 ============ -->
@@ -265,8 +285,8 @@
     <div class="card">
       <h4>こんな課題に</h4>
       <ul class="clean">
-        <li>会計・出納の記帳、収支報告の作成が手作業で属人的</li>
-        <li>名簿・領収書・議事録・予定が各所に散在し探せない</li>
+        <li>既製SaaSは自社の業務に合わず、欲しい機能が足りない／余る</li>
+        <li>会計・名簿・領収書・議事録・予定が各所に散在し探せない</li>
         <li>AI を導入したいが、開発・運用・コスト管理が負担</li>
         <li>SaaS にデータを預ける不安・ベンダーロックイン</li>
       </ul>
@@ -274,10 +294,10 @@
     <div class="card" style="border-color:var(--gold);">
       <h4 style="color:var(--gold);">本サービスが提供する価値</h4>
       <ul class="clean">
-        <li>入出金から収支計算書・PDF/CSV まで会計をWeb画面で完結</li>
+        <li><b>AIと対話して自社専用の機能（アプリ）を自作</b>できる（Plus以上）</li>
         <li>AIチャットが集計・横断検索・文書作成を代行（Plus以上）</li>
         <li>Deployボタン＋自動セットアップで導入・更新は当社CI</li>
-        <li>データは顧客アカウントに保有＝主権と移植性を確保</li>
+        <li>アプリもデータも顧客アカウントに<b>所有</b>＝主権と移植性を確保</li>
       </ul>
     </div>
   </div>
@@ -286,172 +306,248 @@
   <table>
     <thead><tr><th style="width:26%;">シーン</th><th>できること</th></tr></thead>
     <tbody>
-      <tr><td class="em">会計・出納</td><td>入出金を登録し、現金／預金出納帳・収支計算書・予実・科目別台帳を自動生成。PDF/CSV 出力</td></tr>
+      <tr><td class="em">AIでアプリを自作</td><td>「会員ごとの寄付履歴を集計する画面がほしい」→ AIが企画・4確認・実装し、レビューを経て公開（Plus以上）</td></tr>
       <tr><td class="em">AIで集計・検索</td><td>「6月の交通費を集計して」「この資料を要約して」を AIチャットが実データから処理し文書化（Plus以上）</td></tr>
+      <tr><td class="em">会計・出納</td><td>入出金を登録し、出納帳・収支計算書・予実・科目別台帳を自動生成。PDF/CSV 出力（標準パーツ）</td></tr>
       <tr><td class="em">記録・登録</td><td>領収書・議事メモ等を「仮登録 → 本人確認 → 確定」で安全に追加。OCRで日付・金額を抽出</td></tr>
-      <tr><td class="em">名簿・人脈</td><td>メンバーの経歴・スキル・人脈を登録し横断検索（PIIは暗号化）</td></tr>
       <tr><td class="em">リマインド／議事録</td><td>定刻のリマインド、会議音声の文字起こし＋要点整形（議事録化）</td></tr>
     </tbody>
   </table>
 
   <div class="callout">
     AI／エージェントの権限は<b>「読む・足す」中心</b>。編集・削除・承認・共有といった重要操作は
-    人の確認を必ず挟み、AIが勝手に確定しない設計です（共有承認キュー）。
+    人の確認を必ず挟み、AIが勝手に確定しない設計です（共有承認キュー）。自作アプリも<b>宣言した権限の範囲だけ</b>で動きます。
   </div>
 
-  <div class="footer"><span>baku-office 会計・庶務クラウドAIアシスタント 事業説明資料</span><span>P.<span class="pg"></span></span></div>
+  <div class="footer"><span>baku-office 自社専用AIの相棒 事業説明資料</span><span>P.<span class="pg"></span></span></div>
 </section>
 
 <!-- ============ 04 サービス全体像 ============ -->
 <section class="page">
   <div class="sec-no">04</div>
-  <h2 class="sec">サービス全体像 ― 2層構成</h2>
+  <h2 class="sec">サービス全体像 ― 所有モデル（2層構成）</h2>
 
-  <p>当社の<b>ホストポータル</b>（申込・ライセンス・配布・通知・課金）と、顧客アカウント上の<b>クライアントアプリ</b>
-  （会計・庶務の業務本体）の2層。業務データはクライアント側に留まり、境界を越えるのはライセンス・バージョン・通知・契約情報だけです。</p>
+  <p>当社の<b>ホストポータル</b>（申込・ライセンス・配布・通知・課金・アプリ承認）と、顧客アカウント上の<b>クライアントアプリ</b>
+  （自社の相棒本体）の2層。業務データはクライアント側に留まり、境界を越えるのは<b>ライセンス・バージョン・通知・契約情報だけ</b>です。</p>
 
   <div class="flow">
-    <div class="node alt"><div class="t">ホストポータル（当社）</div><div class="d">申込／ライセンス／配布バージョン／通知／課金</div></div>
+    <div class="node alt"><div class="t">ホストポータル（当社）</div><div class="d">申込／署名ライセンス／配布／通知／課金／アプリ承認</div></div>
     <div class="arrow">→</div>
-    <div class="node"><div class="t">クライアントアプリ（顧客CF）</div><div class="d">会計・名簿・ファイル・予定・議事録・AI</div></div>
+    <div class="node"><div class="t">クライアントアプリ（顧客CF）</div><div class="d">4画面UI＋AI相棒＋自作アプリ群＋業務データ</div></div>
   </div>
   <div class="flow" style="margin-top:0;">
-    <div class="node" style="flex:0 0 34%;"><div class="t">AIエンジン</div><div class="d">Gemini（無料枠）＋ Claude（上位・BYOK）＋ 任意API</div></div>
+    <div class="node" style="flex:0 0 34%;"><div class="t">AIエンジン</div><div class="d">Gemini（無料枠）＋ Claude（上位・BYOK）＋ ローカルLLM＋ 任意API</div></div>
     <div class="arrow">↺</div>
     <div class="node" style="flex:1;"><div class="t">チャネル</div><div class="d">Web管理画面（主）＋ LINE／Discord（Pro）</div></div>
   </div>
 
   <h3>役割分担</h3>
   <div class="grid col3" style="margin-top:4mm;">
-    <div class="card soft"><h4>ホストは「鍵と配布」</h4><p>団体申込・ライセンス署名・配布バージョン・お知らせ・Stripe課金のみ。業務データは扱わない。</p></div>
-    <div class="card soft"><h4>クライアントが「業務本体」</h4><p>単一 Worker が Web 画面と API を同居配信。会計・名簿・ファイル・予定・議事録・AI を実行。</p></div>
-    <div class="card soft"><h4>データは顧客保有</h4><p>D1／KV／R2 は顧客アカウント内。AI・LINE は顧客が直接（BYOK）。当社は本文を保有・中継しない。</p></div>
+    <div class="card soft"><h4>ホストは「鍵と配布」</h4><p>団体申込・ライセンス署名・配布バージョン・お知らせ・課金・<b>アプリ承認</b>のみ。業務データは扱わない。</p></div>
+    <div class="card soft"><h4>クライアントが「相棒本体」</h4><p>単一 Worker が4画面のWeb画面とAPIを同居配信。AIチャット・自作アプリ・標準パーツを実行。</p></div>
+    <div class="card soft"><h4>データは顧客が所有</h4><p>D1／KV／R2 は顧客アカウント内。AI・LINE は顧客が直接（BYOK）。当社は本文を保有・中継しない。</p></div>
   </div>
 
   <div class="callout">
     <b>技術スタック：</b>Astro ＋ Cloudflare Workers（静的アセットと API を単一 Worker で配信）／D1・KV・R2／
     ライセンスは Ed25519 署名トークン／APIキー・個人情報は AES-256-GCM（MASTER_KEY）で暗号化／
-    スキーマ変更は<b>自動マイグレーション</b>、配布は<b>CI＋Deployボタン</b>。
+    スキーマ変更は<b>自動マイグレーション</b>、配布は<b>CI＋Deployボタン</b>、アプリ配信は<b>署名つき</b>。
   </div>
 
-  <div class="footer"><span>baku-office 会計・庶務クラウドAIアシスタント 事業説明資料</span><span>P.<span class="pg"></span></span></div>
+  <div class="footer"><span>baku-office 自社専用AIの相棒 事業説明資料</span><span>P.<span class="pg"></span></span></div>
 </section>
 
-<!-- ============ 05 プロダクト機能 ============ -->
+<!-- ============ 05 4画面 ============ -->
 <section class="page">
   <div class="sec-no">05</div>
-  <h2 class="sec">プロダクト機能（クライアント管理画面）</h2>
+  <h2 class="sec">使う画面は4つだけ</h2>
 
-  <p>ブラウザの管理画面から、会計・庶務のすべてを操作。<span class="pill free">Free</span> 以上で使える基本機能と、
-  <span class="pill plus">Plus</span>／<span class="pill pro">Pro</span> で開放される高度機能で構成します。</p>
+  <p class="lead-p">操作はシンプルに<b>4つの場所</b>に集約。業務画面は「アプリ」のランチャーから起動し、各種設定は「設定」に集約します。</p>
 
-  <div class="grid col3">
-    <div class="card"><h4>🏠 ホーム</h4><p>残高サマリー・当月収支・未処理伝票数・プラン／ライセンス状態・ホストからのお知らせ。<span class="pill free">Free</span></p></div>
-    <div class="card"><h4>📊 会計</h4><p>入出金登録／現金・預金出納帳／収支計算書／予算書／科目別台帳／グラフ／PDF・CSV出力。<span class="pill free">Free</span></p></div>
-    <div class="card"><h4>📁 ファイル</h4><p>標準（KV・既定5MB〜25MBまで）／高度（R2）。ソフトデリート・ゴミ箱・監査ログ。<span class="pill free">Free</span></p></div>
-    <div class="card"><h4>📅 予定</h4><p>スケジュール管理・リマインド。チャネルへの通知（Pro）。<span class="pill free">Free</span></p></div>
-    <div class="card"><h4>🎤 議事録</h4><p>会議音声を文字起こし（話者分離）し、要点・決定事項を整形・保存。<span class="pill plus">Plus</span></p></div>
-    <div class="card"><h4>👥 名簿</h4><p>メンバーの経歴・スキル・人脈を登録し横断検索。PIIは暗号化。<span class="pill free">Free</span></p></div>
-    <div class="card" style="border-color:var(--gold);"><h4>💬 AIチャット</h4><p>集計・DB／ファイル検索・ファイルを元にした文書作成を画面上で実行。生成物は<b>PDF/TXT/md/HTML/CSV</b>でDL。<span class="pill plus">Plus</span></p></div>
-    <div class="card" style="border-color:var(--gold);"><h4>📈 API使用量</h4><p>各APIの使用量を数値＋グラフで表示。無料枠超過アラート（リセット時刻つき）、従量課金は上限設定可。<span class="pill plus">Plus</span></p></div>
-    <div class="card"><h4>🗄 直接DB／ストレージ</h4><p>テーブル・ファイルを直接CRUD。ソフトデリート・ゴミ箱・監査つきで安全に。<span class="pill free">Free</span></p></div>
-    <div class="card"><h4>🧑‍🤝‍🧑 メンバー・招待・承認</h4><p>招待コード＋承認、ロール／権限、個人→組織の<b>共有承認キュー</b>。<span class="pill free">Free</span></p></div>
-    <div class="card"><h4>🔌 連携設定</h4><p>Gemini／LINE／Claude／任意APIのキー管理。保存時に検証し AES-GCM で暗号化。<span class="pill free">Free</span></p></div>
-    <div class="card" style="border-color:var(--gold);"><h4>⚙️ 高度なオプション</h4><p>任意API（画像／音声／動画生成）・R2／Workers Paid 案内・KV上限変更。<b>Plus以上で表示</b>。<span class="pill plus">Plus</span></p></div>
+  <div class="navmock">
+    <div class="ni"><div class="ic">🏠</div><div class="t">ホーム</div><div class="d">状況・使用量・ウィジェット</div></div>
+    <div class="ni"><div class="ic">💬</div><div class="t">AI</div><div class="d">相棒＋アプリ開発</div></div>
+    <div class="ni"><div class="ic">🧩</div><div class="t">アプリ</div><div class="d">導入・削除・開発</div></div>
+    <div class="ni"><div class="ic">⚙️</div><div class="t">設定</div><div class="d">連携・課金・運用</div></div>
+  </div>
+
+  <div class="grid col2">
+    <div class="card"><h4>🏠 ホーム</h4>
+      <p>お知らせ、API／DB／ストレージの使用量、プラン／ライセンス状態、そして<b>導入したアプリが出すウィジェット</b>（例：総会員数・当月取引数）。会社の今が一目で分かる。<span class="pill free">Free</span></p></div>
+    <div class="card" style="border-color:var(--gold);"><h4>💬 AI</h4>
+      <p>相棒との<b>チャット</b>。会話は<b>セッションとして保存・切替</b>でき、<b>モデル（Gemini／Claude／ローカル）を選択</b>可能。集計・検索・文書作成を頼める。ここで「〜するアプリを作って」と言えば<b>アプリ開発</b>も始まる。<span class="pill plus">Plus</span></p></div>
+    <div class="card" style="border-color:var(--gold);"><h4>🧩 アプリ</h4>
+      <p>自社に入れる機能の出し入れ。<b>マーケットから導入／削除</b>、<b>外部レジストリから署名検証付きで取り込み</b>、<b>AIと作った草案の公開申請</b>まで。<span class="pill plus">管理者</span></p></div>
+    <div class="card"><h4>⚙️ 設定</h4>
+      <p>必要な設定・オプションを<b>カテゴリ別に集約</b>（メンバー・連携・課金・カスタマイズ・運用）。連携設定（APIキー）・プラン課金・人/ロール・診断などへの入口。<span class="pill free">Free</span></p></div>
   </div>
 
   <div class="callout">
-    ほかに <b>プラン・課金</b>（Stripe／アップグレード）、<b>診断</b>（疎通確認・CF制限エラーの可視化と対処案内）、<b>設定</b> を提供。
     <b>何か操作したら成功・失敗を必ず視覚的に表示</b>し、レスポンシブでスマホ・各画面幅でも崩れません。
+    業務画面（会計／名簿／ファイル／予定／議事録 等）は「アプリ」ランチャーから、設定群は「設定」から開きます。
   </div>
 
-  <div class="footer"><span>baku-office 会計・庶務クラウドAIアシスタント 事業説明資料</span><span>P.<span class="pg"></span></span></div>
+  <div class="footer"><span>baku-office 自社専用AIの相棒 事業説明資料</span><span>P.<span class="pg"></span></span></div>
 </section>
 
-<!-- ============ 06 AIの賢さ ============ -->
+<!-- ============ 06 AIでアプリを作る ============ -->
 <section class="page">
   <div class="sec-no">06</div>
+  <h2 class="sec">AIで自社の相棒を「作る」 ― 目玉機能</h2>
+
+  <p class="lead-p">本サービスの最大の価値は、<b>AIと対話して自社専用の機能（アプリ）を自分で作れる</b>こと。
+  no-code ツールの枠を越え、Cloudflare／ローカルの実行範囲内で<b>本物のバックエンドを使った独自機能</b>を作れます。</p>
+
+  <h3>開発フロー（必ずこの順）</h3>
+  <div class="steps">
+    <div class="s"><b>チャットで依頼</b><div class="d">「〜するアプリを作って」。AIが何を作るかを企画・仕様としてまとめる。</div></div>
+    <div class="s"><b>事前4確認</b><div class="d">①環境（実現可能か）②権限（要求権限は妥当か）③安全（破壊・認証回避がないか）④コスト（推定消費）を点検。</div></div>
+    <div class="s"><b>実装（草案）</b><div class="d">問題なければ草案を生成（要求権限つき）。いきなり本番反映はしない。</div></div>
+    <div class="s"><b>権限レビュー → 公開申請</b><div class="d">管理者が要求権限と4確認結果を確認し、問題なければ公開申請。</div></div>
+    <div class="s"><b>ホスト承認 → 署名つき配信</b><div class="d">ホストが承認し Ed25519 署名で配信。他団体は署名検証して取り込み（再デプロイ不要）。</div></div>
+  </div>
+
+  <div class="grid col3" style="margin-top:4mm;">
+    <div class="card soft"><h4>🔒 安全側に拒絶</h4><p>データ破壊・認証バイパス・課金/ライセンス/admin 操作・他テナント到達は<b>構造的に拒否</b>。許すのは自社業務を助ける範囲のみ。</p></div>
+    <div class="card soft"><h4>♻️ 再利用・更新波及</h4><p>公開アプリは複数団体で再利用でき、版を上げれば<b>導入先すべてに更新が波及</b>。既存を複製・改変すれば<b>派生で新アプリ</b>。</p></div>
+    <div class="card soft"><h4>🧱 最小構成は設定だけ</h4><p>最小構成は「設定画面」のみでもよく、<b>Plus 以上は AIチャットを必須</b>として相棒を中心に据える。</p></div>
+  </div>
+
+  <div class="scene" style="margin-top:5mm;">
+    <h4>イメージ：チャットからアプリを作る</h4>
+    <div class="chat">
+      <div class="bub u"><span class="who">管理者</span>会員ごとの年会費の入金状況を一覧する画面を作って</div>
+      <div class="bub a"><span class="who">AI</span>企画をまとめました。必要権限：会員参照(members:read)・取引参照(db:read)。①環境OK ②権限：妥当 ③安全：破壊操作なし ④コスト：軽微。草案を作成しました。[アプリ]画面でレビュー→公開申請できます。</div>
+    </div>
+    <div class="cap">企画・仕様 → 4確認 → 草案。公開はホスト承認＋署名を経てから。</div>
+  </div>
+
+  <div class="callout gold">
+    <b>位置づけ：</b>「決まった機能を使うSaaS」から、<b>「AIと一緒に自社の相棒を育てるプラットフォーム」</b>へ。これが他社にない中核の差別化です。
+  </div>
+
+  <div class="footer"><span>baku-office 自社専用AIの相棒 事業説明資料</span><span>P.<span class="pg"></span></span></div>
+</section>
+
+<!-- ============ 07 ポータブルコア ============ -->
+<section class="page">
+  <div class="sec-no">07</div>
+  <h2 class="sec">何でも載る・どこでも動く ― ポータブルコア＋パーツ</h2>
+
+  <p class="lead-p">技術の核は<b>「ポータブルコア＋パーツ」</b>。コアは「環境（どこで動くか）」も「業務（何をするか）」も知らないため、
+  <b>同じコードのまま環境を変えられ（移植性）、上に載せる業務機能（パーツ＝アプリ）を自由に差し替えられます。</b></p>
+
+  <div class="stack" style="margin-top:4mm;">
+    <div class="layer"><b>パーツ（団体ごとに可変・AIで自作）</b> ― 会計／名簿／メモ／リマインダー／組織ナレッジ／AIチャット／<b>自作アプリ</b>…。ctx 経由でコア能力にのみ依存。</div>
+    <div class="layer"><b>ポータブルコア</b> ― DB・ストレージ・AI(ChatModel)・エージェント(道具ループ)・認証・アプリ管理。環境も業務も知らない。</div>
+    <div class="layer"><b>環境アダプタ</b> ― D1↔SQLite／KV・R2↔FS／クラウドLLM↔ローカルLLM／Portal↔ローカル認証。差し替えで移植。</div>
+  </div>
+
+  <div class="callout gold">
+    <b>専用ツール（団体X）＝ 環境Profile × 有効パーツ集合 × 連動する外部API。</b> 3軸は直交し、
+    環境を変えてもパーツは無改変、パーツを変えても環境は無改変で動く。これが「相棒を自由に作り替えられる」根拠です。
+  </div>
+
+  <h3>同一コードで「フルクラウド〜オフライン」</h3>
+  <div class="grid col3">
+    <div class="shard"><b>Profile A：フルクラウド</b>D1／KV・R2／外部AI／Portal認証。スマホ一台・最大の手軽さ。</div>
+    <div class="shard"><b>Profile B：ハイブリッド</b>自宅／組織内サーバ。主権と利便の中間。</div>
+    <div class="shard ded"><b>Profile C：完全オフライン</b>ローカルLLM＋ローカル認証＋暗号化SQLite。<b>外部通信ゼロ</b>。</div>
+  </div>
+
+  <div class="grid col2" style="margin-top:4mm;">
+    <div class="card soft"><h4>会計・庶務は「一例」</h4><p>標準同梱パーツを別用途（在庫・予約・問合せ対応…）に差し替えれば、同じコアが別の専用ツールになる。</p></div>
+    <div class="card soft"><h4>移植性を「証明」する</h4><p>Node + SQLite 上で同じコア/パーツを動かす<b>適合性（契約）テスト</b>で、CF非依存＝持ち出せることを実証。</p></div>
+  </div>
+
+  <div class="footer"><span>baku-office 自社専用AIの相棒 事業説明資料</span><span>P.<span class="pg"></span></span></div>
+</section>
+
+<!-- ============ 08 AIの賢さ ============ -->
+<section class="page">
+  <div class="sec-no">08</div>
   <h2 class="sec">AIの賢さ ― エンジン構成と機能</h2>
 
-  <p><b>用途で使い分け</b>：通常処理は <b>Gemini 無料枠</b>、高度な判断や機微情報は <b>Claude</b>（学習なし・BYOK）。
-  画像／音声／動画などは<b>任意APIをBYOK</b>で追加。クレジットカード不要の無料スタックだけでも基本AIが動作します。</p>
+  <p><b>用途で使い分け</b>：通常処理は <b>Gemini 無料枠</b>、高度な判断や機微情報は <b>Claude</b>（学習なし・BYOK）、
+  外部に出したくない場合は <b>ローカルLLM</b>（オフライン）。画像／音声／動画などは<b>任意APIをBYOK</b>で追加。
+  クレジットカード不要の無料スタックだけでも基本AIが動作します。</p>
 
   <h3>エンジンの使い分け</h3>
   <table>
-    <thead><tr><th style="width:20%;">用途</th><th style="width:26%;">エンジン</th><th>使いどころ</th></tr></thead>
+    <thead><tr><th style="width:20%;">用途</th><th style="width:28%;">エンジン</th><th>使いどころ</th></tr></thead>
     <tbody>
       <tr><td class="em">通常・大量処理</td><td>Gemini（無料枠）</td><td>要約・OCR・文字起こし・分類・通常の対話（コストのかかる機械的処理）</td></tr>
       <tr style="background:#eef3f9;"><td class="em">高度・機微</td><td><b>Claude（BYOK）</b></td><td>複雑な判断・連鎖作業・機密情報（学習に使われないエンジン）</td></tr>
-      <tr><td class="em">画像・音声・動画</td><td>任意API（BYOK）</td><td>連携設定／高度なオプションで登録したAPIをAI・エージェントが参照</td></tr>
+      <tr><td class="em">オフライン</td><td><b>ローカルLLM（OpenAI互換）</b></td><td>外部送信ゼロで相棒を動かす（Profile C）。機密・現場・通信制限環境</td></tr>
+      <tr style="background:#eef3f9;"><td class="em">画像・音声・動画</td><td>任意API（BYOK）</td><td>連携設定／高度なオプションで登録したAPIをAI・エージェントが参照</td></tr>
     </tbody>
   </table>
 
   <h3>主なAI機能</h3>
   <div class="grid col3">
-    <div class="card" style="border-color:var(--gold);"><h4>💬 AIチャット</h4>
-      <p>集計・DB/ファイル検索・文書作成を会話で実行。生成物は PDF/TXT/md/HTML/CSV でDL。<span class="pill plus">Plus</span></p></div>
+    <div class="card" style="border-color:var(--gold);"><h4>💬 AIチャット（相棒）</h4>
+      <p>集計・DB/ファイル検索・文書作成を会話で実行。<b>セッション保存・モデル選択</b>。生成物は PDF/TXT/md/HTML/CSV でDL。<span class="pill plus">Plus</span></p></div>
+    <div class="card" style="border-color:var(--gold);"><h4>🛠 AIアプリ開発</h4>
+      <p>「〜するアプリを作って」で企画→4確認→公開申請。自社専用の機能を自作（§06）。<span class="pill plus">Plus</span></p></div>
     <div class="card"><h4>📄 文書・画像の取り込み</h4>
-      <p>PDF・Word・Excel・領収書等を取り込み。OCRで分類・日付・金額を抽出し期間×分類で横断検索。</p></div>
+      <p>PDF・Word・Excel・領収書等を取り込み。OCRで分類・日付・金額を抽出し横断検索。</p></div>
     <div class="card"><h4>🎤 音声の議事録化</h4>
       <p>会議音声を文字起こし（話者分離）し、要点・決定事項を議事録として整形・保存。</p></div>
-    <div class="card"><h4>📑 資料・文書生成</h4>
-      <p>依頼に応じて文書・帳票を生成しダウンロード提供（make_document）。</p></div>
     <div class="card"><h4>🔎 Web検索（グラウンディング）</h4>
       <p>最新情報が必要な依頼では Web 検索で根拠を取得して回答（web_search）。</p></div>
-    <div class="card" style="border-color:var(--gold);"><h4>🧩 スキルの自動導入</h4>
-      <p>AI／エージェントが必要なスキルを検索し <b>Agent Skills に自動設定</b>。利用者は自分でスキルを追加可能。<span class="pill plus">Plus</span></p></div>
     <div class="card" style="border-color:var(--gold);"><h4>🤖 エージェント（チャネル）</h4>
-      <p>LINE／Discord から自然文で操作。各AI機能とツールをフル装備し、24h クラウドで稼働。<span class="pill pro">Pro</span></p></div>
+      <p>LINE／Discord から自然文で操作。各AI機能と道具をフル装備し、24h クラウドで稼働。<span class="pill pro">Pro</span></p></div>
+    <div class="card"><h4>🧩 スキルの自動導入</h4>
+      <p>AI／エージェントが必要なスキルを検索し Agent Skills に自動設定。利用者も追加可能。</p></div>
     <div class="card"><h4>🔐 プライバシー選択（機微モード）</h4>
-      <p>安さ優先＝無料エンジン（学習あり）／機密・精度優先＝学習に使われないエンジン。機微内容は送信前に確認。</p></div>
+      <p>安さ優先＝無料エンジン／機密・精度優先＝学習に使われないエンジン or ローカル。機微内容は送信前に確認。</p></div>
     <div class="card"><h4>🧠 組織記憶（引き継ぎ）</h4>
       <p>資料・会話・決定を団体ごとに蓄積し、人が替わっても知識・意向を継承。</p></div>
   </div>
 
   <div class="callout gold">
-    <b>賢さとコストの両立：</b>高くつく機械的処理（要約・OCR・文字起こし）は無料枠エンジンへ委譲し、難しい判断のみ Claude（BYOK）。
+    <b>賢さとコストの両立：</b>高くつく機械的処理は無料枠エンジンへ委譲し、難しい判断のみ Claude（BYOK）。
     すべての機能は<b>該当APIキーが設定されているときだけ動作</b>するよう出し分け、無設定の機能で無駄な課金が出ません。
   </div>
 
-  <div class="footer"><span>baku-office 会計・庶務クラウドAIアシスタント 事業説明資料</span><span>P.<span class="pg"></span></span></div>
+  <div class="footer"><span>baku-office 自社専用AIの相棒 事業説明資料</span><span>P.<span class="pg"></span></span></div>
 </section>
 
-<!-- ============ 07 使用例 ============ -->
+<!-- ============ 09 使用例 ============ -->
 <section class="page">
-  <div class="sec-no">07</div>
+  <div class="sec-no">09</div>
   <h2 class="sec">使用例 ― 使い方のイメージ</h2>
-  <p>Web 管理画面の AIチャットと、LINE／Discord のエージェント。代表的な4つの使い方を示します。</p>
+  <p>Web 管理画面の AI 相棒（アプリ開発を含む）と、LINE／Discord のエージェント。代表的な4つの使い方を示します。</p>
 
   <div class="grid col2">
     <div class="scene">
-      <h4>① AIチャットで集計（Web）</h4>
+      <h4>① AIで自社用アプリを作る（Web）</h4>
+      <div class="chat">
+        <div class="bub u"><span class="who">管理者</span>イベント参加者の出欠を集計する画面を作って</div>
+        <div class="bub a"><span class="who">AI</span>企画＋4確認OK（権限：db:read/db:write・破壊操作なし）。草案を作りました。[アプリ]でレビュー→公開申請を。</div>
+      </div>
+      <div class="cap">企画→4確認→草案→公開申請。</div>
+      <div class="note"><span class="tag o">Plus</span> ホスト承認＋署名で配信</div>
+    </div>
+
+    <div class="scene">
+      <h4>② AIチャットで集計（Web）</h4>
       <div class="chat">
         <div class="bub u"><span class="who">担当者</span>6月の交通費を科目別に集計してPDFにして</div>
-        <div class="bub a"><span class="who">AIチャット</span>6月の交通費は合計 ¥48,200（12件）です。科目別内訳をまとめました。<br>📄 集計レポート.pdf ／ 📄 明細.csv</div>
+        <div class="bub a"><span class="who">AI</span>6月の交通費は合計 ¥48,200（12件）です。<br>📄 集計レポート.pdf ／ 📄 明細.csv</div>
       </div>
       <div class="cap">出納帳の実データから集計し文書化。</div>
       <div class="note"><span class="tag o">Plus</span> PDF/TXT/md/HTML/CSV でDL可</div>
     </div>
 
     <div class="scene">
-      <h4>② 領収書の登録（チャネル）</h4>
+      <h4>③ 領収書の登録（チャネル）</h4>
       <div class="chat">
         <div class="bub u"><span class="who">利用者</span>（領収書の写真を送信）</div>
-        <div class="bub a"><span class="who">エージェント</span>OCRしました：6/3 / 旅費交通費 / ¥1,200。この内容で仮登録します。確定しますか？［確定］</div>
-        <div class="bub u"><span class="who">利用者</span>確定</div>
+        <div class="bub a"><span class="who">エージェント</span>OCRしました：6/3 / 旅費交通費 / ¥1,200。仮登録します。確定しますか？［確定］</div>
       </div>
       <div class="cap">「仮登録→本人確認→確定」で安全に記帳。</div>
       <div class="note"><span class="tag">安全</span> 破壊的操作なし・本人確認つき</div>
-    </div>
-
-    <div class="scene">
-      <h4>③ リマインダー・議事録</h4>
-      <div class="chat">
-        <div class="bub u"><span class="who">利用者</span>（会議の録音を送信）議事録にして</div>
-        <div class="bub a"><span class="who">エージェント</span>文字起こし＋要点整形しました。決定事項：予算案承認／次回 7/10。議事録に保存しました。</div>
-      </div>
-      <div class="cap">音声→文字起こし（話者分離）→要点整形。</div>
-      <div class="note"><span class="tag o">Plus</span> 議事録として保存・検索</div>
     </div>
 
     <div class="scene">
@@ -467,19 +563,19 @@
   </div>
 
   <div class="callout gold" style="margin-top:5mm;">
-    Web 管理画面は腰を据えた作業に、LINE／Discord は外出先や即時連絡に。<b>同じ業務データ</b>を両方から扱えます。
+    Web 管理画面は腰を据えた作業・アプリ開発に、LINE／Discord は外出先や即時連絡に。<b>同じ業務データ</b>を両方から扱えます。
   </div>
 
-  <div class="footer"><span>baku-office 会計・庶務クラウドAIアシスタント 事業説明資料</span><span>P.<span class="pg"></span></span></div>
+  <div class="footer"><span>baku-office 自社専用AIの相棒 事業説明資料</span><span>P.<span class="pg"></span></span></div>
 </section>
 
-<!-- ============ 08 導入の操作イメージ ============ -->
+<!-- ============ 10 導入の操作イメージ ============ -->
 <section class="page">
-  <div class="sec-no">08</div>
+  <div class="sec-no">10</div>
   <h2 class="sec">導入の操作イメージ</h2>
 
   <p class="lead-p"><b>公開リポジトリの「Deployボタン」</b>で自分の Cloudflare へ配備し、<b>Googleログイン</b>で
-  ライセンスを自動アクティベーション。あとは<b>キーをコピペするだけ</b>で稼働します。</p>
+  ライセンスを自動アクティベーション。あとは<b>キーをコピペするだけ</b>で稼働します。<b>申込時にプラン選択は不要＝全員 Free で開始</b>します。</p>
 
   <div class="callout">
     <b>※ 各アカウントの作成はお客様ご自身で行っていただきます</b>：<b>Cloudflare ／ Google ／（Plus）Gemini ／（Pro）LINE・Discord・Claude</b>
@@ -487,7 +583,7 @@
   </div>
 
   <div class="stepper">
-    <div class="st"><span class="n">1</span><span class="l">ホストで団体申込</span></div>
+    <div class="st"><span class="n">1</span><span class="l">団体申込（プラン選択なし）</span></div>
     <div class="st"><span class="n">2</span><span class="l">Deployボタンで配備</span></div>
     <div class="st"><span class="n">3</span><span class="l">Googleログインで有効化</span></div>
     <div class="st"><span class="n">4</span><span class="l">キーをコピペ→稼働</span></div>
@@ -497,8 +593,8 @@
     <div class="win">
       <div class="bar"><b>① 申込 → Deploy</b></div>
       <div class="body">
-        <p class="small muted" style="margin:0 0 2mm;">ホストで団体情報＋プラン選択 → 個別Deployリンク</p>
-        <div class="field">プラン：Free / Plus / Pro <span class="ok">選択</span></div>
+        <p class="small muted" style="margin:0 0 2mm;">ホストで団体情報を入力 → 個別Deployリンク</p>
+        <div class="field">プラン選択：なし（Free開始） <span class="ok">即発行</span></div>
         <div style="text-align:center; margin-top:2mm;"><span class="btnm">Deploy to Cloudflare</span></div>
         <p class="small muted" style="margin:2.5mm 0 0;">自分のCFアカウントに配備</p>
       </div>
@@ -527,17 +623,17 @@
   </div>
 
   <div class="callout gold" style="margin-top:5mm;">
-    🎉 <b>稼働開始</b>：Web 管理画面で会計・庶務をすぐ利用。Plus で AI、Pro で LINE／Discord エージェントが開放。
+    🎉 <b>稼働開始</b>：Free で会計・庶務をすぐ利用。導入後に<b>「設定 → プラン・課金」</b>から Plus（AI・アプリ開発）／Pro（エージェント）へ。
     顧客の手作業は<b>「申込＋Deploy＋Googleログイン＋キーのコピペ」だけ</b>です。
   </div>
 
-  <div class="footer"><span>baku-office 会計・庶務クラウドAIアシスタント 事業説明資料</span><span>P.<span class="pg"></span></span></div>
+  <div class="footer"><span>baku-office 自社専用AIの相棒 事業説明資料</span><span>P.<span class="pg"></span></span></div>
 </section>
 
-<!-- ============ 09 アーキテクチャ ============ -->
+<!-- ============ 11 アーキテクチャ ============ -->
 <section class="page">
-  <div class="sec-no">09</div>
-  <h2 class="sec">システムアーキテクチャ</h2>
+  <div class="sec-no">11</div>
+  <h2 class="sec">システムアーキテクチャ ― 所有と不可触</h2>
 
   <p>当社は<b>ライセンスと配布のみ</b>。<b>業務データ（本文）は当社を一切通りません</b>。
   AI／LINE は<b>顧客が直接</b>やり取りし、当社はキーも本文も持ちません。当社の不可触性は自己ホストによる<b>構造的</b>なもので、暗号化に依存しません。</p>
@@ -546,13 +642,13 @@
     <div class="ttl" style="color:var(--gold);">ホストポータル（当社アカウント）</div>
     <div class="grid col3">
       <div class="shard" style="background:#fbf6ed;"><b>申込・ライセンス</b>署名トークン発行／エンタイトルメント</div>
-      <div class="shard" style="background:#fbf6ed;"><b>配布・通知</b>バージョン配信・お知らせ（本文不経由）</div>
+      <div class="shard" style="background:#fbf6ed;"><b>配布・通知・アプリ承認</b>バージョン配信・お知らせ・署名配布</div>
       <div class="shard" style="background:#fbf6ed;"><b>課金・監査</b>Stripe入金確認・テレメトリ</div>
     </div>
   </div>
-  <div style="text-align:center; color:var(--gold); font-weight:800;">⇅ ①アクティベーション/確認（PIIなし） ②署名ライセンス＋バージョン/通知</div>
+  <div style="text-align:center; color:var(--gold); font-weight:800;">⇅ ①アクティベーション/確認（PIIなし） ②署名ライセンス＋バージョン/通知/署名アプリ</div>
   <div class="planebox">
-    <div class="ttl">顧客所有アカウント（データ・処理・連携はすべて顧客側）</div>
+    <div class="ttl">顧客所有アカウント（データ・処理・連携・自作アプリはすべて顧客側）</div>
     <div class="shards">
       <div class="shard"><b>クライアントWorker</b>Web画面＋API<br>を単一Workerで配信</div>
       <div class="shard"><b>D1 / KV / R2</b>顧客のデータ<br>当社は保有しない</div>
@@ -562,40 +658,34 @@
   </div>
 
   <div class="grid col3" style="margin-top:4mm;">
-    <div class="card soft"><h4>本文を通さない</h4><p>データも処理も顧客側。当社はライセンスと配布のみで、本文を保有・中継しない。</p></div>
-    <div class="card soft"><h4>機能のみ停止</h4><p>未払い・契約無効は有料機能のみ停止。Free は常に使用可、データは削除・ロックしない。</p></div>
-    <div class="card soft"><h4>自動更新・移植性</h4><p>更新はCI配信＋自動マイグレーション。S3互換／標準SQLでロックインを回避。</p></div>
+    <div class="card soft"><h4>本文を通さない</h4><p>データも処理も自作アプリも顧客側。当社はライセンスと配布のみで、本文を保有・中継しない。</p></div>
+    <div class="card soft"><h4>機能のみ停止</h4><p>未払い・契約無効は有料機能のみ停止。Free は常に使用可、データは削除・ロックしない。解約後もアプリは残る。</p></div>
+    <div class="card soft"><h4>自動更新・移植性</h4><p>更新はCI配信＋自動マイグレーション。標準SQL／データ可搬でロックインを回避。</p></div>
   </div>
 
-  <div class="footer"><span>baku-office 会計・庶務クラウドAIアシスタント 事業説明資料</span><span>P.<span class="pg"></span></span></div>
+  <div class="footer"><span>baku-office 自社専用AIの相棒 事業説明資料</span><span>P.<span class="pg"></span></span></div>
 </section>
 
-<!-- ============ 10 セキュリティ ============ -->
+<!-- ============ 12 セキュリティ ============ -->
 <section class="page">
-  <div class="sec-no">10</div>
+  <div class="sec-no">12</div>
   <h2 class="sec">セキュリティと信頼性</h2>
 
-  <p>「起きる前提」で多層防御。既定状態で被害が広がらない設計です。</p>
+  <p>「起きる前提」で多層防御。既定状態で被害が広がらない設計です。<b>AIが作るアプリも例外なく安全側に制御</b>します。</p>
 
   <div class="grid col2">
     <div class="card" style="border-color:var(--gold);"><h4>🔐 データを預からない</h4>
       <p>データは顧客アカウントに保持し当社は保存しない。APIキー・個人情報は<b>AES-256-GCM（MASTER_KEY＋用途別サブ鍵）</b>で暗号化。</p></div>
-    <div class="card" style="border-color:var(--gold);"><h4>🔏 改ざんできないライセンス</h4>
-      <p>契約状態（エンタイトルメント・有効期限）は当社が<b>Ed25519 で電子署名</b>して配信。顧客側は<b>公開鍵で検証のみ</b>。
-      有効な承認が無い環境は有料機能を開放しません（fail-closed）。署名鍵は当社（将来はKMS）だけが保持。</p></div>
+    <div class="card" style="border-color:var(--gold);"><h4>🔏 改ざんできないライセンス／アプリ</h4>
+      <p>契約状態は当社が<b>Ed25519 で署名</b>して配信、顧客は<b>公開鍵で検証のみ</b>。<b>配布アプリも署名必須＋ホスト承認制</b>で、任意コードの無断流通を防止。</p></div>
+    <div class="card"><h4>🛠 AIアプリ開発の安全</h4>
+      <p>自作アプリは<b>宣言した権限の範囲だけ</b>（db:read/write 等）。生 env・署名鍵・認証内部・破壊操作・他テナントへは到達不可。<b>事前4確認</b>で要求権限を点検。</p></div>
     <div class="card"><h4>🛡 アクセス制御・監査</h4>
       <p>テナント内は owner_id／scope をデータ層で強制し横断アクセス不可。重要操作は共有承認キューで人が確認。操作は監査ログに記録。</p></div>
-    <div class="card"><h4>🚫 不正利用・違反対策</h4>
-      <p>リソース上限・アップロード検査・モデレーション。CF制限（CPU/タイムオーバー）に達した場合は画面でエラーを可視化し、高度なオプション→Workers Paid を案内。</p></div>
     <div class="card"><h4>💾 バックアップ（顧客保有・自己管理）</h4>
-      <p>データは顧客アカウント内のため、バックアップは顧客側の管理（自己責任）。<b>KV・R2 を Google ドライブへ定期バックアップ</b>する任意設定を提供（顧客自身のドライブへ退避）。</p></div>
+      <p>データは顧客アカウント内のため、バックアップは顧客側の管理（自己責任）。<b>KV・R2 を Google ドライブへ定期バックアップ</b>する任意設定を提供。</p></div>
     <div class="card"><h4>🔁 ベンダーロックイン回避</h4>
-      <p>ストレージは標準S3互換、DBは標準SQL＋アダプタ層。特定クラウドへの依存を最小化。</p></div>
-  </div>
-
-  <div class="callout">
-    <b>サービス継続リスクへの備え：</b>自己ホストのため、規約執行・障害・漏えいの影響は<b>1社で完結</b>（他社へ波及しない）。
-    データ顧客保有・別環境バックアップで被害を最小化します。
+      <p>DBは標準SQL＋アダプタ層、データは可搬。特定クラウドへの依存を最小化し、<b>持ち出して別環境で動かせる</b>。</p></div>
   </div>
 
   <h3>役割と法的ポジション</h3>
@@ -605,40 +695,40 @@
       <tr><td class="em">データの操作・管理・保有</td><td><b>顧客</b>が実施（自社アカウント内）。当社は<b>システムの提供・保守・導入支援</b>に徹する</td></tr>
       <tr><td class="em">個人情報の越境移転</td><td>AI／LINE は<b>顧客が直接</b>やり取り＝<b>本文は当社を通らない</b>。越境は顧客契約で整合</td></tr>
       <tr><td class="em">サービス停止（未払い等）</td><td><b>有料機能のみ停止</b>。Free は維持し、データは止めず<b>人質にしない</b></td></tr>
-      <tr><td class="em">AIの回答</td><td><b>参考情報・補助に限定</b>。断定的な専門助言・代理は行わない（非弁・業法回避）</td></tr>
+      <tr><td class="em">AIの回答・自作アプリ</td><td><b>参考情報・補助に限定</b>。断定的な専門助言・代理は行わない。自作アプリは権限と署名・承認で統制（非弁・業法回避）</td></tr>
     </tbody>
   </table>
-  <p class="small muted">※上記は当社の現方針。最終確定は<b>顧問弁護士の確認後</b>とします（各社最新規約の再確認を含む・確認中）。</p>
+  <p class="small muted">※上記は当社の現方針。最終確定は<b>顧問弁護士の確認後</b>とします（各社最新規約の再確認を含む・確認中）。本番化前ゲートとして<b>署名鍵のKMS外化・FIDO2・管理者JIT</b>を整備予定。</p>
 
-  <div class="footer"><span>baku-office 会計・庶務クラウドAIアシスタント 事業説明資料</span><span>P.<span class="pg"></span></span></div>
+  <div class="footer"><span>baku-office 自社専用AIの相棒 事業説明資料</span><span>P.<span class="pg"></span></span></div>
 </section>
 
-<!-- ============ 11 料金・プラン ============ -->
+<!-- ============ 13 料金・プラン ============ -->
 <section class="page">
-  <div class="sec-no">11</div>
+  <div class="sec-no">13</div>
   <h2 class="sec">料金・プラン</h2>
 
-  <p><b>3プラン構成</b>。インフラ・AI・チャネルは<b>顧客が直接契約（BYOK）</b>するため、当社サブスクは<b>ライセンス・配布・運用支援</b>に対する対価です。
-  プラン変更は Stripe（カードは即時、銀行振込・コンビニは年額ベースで入金確認後に反映）。</p>
+  <p><b>Free / Plus / Pro の3プラン</b>（＋評価・社内検証用の test＝全機能解放）。インフラ・AI・チャネルは<b>顧客が直接契約（BYOK）</b>するため、
+  当社サブスクは<b>ライセンス・配布・運用支援</b>に対する対価です。<b>申込時はプラン選択なし＝Free で開始</b>し、導入後に管理画面からアップグレード（Stripe）。</p>
 
   <table>
-    <thead><tr><th style="width:14%;">機能</th><th class="ctr" style="width:24%;">Free</th><th class="ctr" style="width:24%;">Plus</th><th class="ctr" style="width:24%;">Pro</th></tr></thead>
+    <thead><tr><th style="width:16%;">機能</th><th class="ctr">Free</th><th class="ctr">Plus</th><th class="ctr">Pro</th><th class="ctr">test</th></tr></thead>
     <tbody>
-      <tr><td class="em">位置づけ</td><td>完全無料・クレカ不要</td><td>AI 利用</td><td>エージェント利用</td></tr>
-      <tr><td class="em">会計・名簿・ファイル・予定・直接DB</td><td class="ctr">✓</td><td class="ctr">✓</td><td class="ctr">✓</td></tr>
-      <tr style="background:#eef3f9;"><td class="em">マルチユーザー（組織コンテキスト）</td><td class="ctr">✓</td><td class="ctr">✓</td><td class="ctr">✓</td></tr>
-      <tr><td class="em">AIチャット・議事録・API使用量・スキル自動導入</td><td class="ctr">—</td><td class="ctr">✓（Gemini）</td><td class="ctr">✓</td></tr>
-      <tr style="background:#eef3f9;"><td class="em">高度なオプション（任意API・Workers Paid 等）</td><td class="ctr">—</td><td class="ctr">✓</td><td class="ctr">✓</td></tr>
-      <tr><td class="em">LINE／Discord エージェント・個人コンテキスト</td><td class="ctr">—</td><td class="ctr">—</td><td class="ctr">✓</td></tr>
-      <tr style="background:#eef3f9;"><td class="em">Claude（上位・BYOK）／A2A 連携</td><td class="ctr">—</td><td class="ctr">—</td><td class="ctr">✓</td></tr>
-      <tr><td class="em">Stripe 課金</td><td class="ctr">不要</td><td class="ctr">必要</td><td class="ctr">必要</td></tr>
+      <tr><td class="em">位置づけ</td><td>完全無料・クレカ不要</td><td>AI・アプリ開発</td><td>エージェント</td><td>全機能解放（検証）</td></tr>
+      <tr><td class="em">会計・名簿・ファイル・予定・直接DB</td><td class="ctr">✓</td><td class="ctr">✓</td><td class="ctr">✓</td><td class="ctr">✓</td></tr>
+      <tr style="background:#eef3f9;"><td class="em">マルチユーザー（組織コンテキスト）</td><td class="ctr">✓</td><td class="ctr">✓</td><td class="ctr">✓</td><td class="ctr">✓</td></tr>
+      <tr><td class="em">AIチャット・<b>AIアプリ開発</b>・議事録・API使用量</td><td class="ctr">—</td><td class="ctr">✓（Gemini）</td><td class="ctr">✓</td><td class="ctr">✓</td></tr>
+      <tr style="background:#eef3f9;"><td class="em">高度なオプション（任意API・Workers Paid 等）</td><td class="ctr">—</td><td class="ctr">✓</td><td class="ctr">✓</td><td class="ctr">✓</td></tr>
+      <tr><td class="em">LINE／Discord エージェント・個人コンテキスト</td><td class="ctr">—</td><td class="ctr">—</td><td class="ctr">✓</td><td class="ctr">✓</td></tr>
+      <tr style="background:#eef3f9;"><td class="em">Claude（上位・BYOK）／A2A 連携／ローカルLLM</td><td class="ctr">—</td><td class="ctr">Claude可</td><td class="ctr">✓</td><td class="ctr">✓</td></tr>
+      <tr><td class="em">Stripe 課金</td><td class="ctr">不要</td><td class="ctr">必要</td><td class="ctr">必要</td><td class="ctr">不要</td></tr>
     </tbody>
   </table>
-  <p class="small muted">※Free は Stripe を経由せず即発行。Plus／Pro は入金確認まで Free 相当で稼働。ダウングレード／解約は支払済み期間の終了時に反映し、データはロック・削除しません。</p>
+  <p class="small muted">※Free は Stripe を経由せず即発行。Plus／Pro は入金確認まで Free 相当で稼働。<b>test</b> はホスト管理画面から付与する評価用（全ゲート通過・rank 99）。ダウングレード／解約は支払済み期間の終了時に反映し、データはロック・削除しません。</p>
 
   <h3>AI利用コストの管理（Plus 以上）</h3>
   <div class="grid col3">
-    <div class="card soft"><h4>利用量の可視化</h4><p>「API使用量」画面で各APIの使用量を数値＋グラフ表示。いつでも確認。</p></div>
+    <div class="card soft"><h4>利用量の可視化</h4><p>「API使用量」で各APIの使用量を数値＋グラフ表示。いつでも確認。</p></div>
     <div class="card soft"><h4>枠超過アラート</h4><p>無料枠を超えそうな場合にアラート＋<b>リセット時刻</b>を表示。</p></div>
     <div class="card soft"><h4>従量の上限設定</h4><p>上限到達時は<b>無料版に切替 または 該当API一時停止</b>を選択でき、想定外の課金を防止。</p></div>
   </div>
@@ -648,12 +738,12 @@
     <b>プッシュを多用したい・コストを抑えたい場合は無料の Discord を推奨</b>します。
   </div>
 
-  <div class="footer"><span>baku-office 会計・庶務クラウドAIアシスタント 事業説明資料</span><span>P.<span class="pg"></span></span></div>
+  <div class="footer"><span>baku-office 自社専用AIの相棒 事業説明資料</span><span>P.<span class="pg"></span></span></div>
 </section>
 
-<!-- ============ 12 採算設計 ============ -->
+<!-- ============ 14 採算設計 ============ -->
 <section class="page">
-  <div class="sec-no">12</div>
+  <div class="sec-no">14</div>
   <h2 class="sec">採算設計・粗利益率</h2>
 
   <p class="lead-p"><b>自己ホスト型</b>はインフラ・AI・チャネルを顧客が契約するため<b>当社原価はほぼゼロ＝粗利ほぼ純利</b>。
@@ -670,7 +760,7 @@
     <div class="card soft"><h4>① BYOK（自社キー）</h4><p>AI・LINE 実費は顧客が直接負担。当社原価から外れ、利用が増えても当社コストは増えない。</p></div>
     <div class="card soft"><h4>② 配布CI＋自動マイグレーション</h4><p>導入・更新・スキーマ変更を自動化。1社あたりの運用工数を極小化。</p></div>
     <div class="card soft"><h4>③ 使用量ガード</h4><p>API使用量画面と上限設定で、顧客側のコストも暴走させない（信頼維持）。</p></div>
-    <div class="card soft"><h4>④ 軽量なホスト基盤</h4><p>当社は承認・配布・通知のみ。規模が出てもコントロールプレーン原価は誤差。</p></div>
+    <div class="card soft"><h4>④ 軽量なホスト基盤</h4><p>当社は承認・配布・通知・アプリ署名のみ。規模が出てもコントロールプレーン原価は誤差。</p></div>
   </div>
 
   <div class="callout gold">
@@ -681,41 +771,41 @@
     <b>留意：</b>決済手数料（カード約3.6%）は取引コストとして別管理。Claude等の値上げ・円安は単価・プラン改定で吸収します。
   </div>
 
-  <div class="footer"><span>baku-office 会計・庶務クラウドAIアシスタント 事業説明資料</span><span>P.<span class="pg"></span></span></div>
+  <div class="footer"><span>baku-office 自社専用AIの相棒 事業説明資料</span><span>P.<span class="pg"></span></span></div>
 </section>
 
-<!-- ============ 13 ホスト運用 ============ -->
+<!-- ============ 15 ホスト運用 ============ -->
 <section class="page">
-  <div class="sec-no">13</div>
+  <div class="sec-no">15</div>
   <h2 class="sec">ホスト運用（ホストポータル）</h2>
 
-  <p>当社側の管理は <b>Google 管理者認証</b>のホストポータルで完結。団体申込から配布・課金・通知までを一元管理します。</p>
+  <p>当社側の管理は <b>Google 管理者認証</b>のホストポータルで完結。団体申込から配布・課金・通知・<b>アプリ承認</b>までを一元管理します。</p>
 
   <h3>主な機能</h3>
   <table>
     <thead><tr><th style="width:26%;">機能</th><th>内容</th></tr></thead>
     <tbody>
-      <tr><td class="em">団体申込（専用Worker）</td><td>Googleログイン → 団体情報 → プラン選択 → 同意 →（Plus/ZはStripe）。申込は<b>申込専用Workerに分離</b>し、管理画面と独立して稼働</td></tr>
-      <tr><td class="em">クライアント管理</td><td>団体一覧：団体名・<b>代表者・連絡先・登録年月日</b>・プラン・エンタイトルメント・アクティベート状況・デプロイURL・稼働バージョン・最終受信。<b>詳細参照＋各種情報/ステータスの手動変更</b>が可能</td></tr>
-      <tr><td class="em">ライセンス／エンタイトルメント</td><td>ライセンスID単位の状態（Free/Plus/Pro）、アクティベート記録、停止・延長。Stripe入金確認で自動切替</td></tr>
+      <tr><td class="em">団体申込（専用Worker）</td><td>Googleログイン → 団体情報 → 同意 →（<b>プラン選択なし＝Free即発行</b>）。申込は<b>申込専用Workerに分離</b>し、管理画面と独立して稼働</td></tr>
+      <tr><td class="em">クライアント管理</td><td>団体一覧：団体名・代表者・連絡先・登録年月日・プラン・エンタイトルメント・デプロイURL・稼働バージョン・最終受信。<b>詳細参照＋ステータス手動変更</b>（評価用 test 付与を含む）</td></tr>
+      <tr><td class="em">ライセンス／エンタイトルメント</td><td>ライセンスID単位の状態（Free/Plus/Pro/test）、アクティベート記録、停止・延長。Stripe入金確認で自動切替</td></tr>
+      <tr><td class="em">アプリ管理（中枢レジストリ）</td><td>各リポで作られたアプリを<b>承認／停止</b>。<b>署名つき配布</b>。利用状況（導入数・版分布）を集計し、未登録で稼働中のアプリを警告</td></tr>
       <tr><td class="em">課金・請求</td><td>Stripe連携（サブスク状態・入金確認）、振込／コンビニの消込、B2B請求情報の管理</td></tr>
       <tr><td class="em">配布・通知</td><td>配布バージョンの管理（CI）、各団体への通知／更新のお知らせ配信</td></tr>
-      <tr><td class="em">テレメトリ</td><td>各団体の稼働・エンタイトルメント・最終受信を確認（本文・PIIは扱わない）</td></tr>
     </tbody>
   </table>
 
   <div class="grid col3" style="margin-top:4mm;">
     <div class="card soft"><h4>申込の独立稼働</h4><p>申込専用Workerにより、管理画面の更新・障害と申込受付を切り離して安定運用。</p></div>
     <div class="card soft"><h4>共通更新はCIで一括</h4><p>UI・機能の共通更新は upstream／CI で全顧客へ。個別カスタムはデータ駆動で個別対応。</p></div>
-    <div class="card soft"><h4>操作しやすいUI</h4><p>ホストポータルもクライアントと統一したシンプル・レスポンシブUI。</p></div>
+    <div class="card soft"><h4>アプリの中枢管理</h4><p>「どのアプリが存在し、どこで使われているか」を承認制で可視化。配布ポリシーを効かせる。</p></div>
   </div>
 
-  <div class="footer"><span>baku-office 会計・庶務クラウドAIアシスタント 事業説明資料</span><span>P.<span class="pg"></span></span></div>
+  <div class="footer"><span>baku-office 自社専用AIの相棒 事業説明資料</span><span>P.<span class="pg"></span></span></div>
 </section>
 
-<!-- ============ 14 エージェント間連携 ============ -->
+<!-- ============ 16 エージェント間連携 ============ -->
 <section class="page">
-  <div class="sec-no">14</div>
+  <div class="sec-no">16</div>
   <h2 class="sec">エージェント間連携（A2A・Proオプション）</h2>
 
   <p class="lead-p">各社のエージェント同士が<b>相互同意のうえで安全に連携</b>。企業をまたいだ調整・取引を自動化する、
@@ -757,43 +847,49 @@
     <b>位置づけ：</b>他社にない<b>差別化機能</b>。機密保持と直結するため、Discord前提・相互同意制の<b>Pro専用オプション</b>として慎重に提供します。
   </div>
 
-  <div class="footer"><span>baku-office 会計・庶務クラウドAIアシスタント 事業説明資料</span><span>P.<span class="pg"></span></span></div>
+  <div class="footer"><span>baku-office 自社専用AIの相棒 事業説明資料</span><span>P.<span class="pg"></span></span></div>
 </section>
 
-<!-- ============ 15 発展性・ロードマップ ============ -->
+<!-- ============ 17 発展性・ロードマップ ============ -->
 <section class="page">
-  <div class="sec-no">15</div>
+  <div class="sec-no">17</div>
   <h2 class="sec">事業の発展性とロードマップ</h2>
 
-  <p class="lead-p"><b>データを預からない自己ホスト設計</b>は、運用の安全だけでなく、<b>事業の譲渡しやすさ</b>と
-  <b>国内・物理での預かり方</b>という発展性も生みます。</p>
+  <p class="lead-p"><b>データを預からない自己ホスト設計</b>と<b>AIで自作できるアプリ基盤</b>は、運用の安全だけでなく、
+  <b>事業の譲渡しやすさ</b>・<b>アプリ流通（マーケット）</b>・<b>国内/物理での預かり方</b>という発展性を生みます。</p>
 
   <h3>① ホスト機能の譲渡可能性（承継・売却）</h3>
   <div class="grid col2">
-    <div class="card soft"><h4>資産は法人に集約</h4><p>ライセンス・配布・契約・ドメインを法人に集約し、株式／事業譲渡で一括移転。</p></div>
+    <div class="card soft"><h4>資産は法人に集約</h4><p>ライセンス・配布・契約・ドメイン・<b>ポータブルコア＋契約テスト</b>を法人に集約し、株式／事業譲渡で一括移転。</p></div>
     <div class="card soft"><h4>顧客データは対象外</h4><p>データは顧客アカウントに残り売却対象外。買主はデータ責任を負わず評価が上がる。</p></div>
   </div>
 
-  <h3>② 国内ハウジング（場所貸し・上位オプション）</h3>
+  <h3>② アプリ・マーケット（流通の拡大）</h3>
   <div class="callout gold">
+    AIで自作されたアプリを<b>署名つきで安全に流通</b>させるレジストリ（マーケット）。優れたアプリが団体を越えて再利用され、
+    アプリ別課金・外部リポからの自動公開（CI署名）へ発展。<b>作るほど価値が増すネットワーク</b>を育てます。
+  </div>
+
+  <h3>③ 国内ハウジング（場所貸し・上位オプション）</h3>
+  <div class="callout">
     顧客所有のサーバーを<b>当社事務所に設置（ハウジング）</b>し暗号化バックアップを保管。当社は<b>場所・電源・物理セキュリティを提供</b>するのみで、
     <b>データの保有・閲覧はしない</b>（顧客が鍵を保有）。国内保管・物理管理を求める機密案件向け（要顧問弁護士確認）。
   </div>
 
-  <h3>③ 今後の進め方</h3>
+  <h3>④ 今後の進め方</h3>
   <div class="stack">
     <div class="layer"><span class="tag">1</span> <b>本番クレデンシャル投入＋配布CI本稼働</b> ― Google／LINE／Discord／Stripe／Gemini／Claude 連携と公開リポジトリの自動配布</div>
     <div class="layer"><span class="tag">2</span> <b>セキュリティ3ゲート</b> ― 署名鍵のKMS外化＋FIDO2＋管理者JIT（顧客提供拡大に合わせ整備）</div>
     <div class="layer"><span class="tag">3</span> <b>法務確定</b> ― 契約条項・個人/越境論点・各社規約の再確認と顧問弁護士レビュー</div>
-    <div class="layer"><span class="tag g">4</span> <b>横展開</b> ― 業種別テンプレ拡充・A2Aネットワーク拡大・Googleドライブ高度連携</div>
+    <div class="layer"><span class="tag g">4</span> <b>横展開</b> ― AIアプリ・マーケット拡充／業種別テンプレ／A2Aネットワーク拡大</div>
   </div>
 
-  <div style="margin-top:10mm; text-align:center; color:var(--navy);">
+  <div style="margin-top:9mm; text-align:center; color:var(--navy);">
     <div style="font-size:13pt; font-weight:800;">次のステップ</div>
-    <div class="small muted" style="margin-top:2mm;">本番クレデンシャル＋配布CI　→　セキュリティ3ゲート　→　法務確定　→　横展開</div>
+    <div class="small muted" style="margin-top:2mm;">本番クレデンシャル＋配布CI　→　セキュリティ3ゲート　→　法務確定　→　アプリ・マーケット／横展開</div>
   </div>
 
-  <div class="footer"><span>baku-office 会計・庶務クラウドAIアシスタント 事業説明資料</span><span>P.<span class="pg"></span></span></div>
+  <div class="footer"><span>baku-office 自社専用AIの相棒 事業説明資料</span><span>P.<span class="pg"></span></span></div>
 </section>
 
 </body>

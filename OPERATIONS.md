@@ -17,8 +17,8 @@
                                    │
         無料(Free)で利用開始 → 連携設定(Gemini/LINE/Claude) → 必要ならPlus/Proへ課金
                                    │
-        会計・名簿・ファイル・議事録・LINEエージェント・高度なオプション
-[ホスト] クライアント管理で稼働監視 / お知らせ配信 / 入金確認(課金)
+        4画面で運用：ホーム / AI(相棒＋アプリ開発) / アプリ(導入・開発) / 設定
+[ホスト] クライアント管理で稼働監視 / お知らせ配信 / 入金確認(課金) / アプリ承認
 ```
 
 ---
@@ -57,7 +57,14 @@
 > - **更新の波及**：アプリ更新（`version` 上げ）をコア正本に入れると、**CI配布→導入している全団体に波及**（upstream同期＋自動マイグレーション）。
 > - **派生**：既存アプリをコピーし `id` を変えて改変＝**新アプリ**（`derivedFrom` に派生元を記録）。元アプリの更新とは独立。
 
-**開発（開発者）**
+**AIで作る（チャット主導・推奨の入口）** — クライアント管理者が「AI」画面で「〜するアプリを作って」と依頼する流れ。
+
+1. AIが**企画・仕様**を作成し、続けて**事前4確認①環境②権限③安全④コスト**を実行（`propose_app` 道具）。問題なければ草案（`app_drafts`・要求権限つき）を生成。
+2. 管理者が「アプリ」画面で要求権限と4確認結果（`gate_status`：planning/ready/blocked）をレビュー。
+3. `ready` なら**公開申請**（`/api/registry/submit`）→ ホストが `/apps` で承認 → **Ed25519署名つきで配信** → 他団体は署名検証して取り込み（再デプロイ不要）。
+4. 破壊的操作・認証バイパス等は拒絶。アプリは宣言した権限（`db:read`/`db:write`/… §15-2）の範囲のみで動く。
+
+**コードで作る（開発者）**
 
 1. **設計**：機能を Part 単位に分解（道具 `agentTools`／ナビ `menu`／データ操作）。コアは編集しない。
 2. **実装**：`src/parts/<id>.ts` に `Part` を定義。データは必ず **`ctx.db`（SqlStore）経由**＝CF/Node 両対応。認可は `requiredRole`。画面が要れば `src/pages/<id>.astro`。
@@ -85,7 +92,7 @@
    - `ADMIN_KEY`（API保護・任意）
    - 🟢 `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`（スタッフGoogleログイン）
    - 🟢 `HOST_ADMIN_EMAILS`（管理者のGoogleメール・カンマ区切り）
-   - 🟢 課金：`STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` / `STRIPE_PRICE_Y` / `STRIPE_PRICE_Z`
+   - 🟢 課金：`STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` / `STRIPE_PRICE_Y`（Plus用）/ `STRIPE_PRICE_Z`（Pro用）。Stripe接続部は実装済みで、**アカウント未準備なら鍵未投入のまま起動**し、鍵投入で課金が有効化される。
 3. D1 作成＋スキーマ適用：`wrangler d1 execute baku-office-portal-db --remote --file apps/host/migrations/0001_host.sql`。
 4. クライアント配布鍵：ホストの署名鍵に対応する**公開検証鍵**を取得し、クライアント側に渡す（`GET /admin/pubkey`）。
 
@@ -94,14 +101,15 @@
 - 以降 `/clients`・`/notices` は管理者のみ。
 
 ### A-2. 団体の申込受付 → ライセンス発行
-1. `/apply` で団体情報（団体名・代表者・連絡先）とプラン（Free/Plus/Pro・旧 X/Y/Z）を入力 →「申し込む」。
-2. **Free** はその場でライセンス即発行（無料）。**Plus/Pro** は入金確認まで free 相当（プロビジョナル）。
+1. `/apply` で団体情報（団体名・代表者・連絡先）を入力 →「申し込む」。**プラン選択はなし＝全員 Free で開始**（アップグレードは導入後にクライアント `/billing` から）。
+2. その場でライセンスを **Free（`plan=free`・`status=active`）で即発行**（Stripe不要）。
 3. 画面に出る**初期アクティベーションURL**（`…/activate?license_id=…`）を団体へ送付。
    - ※ クライアントの**個別Deployリンク**もあわせて案内（§C-1）。
 
 ### A-3. クライアント管理（監視）
 - `/clients`：団体一覧（団体名・プラン・エンタイトルメント・稼働バージョン・最終受信）。
 - 各クライアントは統合チェック（`/api/check`）で自動的に最終受信/バージョンを更新。
+- **エンタイトルメント設定**：`/clients` から対象団体のプランを変更でき、**評価・社内検証用に `test`（全機能解放）** を付与できる（ランク最上位＝全ゲート通過）。検証後は元プランに戻す。
 
 ### A-3b. アプリ管理（中枢レジストリ）— `/apps`
 - **存在の管理**：各リポで作られたアプリを登録（id/名称/版/リポURL/権限）→ 承認（approved）/停止（blocked）。
@@ -116,7 +124,7 @@
 ### A-5. 課金・入金確認
 - 🟢 Stripe 接続時：カード=即時、振込/コンビニ=入金確認(Webhook `/api/billing/webhook`)でエンタイトルメント昇格。
 - 🧪 Stripe 未接続時：クライアントの課金画面の「デモで支払った」操作（`/api/billing/dev-confirm`）で昇格をシミュレート。
-- 解約/未入金は期末に無料(X)へ復帰（データはロック/削除しない）。
+- 解約/未入金は期末に無料(Free)へ復帰（データはロック/削除しない）。
 
 ### A-6. バージョン更新の配布
 - `apps/client` を更新して main へ push → **CI（`publish-client.yml`）が公開配布リポ `baku-office-app` を自動更新**。
@@ -149,7 +157,14 @@
 - デプロイ後に初めてアプリを開くと、ライセンス未保持を検知し**自動でアクティベーション**へ。
 - 🟢 申込時と同じGoogleで認証 → 署名済みライセンストークンを取得・保存（§4）。
 - 🧪 dev：案内された `…/activate?license_id=…` を開くと取得。
-- 以後 `/` ホームでプラン状態・残高サマリー・お知らせを表示。
+- 以後 `/` ホームでプラン状態・使用量・お知らせ・アプリのウィジェットを表示。
+
+### C-2b. 画面構成（4ナビ）
+操作は4つに集約。業務画面は「アプリ」のランチャーから開き、各種設定は「設定」に集約される。
+- **ホーム** `/`：お知らせ、API/DB/ストレージ使用量、導入アプリのウィジェット（例：総会員数・当月取引数）。
+- **AI** `/chat`：相棒とのチャット（セッション保存・切替、モデル選択 Gemini/Claude/local）。ここからAIアプリ開発も。
+- **アプリ** `/apps`：導入済みランチャー／マーケット（導入・削除）／外部取り込み（署名検証）／開発草案（管理者）。
+- **設定** `/settings`：メンバー・連携・課金・カスタマイズ・運用をカテゴリ別に集約。
 
 ### C-3. ログイン（組織／個人）
 - `/login`：
@@ -210,7 +225,8 @@
 | --- | --- | --- |
 | ホスト | `/login` `/apply` `/clients` `/notices` | スタッフログイン・申込・監視・配信 |
 | ホストAPI | `/api/apply` `/api/activate` `/api/token` `/api/check` `/api/billing/*` `/api/notices` | 発行・アクティベート・統合チェック・課金・通知 |
-| クライアント | `/` `/accounting` `/files` `/schedule` `/minutes` `/review` `/personal` `/billing` `/settings/keys` `/settings/advanced` `/diagnostics` | 日常業務・設定 |
+| クライアント（4ナビ） | `/`（ホーム） `/chat`（AI） `/apps`（アプリ） `/settings`（設定） | 相棒・アプリ導入/開発・設定集約 |
+| クライアント（業務画面） | `/accounting` `/membership` `/files` `/schedule` `/minutes` `/review` `/personal` `/billing` `/settings/keys` `/settings/advanced` `/diagnostics` | 「アプリ」「設定」から起動する各機能 |
 | クライアントAPI | `/api/line/webhook` `/api/cron/drain` `/provision` | エージェント・リマインダー/ジョブ処理・配信受信 |
 
 - 外部スケジューラ（cron-job.org等）→ `POST /api/cron/drain`（`x-internal-key: INTERNAL_KEY`・`content-type: application/json`）でリマインダー配信・要約/動画ジョブを進行。
