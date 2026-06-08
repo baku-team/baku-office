@@ -8,6 +8,7 @@ import { enabledParts, toolsOf, enabledPartIds, type AgentTool } from "../core/p
 import { runToolLoop, type ToolDecl, type Turn, type ChatModel } from "../core/ai.ts";
 import { ROLES, toolsForRole, normalizeRole, ROLE_LIST } from "./multi-agent.ts";
 import { maxParallelAgents, agentMaxHops } from "./settings.ts";
+import { callPartner } from "./a2a.ts";
 import { localChatModel } from "../core/models/local.ts";
 import { geminiModel } from "../core/models/gemini.ts";
 import { claudeModel } from "../core/models/claude.ts";
@@ -42,10 +43,11 @@ const GEMINI_TOOLS = [
 const CLAUDE_TOOLS = [
   { name: "make_document", description: "資料を生成（type=md/csv/txt）してDLリンクを返す", parameters: { type: "object", properties: { type: { type: "string" }, title: { type: "string" }, content: { type: "string" } }, required: ["title", "content"] } },
 ];
-// マルチエージェント（Pro 以上）：スーパーバイザーが子エージェントへ委譲する道具。
+// マルチエージェント（Pro 以上）：スーパーバイザーが子エージェントへ委譲する道具＋他団体連携(A2A)。
 const MULTI_TOOLS = [
   { name: "run_subagent", description: `専門の子エージェントに1つのタスクを委譲して結果を得る（役割: ${ROLE_LIST}）`, parameters: { type: "object", properties: { role: { type: "string" }, task: { type: "string", description: "委譲する具体的なタスク" } }, required: ["role", "task"] } },
   { name: "run_team", description: "複数タスクを子エージェントに同時並行で委譲し、結果をまとめて得る（独立タスクの並列処理に使う）", parameters: { type: "object", properties: { tasks: { type: "array", items: { type: "object", properties: { role: { type: "string" }, task: { type: "string" } }, required: ["role", "task"] } } }, required: ["tasks"] } },
+  { name: "call_partner", description: "連携済みの他団体（partner=相手のライセンスID）の公開アクションを呼ぶ（A2A・相互同意済みのみ）", parameters: { type: "object", properties: { partner: { type: "string", description: "相手のライセンスID" }, app: { type: "string", description: "アプリID" }, action: { type: "string" }, args: { type: "object" } }, required: ["partner", "app", "action"] } },
 ];
 // 高度なオプション：有効化済みのユーザー追加スキル（要Claudeキー）。
 function skillTool(names: string[]) {
@@ -172,6 +174,10 @@ export async function runAgent(ctx: Ctx, owner: string, text: string, image?: { 
       const out = await Promise.all(run.map((t) => spawn(String(t.role ?? "general"), String(t.task ?? ""))));
       const over = tasks.length > cap ? `\n\n（同時実行は最大${cap}件のため ${tasks.length - cap} 件は省略しました。Workers Paid で上限を拡張できます）` : "";
       return out.map((r, i) => `【${normalizeRole(String(run[i].role ?? "general"))}】\n${r}`).join("\n\n") + over;
+    }
+    if (isPro && n === "call_partner") {
+      const r = await callPartner(env, String(a.partner ?? ""), String(a.app ?? ""), String(a.action ?? ""), (a.args as Record<string, unknown>) ?? {});
+      return r.ok ? `連携先の応答：\n${typeof r.result === "string" ? r.result : JSON.stringify(r.result)}` : `連携に失敗：${r.error ?? ""}`;
     }
     return execTool(ctx, owner, baseUrl, n, a, role, activeTools);
   };

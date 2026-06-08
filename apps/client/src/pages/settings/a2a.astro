@@ -1,0 +1,94 @@
+---
+export const prerender = false;
+import App from "../../layouts/App.astro";
+import { atLeast } from "@baku-office/shared";
+const env = Astro.locals.runtime.env;
+const { getSession } = await import("../../lib/auth.ts");
+const ses = await getSession(env, Astro.request);
+if (!ses || ses.role !== "admin" || ses.ctx !== "org") return Astro.redirect("/login", 302);
+const entitlement = await (await import("../../lib/client.ts")).cachedEntitlement(env);
+const hasPro = atLeast(entitlement, "pro");
+const { getLicenseId } = await import("../../lib/client.ts");
+const licenseId = hasPro ? (await getLicenseId(env)) ?? "" : "";
+
+await import("../../parts/index.ts");
+const { appCatalog } = await import("../../core/apps.ts");
+const { getExposedActions, a2aHost } = await import("../../lib/a2a.ts");
+const cat = hasPro ? appCatalog().filter((a) => a.actions.length > 0) : [];
+const exposed = hasPro ? new Set(await getExposedActions(Astro.locals.ctx)) : new Set<string>();
+const list = hasPro ? ((await a2aHost(env, "list").catch(() => ({}))) as { connections?: { id: string; partner: string | null; status: string }[] }) : {};
+const conns = list.connections ?? [];
+---
+<App title="A2A（団体間連携）" active="/settings">
+  <h1>A2A（他団体エージェント連携）</h1>
+  {!hasPro && (
+    <div class="card">
+      <div class="banner banner-warn">この機能は <strong>Pro 以上</strong>のプランで利用できます。</div>
+      <p class="muted">他団体のエージェントと、相互同意のうえで「決められた操作」だけを安全に連携できます。</p>
+      <a class="btn btn-primary" href="/billing">プラン・課金へ</a>
+    </div>
+  )}
+  {hasPro && (
+    <Fragment>
+      <div class="banner banner-info">他団体との連携は<strong>相互同意</strong>が前提です。公開した操作だけが、ホスト署名つきの中継で実行されます（相手データへ直アクセスはできません）。相手に到達するには<strong>カスタムドメイン等で到達可能</strong>である必要があります。</div>
+
+      <h2>あなたの団体ID</h2>
+      <div class="card"><p class="muted">相手があなたを呼ぶ際に使うIDです。</p><code>{licenseId || "（未取得）"}</code></div>
+
+      <h2>接続</h2>
+      <div class="card">
+        <p class="muted">接続コードを作成して相手に渡す（相手が参加で確定）／相手のコードで参加する。</p>
+        <div class="row"><button class="btn btn-primary" id="mkcode" style="flex:0 0 auto">接続コードを作成</button><span id="codeout" class="muted"></span></div>
+        <div class="row" style="margin-top:.5rem"><input id="joincode" placeholder="相手の接続コード" /><button class="btn btn-primary" id="join" style="flex:0 0 auto">参加</button></div>
+      </div>
+
+      <h3>接続一覧</h3>
+      <div class="table-wrap"><table><thead><tr><th>状態</th><th>相手ID</th><th>コード</th><th></th></tr></thead><tbody>
+        {conns.map((c) => (<tr data-code={c.id}><td>{c.status}</td><td><code>{c.partner ?? "（参加待ち）"}</code></td><td><code>{c.id}</code></td><td><button class="btn btn-sm btn-danger rev">取消</button></td></tr>))}
+        {conns.length === 0 && (<tr><td colspan="4" class="muted">接続はありません。</td></tr>)}
+      </tbody></table></div>
+
+      <h2>公開するアクション</h2>
+      <div class="card">
+        <p class="muted">連携先から呼べるようにする操作を選びます（チェックしたものだけが外部に公開されます）。</p>
+        {cat.length === 0 && (<p class="muted">公開できるアクションを持つアプリがありません。</p>)}
+        {cat.map((a) => (
+          <div class="field"><strong>{a.name}</strong>
+            {a.actions.map((act) => (
+              <label style="display:block;margin-left:1rem;font-size:.9rem"><input type="checkbox" class="exp-chk" value={`${a.id}.${act}`} checked={exposed.has(`${a.id}.${act}`)} /> {act}</label>
+            ))}
+          </div>
+        ))}
+        <button class="btn btn-primary" id="saveExp">公開アクションを保存</button>
+      </div>
+
+      <script slot="scripts" is:inline>
+        (function () {
+          const api = (b, btn) => window.bo.api("/api/a2a/manage", b, { btn });
+          document.getElementById("mkcode")?.addEventListener("click", async (e) => {
+            const r = await api({ _action: "create" }, e.currentTarget);
+            if (r.ok && r.data.code) document.getElementById("codeout").textContent = "コード：" + r.data.code + "（相手に渡してください）";
+          });
+          document.getElementById("join")?.addEventListener("click", async (e) => {
+            const code = document.getElementById("joincode").value.trim();
+            if (!code) { window.bo.toast("接続コードを入力", "err"); return; }
+            const r = await api({ _action: "accept", code }, e.currentTarget);
+            if (r.ok && r.data.ok) { window.bo.toast("接続しました"); setTimeout(() => location.reload(), 700); }
+            else window.bo.toast(r.data.error || "参加に失敗", "err");
+          });
+          document.querySelectorAll("tr[data-code]").forEach((tr) => {
+            tr.querySelector(".rev")?.addEventListener("click", async (e) => {
+              if (!confirm("この接続を取り消しますか？")) return;
+              const r = await api({ _action: "revoke", code: tr.dataset.code }, e.currentTarget);
+              if (r.ok) setTimeout(() => location.reload(), 500);
+            });
+          });
+          document.getElementById("saveExp")?.addEventListener("click", async (e) => {
+            const actions = [...document.querySelectorAll(".exp-chk")].filter((c) => c.checked).map((c) => c.value);
+            await api({ _action: "expose", actions }, e.currentTarget);
+          });
+        })();
+      </script>
+    </Fragment>
+  )}
+</App>
