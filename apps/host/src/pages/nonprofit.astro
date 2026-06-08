@@ -1,0 +1,40 @@
+---
+export const prerender = false;
+import Host from "../layouts/Host.astro";
+const env = Astro.locals.runtime.env;
+const { getHostSession } = await import("../lib/hostauth.ts");
+const ses = await getHostSession(env, Astro.request);
+if (!ses?.isAdmin) return Astro.redirect("/login", 302);
+const { listApplications } = await import("../lib/nonprofit.ts");
+const pending = await listApplications(env, "pending");
+const t = (s: number | null) => (s ? new Date(s * 1000).toISOString().slice(0, 16).replace("T", " ") : "—");
+---
+<Host title="NonProfit 審査" active="/nonprofit">
+  <h1>NonProfit 審査</h1>
+  <p class="muted">非営利団体向け「全機能無料」プランの申込審査。承認するとエンタイトルメントが <code>nonprofit</code>（全機能）になります。</p>
+  <div class="table-wrap"><table><thead><tr><th>団体</th><th>種別</th><th>認証/書類</th><th>用途</th><th>申込</th><th>操作</th></tr></thead><tbody>
+    {pending.map((a) => (
+      <tr data-lic={a.license_id}>
+        <td>{a.org_name ?? "—"}<div class="muted" style="font-size:.75rem"><code>{a.license_id}</code></div></td>
+        <td>{a.org_type ?? "—"}</td>
+        <td class="muted" style="font-size:.8rem">{a.doc_ref ?? "—"}</td>
+        <td class="muted" style="font-size:.8rem">{a.description ?? "—"}</td>
+        <td>{t(a.created_at)}</td>
+        <td>
+          <button class="btn btn-ghost np-ok">承認</button>
+          <button class="btn btn-ghost np-ng">却下</button>
+        </td>
+      </tr>
+    ))}
+    {pending.length === 0 && (<tr><td colspan="6" class="muted">審査待ちはありません。</td></tr>)}
+  </tbody></table></div>
+
+  <script slot="scripts" is:inline>
+    const api = async (b, btn) => { if (btn) btn.disabled = true; try { const r = await fetch("/api/nonprofit", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(b) }); const j = await r.json().catch(() => ({})); if (!r.ok || j.error) { alert("エラー：" + (j.error || r.status)); return null; } return j; } finally { if (btn) btn.disabled = false; } };
+    document.querySelectorAll("tr[data-lic]").forEach((tr) => {
+      const license_id = tr.getAttribute("data-lic");
+      tr.querySelector(".np-ok")?.addEventListener("click", async (e) => { if (!confirm("承認して全機能を有効化しますか？")) return; const r = await api({ _action: "approve", license_id }, e.currentTarget); if (r) location.reload(); });
+      tr.querySelector(".np-ng")?.addEventListener("click", async (e) => { const reason = prompt("却下理由（任意）") ?? ""; const r = await api({ _action: "reject", license_id, reason }, e.currentTarget); if (r) location.reload(); });
+    });
+  </script>
+</Host>

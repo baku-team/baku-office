@@ -24,12 +24,13 @@ export const POST: APIRoute = async ({ request, locals }) => {
     contactName?: string;
     contactEmail?: string;
     googleSub?: string;
+    nonprofit?: { orgType?: string; docRef?: string; description?: string };
   };
   if (!b.orgName || !b.contactEmail) {
     return json({ error: "orgName・contactEmail が必要" }, 400);
   }
-  // 申込時はプランを選ばせない。全員 Free で開始し、後から管理画面（/billing）で Plus/Pro へアップグレードする。
-  const plan: Plan = "free";
+  // 基本 Free で開始（後から /billing で Plus/Pro）。NonProfit のみ申込時選択＝審査待ち（通過まで free 相当）。
+  const plan: Plan = b.nonprofit ? "nonprofit" : "free";
   const now = nowSec();
   const customerId = randomId();
   const licenseId = randomId();
@@ -43,6 +44,12 @@ export const POST: APIRoute = async ({ request, locals }) => {
   )
     .bind(licenseId, customerId, plan, initialEntitlement(plan), "active", b.googleSub ?? null, deployCode, now)
     .run();
+
+  // NonProfit 申込は審査レコードを作成（ホストが /nonprofit で承認 → entitlement=nonprofit）。
+  if (b.nonprofit) {
+    await env.DB.prepare("INSERT INTO nonprofit_applications (license_id,org_type,doc_ref,description,status,created_at) VALUES (?,?,?,?,'pending',?) ON CONFLICT(license_id) DO UPDATE SET org_type=excluded.org_type, doc_ref=excluded.doc_ref, description=excluded.description, status='pending', created_at=excluded.created_at")
+      .bind(licenseId, b.nonprofit.orgType ?? null, b.nonprofit.docRef ?? null, b.nonprofit.description ?? null, now).run().catch(() => {});
+  }
 
   // 入力ゼロの初回デプロイ：団体ごと公開リポ（throwaway）を生成し report.json を焼き込む（§2.2）。
   // 失敗時は共有リポにフォールバック（自動点灯なしでも導入は完了＝§2.7）。
