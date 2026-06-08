@@ -38,7 +38,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
     const v = await setWorkersPaid(env, b.workersPaid === true);
     return json({ ok: true, workersPaid: v });
   }
-  // サーバー自治（AIにCF/GitHub運用代行を許可）。トグル＋トークン/アカウント/リポ登録。
+  // オートパイロット（AIにCF/GitHub運用代行を許可）。トグル＋トークン/アカウント/リポ登録。
   if (b._action === "autonomy_toggle") { await setAutonomy(env, b.on === true); return json({ ok: true, on: b.on === true }); }
   if (b._action === "autonomy_config") { await saveAutonomyConfig(env, { cfToken: b.cfToken, cfAccount: b.cfAccount, ghToken: b.ghToken, ghRepo: b.ghRepo }); return json({ ok: true }); }
   if (b._action === "storage_limits") {
