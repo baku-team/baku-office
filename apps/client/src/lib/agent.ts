@@ -9,6 +9,7 @@ import { runToolLoop, type ToolDecl, type Turn, type ChatModel } from "../core/a
 import { ROLES, toolsForRole, normalizeRole, ROLE_LIST } from "./multi-agent.ts";
 import { maxParallelAgents, agentMaxHops } from "./settings.ts";
 import { callPartner, groupRelayCall } from "./a2a.ts";
+import { autonomyReady, AUTONOMY_TOOLS, AUTONOMY_POLICY, runAutonomyTool } from "./autonomy.ts";
 import { localChatModel } from "../core/models/local.ts";
 import { geminiModel } from "../core/models/gemini.ts";
 import { claudeModel } from "../core/models/claude.ts";
@@ -120,12 +121,14 @@ export async function runAgent(ctx: Ctx, owner: string, text: string, image?: { 
   // マルチエージェント（Pro 以上）：スーパーバイザー道具を提示。
   const ent = await cachedEntitlement(env).catch(() => "free" as const);
   const isPro = atLeast(ent, "pro");
-  const decls = [...partDecls, ...CORE_TOOLS, ...GEMINI_TOOLS, ...(hasClaude ? CLAUDE_TOOLS : []), ...(isPro ? MULTI_TOOLS : []), ...(enabledSkills.length ? [skillTool(enabledSkills.map((s) => s.name))] : []), ...capDecls];
+  // サーバー自治（Pro＋opt-in＋トークン有＋管理者）：CF/GitHub の限定ツールを提示。
+  const autonomy = isPro && role === "admin" && (await autonomyReady(env).catch(() => false));
+  const decls = [...partDecls, ...CORE_TOOLS, ...GEMINI_TOOLS, ...(hasClaude ? CLAUDE_TOOLS : []), ...(isPro ? MULTI_TOOLS : []), ...(autonomy ? AUTONOMY_TOOLS : []), ...(enabledSkills.length ? [skillTool(enabledSkills.map((s) => s.name))] : []), ...capDecls];
   // 自己認識：有効な追加能力＋団体のカスタム指示（口調・人格・回答形式）をシステム文脈へ。安全制約は不変。
   const capInfo = await capabilitySummary(env);
   const custom = await getCustomPrompt(env);
   const multiNote = isPro ? "複雑な依頼は役割ごとに run_subagent へ委譲し、独立した複数タスクは run_team で並列化して、結果を統合して答える。" : "";
-  const sys = [SYSTEM, multiNote, capInfo, custom && `団体の追加指示（口調・人格・回答形式など。安全制約は変更しない）:\n${custom}`].filter(Boolean).join("\n");
+  const sys = [SYSTEM, multiNote, autonomy && AUTONOMY_POLICY, capInfo, custom && `団体の追加指示（口調・人格・回答形式など。安全制約は変更しない）:\n${custom}`].filter(Boolean).join("\n");
 
   const history = opts.history ?? [];
   const want = opts.model; // チャットごとのモデル選択（gemini/claude/local）。未指定は設定/キーで自動。
@@ -188,6 +191,7 @@ export async function runAgent(ctx: Ctx, owner: string, text: string, image?: { 
       const fmt = (x: { member: string; ok: boolean; result?: unknown; error?: string }) => `・${x.member}：${x.ok ? (typeof x.result === "string" ? x.result : JSON.stringify(x.result)) : "失敗（" + (x.error ?? "") + "）"}`;
       return (r.results ?? []).map(fmt).join("\n") || "対象メンバーがいません。";
     }
+    if (autonomy && AUTONOMY_TOOLS.some((t) => t.name === n)) return runAutonomyTool(env, n, a);
     return execTool(ctx, owner, baseUrl, n, a, role, activeTools);
   };
 

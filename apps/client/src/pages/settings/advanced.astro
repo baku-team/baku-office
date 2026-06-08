@@ -11,6 +11,8 @@ const hasPlus = atLeast(entitlement, "plus");
 const hasPro = atLeast(entitlement, "pro");
 const { getAiEngine, getCustomPrompt, getWorkersPaid } = await import("../../lib/settings.ts");
 const workersPaid = hasPlus ? await getWorkersPaid(env) : false;
+const { getAutonomyConfig } = await import("../../lib/autonomy.ts");
+const auto = hasPro ? await getAutonomyConfig(env) : { on: false, cfToken: false, cfAccount: "", ghToken: false, ghRepo: "" };
 const { hasApiKey } = await import("../../lib/client.ts");
 const engine = hasPlus ? await getAiEngine(env) : "gemini";
 const custom = hasPlus ? await getCustomPrompt(env) : "";
@@ -116,6 +118,25 @@ const curMax = hasPlus ? await maxUploadMb(env) : 5;
     </div>
   )}
 
+  <h2>サーバー自治（AIに運用代行を許可・Pro 以上）</h2>
+  {!hasPro && (
+    <div class="card"><p class="muted">AIに自団体のCloudflare/GitHub運用（破壊的操作を除く）を任せる機能は <strong>Pro 以上</strong>で開放されます。<a href="/billing">プラン・課金へ</a></p></div>
+  )}
+  {hasPro && (
+    <div class="card">
+      <div class="banner banner-warn">⚠️ AIに<strong>自団体のサーバー操作</strong>を任せます。許可＝CFのKV/D1作成・一覧・デプロイ、GitHubの読取・ブランチ/PR・非コアコミット。<strong>禁止（実行不可）</strong>＝削除・force-push・main直push・課金/権限変更・他団体操作。トークンは<strong>最小スコープ</strong>を推奨し、暗号化して保存します（既定OFF・管理者のみ）。</div>
+      <div class="field"><label><input type="checkbox" id="autoOn" checked={auto.on} /> <strong>サーバー自治を許可する</strong></label></div>
+      <h3 style="margin:.5rem 0 .2rem">Cloudflare</h3>
+      <div class="field"><input id="cfTok" type="password" placeholder={auto.cfToken ? "CF APIトークン（設定済み・変更時のみ）" : "CF APIトークン（Workers/KV/D1 編集権限）"} /></div>
+      <div class="field"><input id="cfAcct" value={auto.cfAccount} placeholder="CF アカウントID" /></div>
+      <h3 style="margin:.5rem 0 .2rem">GitHub</h3>
+      <div class="field"><input id="ghTok" type="password" placeholder={auto.ghToken ? "GitHub トークン（設定済み・変更時のみ）" : "GitHub トークン（contents/pull_requests 権限）"} /></div>
+      <div class="field"><input id="ghRepo" value={auto.ghRepo} placeholder="owner/repo（例 your-org/baku-office-app）" /></div>
+      <button class="btn btn-primary" id="saveAuto">自治設定を保存</button>
+      <p class="muted" style="font-size:.8rem;margin-top:.4rem">設定後、AIチャット（管理者）から「KVを作って」「○○を直すPRを出して」等を依頼できます。重要操作は実行前にAIが確認します。</p>
+    </div>
+  )}
+
   <h2>Workers Paid（CF有料プラン）への切替案内</h2>
   <div class="banner banner-info">無料枠では CPU時間・実行時間(waitUntil)・サブリクエスト数 等に上限があり、大きなファイル処理や生成でエラーになることがあります（<a href="/diagnostics">診断</a>）。安定運用には Cloudflareダッシュボードで <strong>Workers &amp; Pages → Plans → Workers Paid（月$5〜）</strong> に切り替えてください。データ・デプロイはそのまま、上限が大幅緩和されます。</div>
   </div>
@@ -137,6 +158,18 @@ const curMax = hasPlus ? await maxUploadMb(env) : 5;
       });
       document.getElementById("saveMax")?.addEventListener("click", async (e) => { const v = document.getElementById("maxmb").value; const r = await window.bo.api("/api/settings", { _action: "max_upload", mb: Number(v) }, { btn: e.currentTarget, successMsg: "上限を保存しました" }); if (r.ok) setTimeout(() => location.reload(), 600); });
       document.getElementById("saveWpaid")?.addEventListener("click", async (e) => { const workersPaid = document.getElementById("wpaid").checked; const r = await window.bo.api("/api/settings", { _action: "workers_paid", workersPaid }, { btn: e.currentTarget, successMsg: "保存しました" }); if (r.ok) setTimeout(() => location.reload(), 600); });
+      document.getElementById("saveAuto")?.addEventListener("click", async (e) => {
+        const on = document.getElementById("autoOn").checked;
+        const cfToken = document.getElementById("cfTok").value.trim();
+        const ghToken = document.getElementById("ghTok").value.trim();
+        const cfg = { _action: "autonomy_config", cfAccount: document.getElementById("cfAcct").value.trim(), ghRepo: document.getElementById("ghRepo").value.trim() };
+        if (cfToken) cfg.cfToken = cfToken;
+        if (ghToken) cfg.ghToken = ghToken;
+        const r1 = await window.bo.api("/api/settings", cfg, { btn: e.currentTarget, successMsg: null });
+        if (!r1.ok) return;
+        const r2 = await window.bo.api("/api/settings", { _action: "autonomy_toggle", on }, { btn: e.currentTarget, successMsg: "自治設定を保存しました" });
+        if (r2.ok) setTimeout(() => location.reload(), 700);
+      });
     })();
   </script>
   )}
