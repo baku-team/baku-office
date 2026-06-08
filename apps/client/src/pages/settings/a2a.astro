@@ -13,137 +13,153 @@ const licenseId = hasPro ? (await getLicenseId(env)) ?? "" : "";
 
 await import("../../parts/index.ts");
 const { appCatalog } = await import("../../core/apps.ts");
-const { getExposedActions, getGroupExposed, a2aHost, groupHost } = await import("../../lib/a2a.ts");
-const cat = hasPro ? appCatalog().filter((a) => a.actions.length > 0) : [];
-const exposed = hasPro ? new Set(await getExposedActions(Astro.locals.ctx)) : new Set<string>();
+const { a2aHost, groupHost } = await import("../../lib/a2a.ts");
+const { listActions, getOrgProfile, DECL_TYPES, DB_ALLOW } = await import("../../lib/a2a-actions.ts");
+const appActs = hasPro ? appCatalog().filter((a) => a.actions.length > 0) : [];
 const list = hasPro ? ((await a2aHost(env, "list").catch(() => ({}))) as { connections?: { id: string; partner: string | null; status: string }[] }) : {};
-const conns = list.connections ?? [];
-// グループ一覧＋各グループの公開アクション。
-const glist = hasPro ? ((await groupHost(env, "list").catch(() => ({}))) as { groups?: { id: string; name: string | null; owner: boolean; members: { license: string; label: string | null }[] }[] }) : {};
+const conns = (list.connections ?? []).filter((c) => c.status === "active" && c.partner);
+const glist = hasPro ? ((await groupHost(env, "list").catch(() => ({}))) as { groups?: { id: string; name: string | null; members: { license: string; label: string | null }[] }[] }) : {};
 const groups = glist.groups ?? [];
-const groupExposed: Record<string, Set<string>> = {};
-for (const g of groups) groupExposed[g.id] = new Set(await getGroupExposed(Astro.locals.ctx, g.id));
+const actions = hasPro ? await listActions(Astro.locals.ctx).catch(() => []) : [];
+const profile = hasPro ? await getOrgProfile(Astro.locals.ctx).catch(() => ({})) : {};
+const p = profile as Record<string, string>;
+// 公開状況サマリ
+const enabledActs = actions.filter((a) => a.enabled);
+const commonActs = enabledActs.filter((a) => a.scope === "common");
+const connName = (lic: string) => conns.find((c) => c.partner === lic)?.partner ?? lic;
+const groupName = (id: string) => groups.find((g) => g.id === id)?.name || id;
+const scopeText = (a: { scope: string; target: string }) => a.scope === "common" ? "共通" : a.scope === "conn" ? `1:1(${connName(a.target)})` : `グループ(${groupName(a.target)})`;
+const DBALLOW = DB_ALLOW as Record<string, string[]>;
 ---
 <App title="A2A（団体間連携）" active="/settings">
   <h1>A2A（他団体エージェント連携）</h1>
   {!hasPro && (
     <div class="card">
       <div class="banner banner-warn">この機能は <strong>Pro 以上</strong>のプランで利用できます。</div>
-      <p class="muted">他団体のエージェントと、相互同意のうえで「決められた操作」だけを安全に連携できます。</p>
+      <p class="muted">他団体のエージェントと、相互同意のうえで「公開したアクション（参照のみ）」だけを安全に連携できます。</p>
       <a class="btn btn-primary" href="/billing">プラン・課金へ</a>
     </div>
   )}
   {hasPro && (
     <Fragment>
-      <div class="banner banner-info">他団体との連携は<strong>相互同意</strong>が前提です。公開した操作だけが、ホスト署名つきの中継で実行されます（相手データへ直アクセスはできません）。相手に到達するには<strong>カスタムドメイン等で到達可能</strong>である必要があります。</div>
+      <div class="banner banner-info">公開アクションは<strong>参照（read）のみ</strong>です。相手は「公開したアクション」しか呼べず、相手データへ直アクセスはできません。相手到達には<strong>カスタムドメイン等で到達可能</strong>である必要があります。</div>
 
       <h2>あなたの団体ID</h2>
       <div class="card"><p class="muted">相手があなたを呼ぶ際に使うIDです。</p><code>{licenseId || "（未取得）"}</code></div>
 
-      <h2>接続</h2>
+      <h2>公開状況（誰に何を公開中か）</h2>
       <div class="card">
-        <p class="muted">接続コードを作成して相手に渡す（相手が参加で確定）／相手のコードで参加する。</p>
+        <p><strong>共通（全相手・全グループ）</strong>：{commonActs.length ? commonActs.map((a) => a.name).join("、") : "（なし）"}</p>
+        {conns.map((c) => (<p><strong>1:1：{c.partner}</strong>：{[...commonActs, ...enabledActs.filter((a) => a.scope === "conn" && a.target === c.partner)].map((a) => a.name).join("、") || "（なし）"}</p>))}
+        {groups.map((g) => (<p><strong>グループ：{g.name || g.id}</strong>：{[...commonActs, ...enabledActs.filter((a) => a.scope === "group" && a.target === g.id)].map((a) => a.name).join("、") || "（なし）"}</p>))}
+      </div>
+
+      <h2>組織プロフィール</h2>
+      <div class="card">
+        <p class="muted">「組織プロフィール参照」アクションで外部に返す内容です。</p>
+        <div class="field"><label>名称<input id="pf-name" value={p.name ?? ""} /></label></div>
+        <div class="field"><label>紹介<textarea id="pf-desc" rows="2">{p.description ?? ""}</textarea></label></div>
+        <div class="row"><label style="flex:1">連絡先<input id="pf-contact" value={p.contact ?? ""} /></label><label style="flex:1">URL<input id="pf-url" value={p.url ?? ""} /></label></div>
+        <button class="btn btn-primary" id="saveProfile">プロフィールを保存</button>
+      </div>
+
+      <h2>公開アクション</h2>
+      <div class="table-wrap"><table><thead><tr><th>公開名</th><th>種類</th><th>公開先</th><th>状態</th><th>操作</th></tr></thead><tbody>
+        {actions.map((a) => (<tr data-aid={a.id}><td>{a.name}</td><td>{a.kind === "app" ? "アプリ" : "テンプレ"}</td><td>{scopeText(a)}</td><td>{a.enabled ? "有効" : "無効"}</td><td>{a.enabled ? <button class="btn btn-sm btn-warn a-dis">無効化</button> : <button class="btn btn-sm btn-ok a-en">有効化</button>} <button class="btn btn-sm btn-danger a-del">削除</button></td></tr>))}
+        {actions.length === 0 && (<tr><td colspan="5" class="muted">公開アクションはありません。</td></tr>)}
+      </tbody></table></div>
+
+      <details class="card" style="margin-top:.6rem"><summary><strong>公開アクションを追加</strong></summary>
+        <div class="field"><label>公開名（相手が呼ぶ名前）<input id="a-name" placeholder="例 profile / progress / members_count" /></label></div>
+        <div class="field"><label>種類
+          <select id="a-kind"><option value="decl">テンプレ（ノーコード・参照のみ）</option><option value="app">アプリのアクション（AI開発で作成）</option></select>
+        </label></div>
+        <div class="field" data-k="decl"><label>テンプレ種別
+          <select id="a-dtype">{DECL_TYPES.map((t) => (<option value={t.type}>{t.label}</option>))}</select>
+        </label></div>
+        <div class="field" data-k="decl"><label>（DB参照）テーブル
+          <select id="a-dtable"><option value="">—</option>{Object.keys(DBALLOW).map((t) => (<option value={t}>{t}（{DBALLOW[t].join("/")}）</option>))}</select>
+        </label></div>
+        <div class="field" data-k="decl"><label>（DB参照）公開する列（カンマ区切り・許可列のみ反映）<input id="a-dcols" placeholder="name,type" /></label></div>
+        <div class="row" data-k="decl"><label style="flex:1">（進捗）種別<input id="a-pkind" placeholder="task / schedule（任意）" /></label><label style="flex:1">件数上限<input id="a-limit" type="number" min="1" max="200" value="50" /></label></div>
+        <div class="field" data-k="app"><label>アプリのアクション
+          <select id="a-appact"><option value="">—</option>{appActs.flatMap((a) => a.actions.map((act) => <option value={`${a.id}.${act}`}>{a.name}：{act}</option>))}</select>
+        </label></div>
+        <div class="field"><label>公開先（スコープ）
+          <select id="a-scope"><option value="common">共通（全相手・全グループ）</option><option value="conn">1:1（特定の相手）</option><option value="group">グループ</option></select>
+        </label></div>
+        <div class="field"><label>（1:1）相手<select id="a-conn"><option value="">—</option>{conns.map((c) => (<option value={c.partner ?? ""}>{c.partner}</option>))}</select></label></div>
+        <div class="field"><label>（グループ）対象<select id="a-group"><option value="">—</option>{groups.map((g) => (<option value={g.id}>{g.name || g.id}</option>))}</select></label></div>
+        <button class="btn btn-primary" id="a-create">追加</button>
+      </details>
+
+      <h2>接続（1:1）</h2>
+      <div class="card">
         <div class="row"><button class="btn btn-primary" id="mkcode" style="flex:0 0 auto">接続コードを作成</button><span id="codeout" class="muted"></span></div>
         <div class="row" style="margin-top:.5rem"><input id="joincode" placeholder="相手の接続コード" /><button class="btn btn-primary" id="join" style="flex:0 0 auto">参加</button></div>
       </div>
-
-      <h3>接続一覧</h3>
       <div class="table-wrap"><table><thead><tr><th>状態</th><th>相手ID</th><th>コード</th><th></th></tr></thead><tbody>
-        {conns.map((c) => (<tr data-code={c.id}><td>{c.status}</td><td><code>{c.partner ?? "（参加待ち）"}</code></td><td><code>{c.id}</code></td><td><button class="btn btn-sm btn-danger rev">取消</button></td></tr>))}
-        {conns.length === 0 && (<tr><td colspan="4" class="muted">接続はありません。</td></tr>)}
+        {(list.connections ?? []).map((c) => (<tr data-code={c.id}><td>{c.status}</td><td><code>{c.partner ?? "（参加待ち）"}</code></td><td><code>{c.id}</code></td><td><button class="btn btn-sm btn-danger rev">取消</button></td></tr>))}
+        {(list.connections ?? []).length === 0 && (<tr><td colspan="4" class="muted">接続はありません。</td></tr>)}
       </tbody></table></div>
-
-      <h2>公開するアクション</h2>
-      <div class="card">
-        <p class="muted">連携先から呼べるようにする操作を選びます（チェックしたものだけが外部に公開されます）。</p>
-        {cat.length === 0 && (<p class="muted">公開できるアクションを持つアプリがありません。</p>)}
-        {cat.map((a) => (
-          <div class="field"><strong>{a.name}</strong>
-            {a.actions.map((act) => (
-              <label style="display:block;margin-left:1rem;font-size:.9rem"><input type="checkbox" class="exp-chk" value={`${a.id}.${act}`} checked={exposed.has(`${a.id}.${act}`)} /> {act}</label>
-            ))}
-          </div>
-        ))}
-        <button class="btn btn-primary" id="saveExp">公開アクションを保存</button>
-      </div>
 
       <h2>グループ（3団体以上）</h2>
       <div class="card">
-        <p class="muted">グループを作成して招待コードを配る／相手のコードで参加。グループ内では特定メンバー呼び出しと全員同報ができます。公開アクションは<strong>グループごと</strong>に設定します。</p>
         <div class="row"><input id="gname" placeholder="グループ名（任意）" /><button class="btn btn-primary" id="mkgroup" style="flex:0 0 auto">グループ作成</button><span id="gout" class="muted"></span></div>
         <div class="row" style="margin-top:.5rem"><input id="gjoin" placeholder="グループコード" /><button class="btn btn-primary" id="joingroup" style="flex:0 0 auto">参加</button></div>
       </div>
-
-      {groups.map((g) => (
-        <div class="card" data-gid={g.id} style="margin-top:.6rem">
-          <div class="row" style="justify-content:space-between"><strong>{g.name || "（無名グループ）"}{g.owner ? "（作成者）" : ""}</strong><button class="btn btn-sm btn-danger gleave" style="flex:0 0 auto">脱退</button></div>
-          <p class="muted" style="font-size:.8rem">コード：<code>{g.id}</code> ／ メンバー：{g.members.map((m) => m.label || m.license).join("、")}</p>
-          <details>
-            <summary>このグループへ公開するアクション</summary>
-            {cat.length === 0 && (<p class="muted">公開できるアクションがありません。</p>)}
-            {cat.map((a) => (
-              <div class="field"><strong>{a.name}</strong>
-                {a.actions.map((act) => (
-                  <label style="display:block;margin-left:1rem;font-size:.9rem"><input type="checkbox" class="gexp-chk" value={`${a.id}.${act}`} checked={groupExposed[g.id]?.has(`${a.id}.${act}`)} /> {act}</label>
-                ))}
-              </div>
-            ))}
-            <button class="btn btn-primary gexp-save">このグループの公開アクションを保存</button>
-          </details>
-        </div>
-      ))}
-      {groups.length === 0 && (<p class="muted">グループはありません。</p>)}
+      <div class="table-wrap"><table><thead><tr><th>グループ</th><th>コード</th><th>メンバー</th><th></th></tr></thead><tbody>
+        {groups.map((g) => (<tr data-gid={g.id}><td>{g.name || "（無名）"}</td><td><code>{g.id}</code></td><td class="muted" style="font-size:.8rem">{g.members.map((m) => m.label || m.license).join("、")}</td><td><button class="btn btn-sm btn-danger gleave">脱退</button></td></tr>))}
+        {groups.length === 0 && (<tr><td colspan="4" class="muted">グループはありません。</td></tr>)}
+      </tbody></table></div>
 
       <script slot="scripts" is:inline>
         (function () {
           const api = (b, btn) => window.bo.api("/api/a2a/manage", b, { btn });
-          document.getElementById("mkcode")?.addEventListener("click", async (e) => {
-            const r = await api({ _action: "create" }, e.currentTarget);
-            if (r.ok && r.data.code) document.getElementById("codeout").textContent = "コード：" + r.data.code + "（相手に渡してください）";
+          // プロフィール
+          document.getElementById("saveProfile")?.addEventListener("click", async (e) => {
+            const profile = { name: document.getElementById("pf-name").value, description: document.getElementById("pf-desc").value, contact: document.getElementById("pf-contact").value, url: document.getElementById("pf-url").value };
+            await api({ _action: "profile_save", profile }, e.currentTarget);
           });
-          document.getElementById("join")?.addEventListener("click", async (e) => {
-            const code = document.getElementById("joincode").value.trim();
-            if (!code) { window.bo.toast("接続コードを入力", "err"); return; }
-            const r = await api({ _action: "accept", code }, e.currentTarget);
-            if (r.ok && r.data.ok) { window.bo.toast("接続しました"); setTimeout(() => location.reload(), 700); }
-            else window.bo.toast(r.data.error || "参加に失敗", "err");
+          // 公開アクション追加
+          document.getElementById("a-create")?.addEventListener("click", async (e) => {
+            const name = document.getElementById("a-name").value.trim();
+            if (!name) { window.bo.toast("公開名を入力", "err"); return; }
+            const kind = document.getElementById("a-kind").value;
+            const scope = document.getElementById("a-scope").value;
+            const target = scope === "conn" ? document.getElementById("a-conn").value : scope === "group" ? document.getElementById("a-group").value : "";
+            if (scope !== "common" && !target) { window.bo.toast("公開先を選択", "err"); return; }
+            let spec;
+            if (kind === "app") {
+              const v = document.getElementById("a-appact").value;
+              if (!v) { window.bo.toast("アプリのアクションを選択", "err"); return; }
+              const [appId, action] = v.split(".");
+              spec = { appId, action };
+            } else {
+              const type = document.getElementById("a-dtype").value;
+              const config = {};
+              if (type === "db") { config.table = document.getElementById("a-dtable").value; config.columns = document.getElementById("a-dcols").value.split(",").map((s) => s.trim()).filter(Boolean); }
+              if (type === "files" || type === "progress") config.limit = Number(document.getElementById("a-limit").value) || 50;
+              if (type === "progress") config.kind = document.getElementById("a-pkind").value.trim();
+              spec = { type, config };
+            }
+            const r = await api({ _action: "action_create", name, kind, spec, scope, target }, e.currentTarget);
+            if (r.ok) { window.bo.toast("公開アクションを追加しました"); setTimeout(() => location.reload(), 700); }
           });
-          document.querySelectorAll("tr[data-code]").forEach((tr) => {
-            tr.querySelector(".rev")?.addEventListener("click", async (e) => {
-              if (!confirm("この接続を取り消しますか？")) return;
-              const r = await api({ _action: "revoke", code: tr.dataset.code }, e.currentTarget);
-              if (r.ok) setTimeout(() => location.reload(), 500);
-            });
+          document.querySelectorAll("tr[data-aid]").forEach((tr) => {
+            const id = tr.dataset.aid;
+            tr.querySelector(".a-en")?.addEventListener("click", async (e) => { const r = await api({ _action: "action_update", id, enabled: true }, e.currentTarget); if (r.ok) setTimeout(() => location.reload(), 400); });
+            tr.querySelector(".a-dis")?.addEventListener("click", async (e) => { const r = await api({ _action: "action_update", id, enabled: false }, e.currentTarget); if (r.ok) setTimeout(() => location.reload(), 400); });
+            tr.querySelector(".a-del")?.addEventListener("click", async (e) => { if (!confirm("削除しますか？")) return; const r = await api({ _action: "action_delete", id }, e.currentTarget); if (r.ok) setTimeout(() => location.reload(), 400); });
           });
-          document.getElementById("saveExp")?.addEventListener("click", async (e) => {
-            const actions = [...document.querySelectorAll(".exp-chk")].filter((c) => c.checked).map((c) => c.value);
-            await api({ _action: "expose", actions }, e.currentTarget);
-          });
+          // 1:1 接続
+          document.getElementById("mkcode")?.addEventListener("click", async (e) => { const r = await api({ _action: "create" }, e.currentTarget); if (r.ok && r.data.code) document.getElementById("codeout").textContent = "コード：" + r.data.code; });
+          document.getElementById("join")?.addEventListener("click", async (e) => { const code = document.getElementById("joincode").value.trim(); if (!code) { window.bo.toast("接続コードを入力", "err"); return; } const r = await api({ _action: "accept", code }, e.currentTarget); if (r.ok && r.data.ok) { window.bo.toast("接続しました"); setTimeout(() => location.reload(), 700); } else window.bo.toast(r.data.error || "参加に失敗", "err"); });
+          document.querySelectorAll("tr[data-code]").forEach((tr) => { tr.querySelector(".rev")?.addEventListener("click", async (e) => { if (!confirm("取り消しますか？")) return; const r = await api({ _action: "revoke", code: tr.dataset.code }, e.currentTarget); if (r.ok) setTimeout(() => location.reload(), 500); }); });
           // グループ
-          document.getElementById("mkgroup")?.addEventListener("click", async (e) => {
-            const name = document.getElementById("gname").value.trim();
-            const r = await api({ _action: "group_create", name }, e.currentTarget);
-            if (r.ok && r.data.groupId) { document.getElementById("gout").textContent = "コード：" + r.data.groupId; setTimeout(() => location.reload(), 800); }
-          });
-          document.getElementById("joingroup")?.addEventListener("click", async (e) => {
-            const groupId = document.getElementById("gjoin").value.trim();
-            if (!groupId) { window.bo.toast("グループコードを入力", "err"); return; }
-            const r = await api({ _action: "group_join", groupId }, e.currentTarget);
-            if (r.ok && r.data.ok) { window.bo.toast("参加しました"); setTimeout(() => location.reload(), 700); }
-            else window.bo.toast(r.data.error || "参加に失敗", "err");
-          });
-          document.querySelectorAll("[data-gid]").forEach((el) => {
-            const gid = el.dataset.gid;
-            el.querySelector(".gleave")?.addEventListener("click", async (e) => {
-              if (!confirm("このグループを脱退しますか？")) return;
-              const r = await api({ _action: "group_leave", groupId: gid }, e.currentTarget);
-              if (r.ok) setTimeout(() => location.reload(), 500);
-            });
-            el.querySelector(".gexp-save")?.addEventListener("click", async (e) => {
-              const actions = [...el.querySelectorAll(".gexp-chk")].filter((c) => c.checked).map((c) => c.value);
-              await api({ _action: "group_expose", groupId: gid, actions }, e.currentTarget);
-            });
-          });
+          document.getElementById("mkgroup")?.addEventListener("click", async (e) => { const name = document.getElementById("gname").value.trim(); const r = await api({ _action: "group_create", name }, e.currentTarget); if (r.ok && r.data.groupId) { document.getElementById("gout").textContent = "コード：" + r.data.groupId; setTimeout(() => location.reload(), 800); } });
+          document.getElementById("joingroup")?.addEventListener("click", async (e) => { const groupId = document.getElementById("gjoin").value.trim(); if (!groupId) { window.bo.toast("グループコードを入力", "err"); return; } const r = await api({ _action: "group_join", groupId }, e.currentTarget); if (r.ok && r.data.ok) { window.bo.toast("参加しました"); setTimeout(() => location.reload(), 700); } else window.bo.toast(r.data.error || "参加に失敗", "err"); });
+          document.querySelectorAll("tr[data-gid]").forEach((tr) => { tr.querySelector(".gleave")?.addEventListener("click", async (e) => { if (!confirm("脱退しますか？")) return; const r = await api({ _action: "group_leave", groupId: tr.dataset.gid }, e.currentTarget); if (r.ok) setTimeout(() => location.reload(), 500); }); });
         })();
       </script>
     </Fragment>
