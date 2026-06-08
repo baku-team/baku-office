@@ -54,6 +54,43 @@ const curMax = hasPlus ? await maxUploadMb(env) : 5;
     <div class="row"><input id="maxmb" type="number" min="1" max="25" value={curMax} style="flex:0 0 120px" /><button class="btn btn-primary" id="saveMax" style="flex:0 0 auto">上限を保存</button></div>
   </div>
 
+  <h2>ファイル保存を強化（R2・高度モード）</h2>
+  <div class="card">
+    <p class="muted">現在：<strong>{mode === "r2" ? "高度モード（R2 有効・1ファイル上限なし）" : "標準モード（KV・上限あり）"}</strong>。R2 を有効化すると、領収書画像・契約書・大きな添付などを本格的に保存できます。</p>
+    <h3 style="margin:.6rem 0 .2rem">できること</h3>
+    <ul class="clean">
+      <li>大容量ファイルの保存（<strong>1ファイル上限なし</strong>。KV標準モードの 25MiB/日次書込制限を回避）。</li>
+      <li>領収書・契約書・写真・音声など、業務ファイルの蓄積と横断利用（OCR・要約の元データ保管にも）。</li>
+      <li>有効化を自動検出して切り替え（コード変更不要）。Googleドライブ連携とも併用できます。</li>
+    </ul>
+    <h3 style="margin:.6rem 0 .2rem">こんなときに必要</h3>
+    <ul class="clean">
+      <li>ファイルを日常的に多数／大きいサイズで扱う団体。</li>
+      <li>標準モード（KV）で「アップロード上限」や書込制限に当たるようになった。</li>
+      <li>画像・PDF などの原本を長期保管したい。</li>
+    </ul>
+
+    {mode === "r2" ? (
+      <div class="banner banner-info">✅ R2 はすでに有効です（高度モード）。ファイルは上限なしで R2 に保存されます。</div>
+    ) : (
+      <details open>
+        <summary><strong>R2 を登録する（お客様の Cloudflare で設定）</strong></summary>
+        <ol style="margin:.4rem 0;padding-left:1.2rem;line-height:1.9">
+          <li>Cloudflare ダッシュボード → <strong>R2</strong> を開き、<strong>支払い方法（カード）を登録</strong>（R2 の有効化に必要。無料枠内なら課金は発生しません）。</li>
+          <li>R2 → <strong>バケットを作成</strong>（名前は任意。例 <code>baku-office-media</code>）。</li>
+          <li><strong>Workers &amp; Pages</strong> → このアプリの Worker（<code>baku-office-app</code>）→ <strong>Settings → Bindings → Add → R2 bucket</strong> を選択。</li>
+          <li>変数名（Variable name）は必ず <strong><code>MEDIA_R2</code></strong> とし、作成したバケットを選んで保存。</li>
+          <li>保存後にデプロイ（または再デプロイ）すると、自動的に<strong>高度モード（R2）</strong>へ切り替わります。</li>
+        </ol>
+        <div class="row" style="margin-top:.3rem">
+          <a class="btn btn-primary" href="https://dash.cloudflare.com/?to=/:account/r2" target="_blank" rel="noopener" style="flex:0 0 auto">Cloudflare R2 を開く</a>
+          <a class="btn btn-ghost" href="https://developers.cloudflare.com/r2/buckets/" target="_blank" rel="noopener" style="flex:0 0 auto">バケット作成の手順</a>
+        </div>
+        <p class="muted" style="font-size:.8rem;margin-top:.5rem">⚠️ R2 はカード登録が前提です。使用量に応じた従量課金（無料枠あり）で、支払い方法が無効のまま30日経過すると R2 のデータが削除され得ます（標準モードの KV は影響を受けません）。設定はお客様の Cloudflare 操作で、当社は手順案内のみを行います。</p>
+      </details>
+    )}
+  </div>
+
   <h2>Workers Paid（CF有料プラン）への切替案内</h2>
   <div class="banner banner-info">無料枠では CPU時間・実行時間(waitUntil)・サブリクエスト数 等に上限があり、大きなファイル処理や生成でエラーになることがあります（<a href="/diagnostics">診断</a>）。安定運用には Cloudflareダッシュボードで <strong>Workers &amp; Pages → Plans → Workers Paid（月$5〜）</strong> に切り替えてください。データ・デプロイはそのまま、上限が大幅緩和されます。</div>
   </div>
