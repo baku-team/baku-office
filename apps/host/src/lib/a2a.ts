@@ -49,6 +49,78 @@ export async function revokeConnection(env: Env, code: string, byLicense: string
     .bind(nowSec(), code, byLicense, byLicense).run();
 }
 
+// ===== グループ（3団体以上・1:1とは別管理） =====
+
+export async function createGroup(env: Env, owner: string, name?: string): Promise<string> {
+  const id = randomId(8);
+  const now = nowSec();
+  await env.DB.prepare("INSERT INTO a2a_groups (id,name,owner_license,created_at) VALUES (?,?,?,?)").bind(id, name ?? null, owner, now).run();
+  await env.DB.prepare("INSERT OR IGNORE INTO a2a_group_members (group_id,member_license,status,joined_at) VALUES (?,?,'active',?)").bind(id, owner, now).run();
+  return id;
+}
+
+export async function joinGroup(env: Env, groupId: string, license: string, label?: string): Promise<{ ok: boolean; error?: string }> {
+  const g = await env.DB.prepare("SELECT id FROM a2a_groups WHERE id=?").bind(groupId).first();
+  if (!g) return { ok: false, error: "グループコードが見つかりません" };
+  const exists = await env.DB.prepare("SELECT status FROM a2a_group_members WHERE group_id=? AND member_license=?").bind(groupId, license).first<{ status: string }>();
+  if (exists?.status === "active") return { ok: false, error: "すでに参加済みです" };
+  await env.DB.prepare("INSERT INTO a2a_group_members (group_id,member_license,label,status,joined_at) VALUES (?,?,?,'active',?) ON CONFLICT(group_id,member_license) DO UPDATE SET status='active', label=excluded.label")
+    .bind(groupId, license, label ?? null, nowSec()).run();
+  return { ok: true };
+}
+
+export async function leaveGroup(env: Env, groupId: string, license: string): Promise<void> {
+  await env.DB.prepare("UPDATE a2a_group_members SET status='revoked' WHERE group_id=? AND member_license=?").bind(groupId, license).run();
+}
+
+export async function listGroups(env: Env, license: string): Promise<{ id: string; name: string | null; owner: boolean; members: { license: string; label: string | null }[] }[]> {
+  const { results: mine } = await env.DB.prepare("SELECT g.id,g.name,g.owner_license FROM a2a_groups g JOIN a2a_group_members m ON m.group_id=g.id WHERE m.member_license=? AND m.status='active' ORDER BY g.created_at DESC")
+    .bind(license).all<{ id: string; name: string | null; owner_license: string }>();
+  const out = [];
+  for (const g of mine) {
+    const { results: mem } = await env.DB.prepare("SELECT member_license,label FROM a2a_group_members WHERE group_id=? AND status='active'").bind(g.id).all<{ member_license: string; label: string | null }>();
+    out.push({ id: g.id, name: g.name, owner: g.owner_license === license, members: mem.map((m) => ({ license: m.member_license, label: m.label })) });
+  }
+  return out;
+}
+
+async function isActiveMember(env: Env, groupId: string, license: string): Promise<boolean> {
+  return !!(await env.DB.prepare("SELECT 1 FROM a2a_group_members WHERE group_id=? AND member_license=? AND status='active'").bind(groupId, license).first());
+}
+
+// グループ中継：to 指定で個別、未指定で他の全 active メンバーへ同報。各宛先の結果を集約。
+export async function groupRelay(env: Env, fromLicense: string, groupId: string, to: string | null, appId: string, action: string, args: Record<string, unknown>): Promise<{ ok: boolean; results?: { member: string; ok: boolean; result?: unknown; error?: string }[]; error?: string }> {
+  if (!(await isActiveMember(env, groupId, fromLicense))) { await audit(env, groupId, fromLicense, "", `${appId}.${action}`, "denied"); return { ok: false, error: "グループのメンバーではありません" }; }
+  // レート（グループ×分）。
+  const since = nowSec() - 60;
+  const cnt = await env.DB.prepare("SELECT COUNT(*) AS n FROM a2a_audit WHERE conn_id=? AND created_at>=?").bind(groupId, since).first<{ n: number }>();
+  if ((cnt?.n ?? 0) >= RATE_PER_MIN) return { ok: false, error: "レート上限に達しました。しばらく待って再試行してください" };
+  let targets: string[];
+  if (to) {
+    if (!(await isActiveMember(env, groupId, to))) return { ok: false, error: "宛先がグループの active メンバーではありません" };
+    targets = [to];
+  } else {
+    const { results } = await env.DB.prepare("SELECT member_license FROM a2a_group_members WHERE group_id=? AND status='active' AND member_license<>?").bind(groupId, fromLicense).all<{ member_license: string }>();
+    targets = results.map((r) => r.member_license);
+  }
+  const results = [];
+  for (const m of targets) {
+    const to2 = await env.DB.prepare("SELECT deploy_url FROM licenses WHERE license_id=? AND status='active'").bind(m).first<{ deploy_url: string | null }>();
+    if (!to2?.deploy_url) { results.push({ member: m, ok: false, error: "デプロイURL未登録" }); await audit(env, groupId, fromLicense, m, `${appId}.${action}`, "error"); continue; }
+    try {
+      const envlp = await signEnvelope(await importSignKey(signingJwk(env)), { from: fromLicense, groupId, appId, action, args, exp: nowSec() + 60 });
+      const r = await fetch(to2.deploy_url.replace(/\/$/, "") + "/api/a2a/inbound", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(envlp) });
+      const data = (await r.json().catch(() => ({}))) as { ok?: boolean; result?: unknown; error?: string };
+      results.push({ member: m, ok: !!(r.ok && data.ok), result: data.result, error: r.ok && data.ok ? undefined : (data.error ?? `応答なし(${r.status})`) });
+      await audit(env, groupId, fromLicense, m, `${appId}.${action}`, r.ok && data.ok ? "ok" : "error");
+    } catch (e) {
+      results.push({ member: m, ok: false, error: "到達不可：" + ((e as Error).message ?? "") });
+      await audit(env, groupId, fromLicense, m, `${appId}.${action}`, "error");
+    }
+  }
+  return { ok: true, results };
+}
+
 async function audit(env: Env, connId: string | null, from: string, to: string, action: string, status: string): Promise<void> {
   await env.DB.prepare("INSERT INTO a2a_audit (id,conn_id,from_license,to_license,action,status,created_at) VALUES (?,?,?,?,?,?,?)")
     .bind(randomId(8), connId, from, to, action, status, nowSec()).run().catch(() => {});
