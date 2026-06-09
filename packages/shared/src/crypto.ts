@@ -5,7 +5,7 @@
 const ENC = new TextEncoder();
 const DEC = new TextDecoder();
 const toB64 = (buf: ArrayBuffer): string => btoa(String.fromCharCode(...new Uint8Array(buf)));
-const fromB64 = (s: string): Uint8Array => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
+const fromB64 = (s: string): Uint8Array<ArrayBuffer> => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
 
 // ---------- AES-256-GCM（MASTER_KEY・用途別サブ鍵をHKDFで派生） ----------
 
@@ -73,7 +73,7 @@ export async function signEnvelope(privateKey: CryptoKey, payload: unknown): Pro
   const sig = await crypto.subtle.sign("Ed25519", privateKey, bytes);
   return { body: toB64(bytes.buffer as ArrayBuffer), sig: toB64(sig) };
 }
-function signedBytes(env: AnyEnvelope): Uint8Array {
+function signedBytes(env: AnyEnvelope): Uint8Array<ArrayBuffer> {
   if ("body" in env && typeof env.body === "string") return fromB64(env.body);
   return ENC.encode(JSON.stringify((env as LegacyEnvelope).payload));
 }

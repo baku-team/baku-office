@@ -1,0 +1,91 @@
+---
+export const prerender = false;
+import App from "../layouts/App.astro";
+import { atLeast } from "@baku-office/shared";
+const env = Astro.locals.runtime.env;
+const ctx = Astro.locals.ctx;
+const { getSession } = await import("../lib/auth.ts");
+const ses = await getSession(env, Astro.request);
+if (!ses) return Astro.redirect("/login", 302);
+const isAdmin = ses.role === "admin" && ses.ctx === "org";
+const { cachedEntitlement } = await import("../lib/client.ts");
+const hasPro = atLeast(await cachedEntitlement(env), "pro");
+
+type Inv = { id: string; file_id: string | null; vendor: string | null; amount: number | null; issued_date: string | null; due_date: string | null; status: string; source: string | null };
+let invoices: Inv[] = [];
+if (hasPro) {
+  const { listInvoices } = await import("../parts/invoices.ts");
+  invoices = await listInvoices(ctx, { limit: 300 });
+}
+const STATUSES = ["unpaid", "paid", "overdue", "canceled"];
+const STATUS_LABEL: Record<string, string> = { unpaid: "未払", paid: "支払済", overdue: "期限超過", canceled: "取消" };
+const yen = (n: number | null) => (n == null ? "—" : "¥" + n.toLocaleString());
+---
+<App title="請求書管理" active="/invoices">
+  <h1>請求書管理</h1>
+  {!hasPro && (
+    <div class="card">
+      <div class="banner banner-warn">この機能は <strong>Pro 以上</strong>のプランで利用できます。</div>
+      <p class="muted">請求書/領収書の画像・PDFから請求元・金額・期日を自動抽出し、支払いステータスを管理します。未払の期日が近づくと通知します。</p>
+      <a class="btn btn-primary" href="/billing">プラン・課金へ</a>
+    </div>
+  )}
+  {hasPro && (
+    <Fragment>
+      {isAdmin && (
+        <div class="card">
+          <h2 style="margin-top:0;border:0">請求書をアップロード</h2>
+          <p class="muted">PDF または画像（JPEG/PNG）を選んでアップロードすると、内容を自動抽出して登録します。メール添付・AIチャットからも登録できます。</p>
+          <div class="row">
+            <input type="file" id="invfile" accept="application/pdf,image/*" />
+            <button class="btn btn-primary" id="invup" style="flex:0 0 auto">アップロードして抽出</button>
+          </div>
+        </div>
+      )}
+      <h2>請求書一覧</h2>
+      <div class="table-wrap"><table>
+        <thead><tr><th>請求元</th><th>金額</th><th>発行日</th><th>期日</th><th>状態</th><th>元ファイル</th></tr></thead>
+        <tbody>
+          {invoices.map((r) => (
+            <tr data-id={r.id}>
+              <td>{r.vendor ?? "(請求元不明)"}<div class="muted" style="font-size:.7rem">{r.source ?? ""}</div></td>
+              <td>{yen(r.amount)}</td>
+              <td class="muted" style="font-size:.8rem">{r.issued_date ?? "—"}</td>
+              <td class="muted" style="font-size:.8rem">{r.due_date ?? "—"}</td>
+              <td>
+                {isAdmin
+                  ? (<select class="inv-status">{STATUSES.map((v) => (<option value={v} selected={r.status === v}>{STATUS_LABEL[v]}</option>))}</select>)
+                  : (<span class="pill">{STATUS_LABEL[r.status] ?? r.status}</span>)}
+              </td>
+              <td>{r.file_id ? (<a href={`/files/${r.file_id}`} target="_blank" rel="noreferrer">表示</a>) : "—"}</td>
+            </tr>
+          ))}
+          {invoices.length === 0 && (<tr><td colspan="6" class="muted">請求書はまだありません。</td></tr>)}
+        </tbody>
+      </table></div>
+    </Fragment>
+  )}
+  <script slot="scripts" is:inline>
+    const up = document.getElementById("invup");
+    if (up) up.addEventListener("click", async () => {
+      const input = document.getElementById("invfile");
+      const f = input.files && input.files[0];
+      if (!f) { window.bo.toast("ファイルを選んでください"); return; }
+      up.disabled = true;
+      try {
+        const fd = new FormData();
+        fd.append("file", f);
+        const r = await fetch("/api/invoices", { method: "POST", body: fd });
+        const data = await r.json();
+        if (r.ok && data.ok) { window.bo.toast(`登録：${data.vendor ?? "請求元不明"} ${data.amount ? "¥" + data.amount.toLocaleString() : ""}`); setTimeout(() => location.reload(), 900); }
+        else window.bo.toast(data.error ?? "アップロードに失敗しました");
+      } finally { up.disabled = false; }
+    });
+    document.querySelectorAll("tr[data-id] .inv-status").forEach((sel) => {
+      sel.addEventListener("change", async (e) => {
+        const id = e.currentTarget.closest("tr[data-id]").getAttribute("data-id");
+        await window.bo.api("/api/invoices", { _action: "status", id, status: e.currentTarget.value }, { successMsg: "更新しました" });
+      });
+    });
+  </script>
+</App>

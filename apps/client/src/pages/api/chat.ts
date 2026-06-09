@@ -1,7 +1,8 @@
 import type { APIRoute } from "astro";
 import { getSession } from "../../lib/auth.ts";
-import { cachedEntitlement } from "../../lib/client.ts";
+import { cachedEntitlement, nowSec } from "../../lib/client.ts";
 import { atLeast } from "@baku-office/shared";
+import { saveFile } from "../../lib/storage.ts";
 import { ownedSession, createSession, getMessages, appendMessage, ensureTitle, toTurns, type ChatModelId } from "../../lib/chat-sessions.ts";
 
 export const prerender = false;
@@ -15,28 +16,40 @@ export const POST: APIRoute = async ({ request, locals }) => {
   if (!ses) return json({ error: "ログインが必要" }, 401);
   if (!atLeast(await cachedEntitlement(env), "plus")) return json({ error: "AIチャットは Plus 以上のプランで利用できます" }, 403);
 
-  const b = (await request.json().catch(() => ({}))) as { message?: string; sessionId?: string; model?: string; background?: boolean };
+  const b = (await request.json().catch(() => ({}))) as { message?: string; sessionId?: string; model?: string; background?: boolean; image?: { mimeType: string; dataB64: string } };
   const message = (b.message ?? "").trim();
-  if (!message) return json({ error: "メッセージが必要" }, 400);
+  if (!message && !b.image?.dataB64) return json({ error: "メッセージが必要" }, 400);
+
+  // 画像/PDF添付：storage に保存し file_id をプロンプトへ付加（請求書なら register_invoice で登録できるように）。
+  let prompt = message || "(添付ファイルを確認してください)";
+  if (b.image?.dataB64 && b.image.mimeType) {
+    try {
+      const bin = atob(b.image.dataB64);
+      const ext = b.image.mimeType.includes("pdf") ? "pdf" : (b.image.mimeType.split("/")[1] || "bin");
+      const file = new File([Uint8Array.from(bin, (c) => c.charCodeAt(0))], `upload-${nowSec()}.${ext}`, { type: b.image.mimeType });
+      const saved = await saveFile(env, file, ses.uid);
+      prompt = `${prompt}\n\n（添付ファイルを保存しました: file_id=${saved.id}。請求書/領収書なら register_invoice に file_id を渡して登録してください。）`;
+    } catch { /* 保存失敗時は通常処理を続ける */ }
+  }
 
   // セッション解決（無ければ作成・他人のセッションは使えない）。
   let sessionId = b.sessionId && (await ownedSession(ctx, ses.uid, b.sessionId)) ? b.sessionId : "";
   if (!sessionId) sessionId = await createSession(ctx, ses.uid, b.model);
 
   const prior = await getMessages(ctx, sessionId);
-  await appendMessage(ctx, sessionId, "user", message);
-  await ensureTitle(ctx, sessionId, message);
+  await appendMessage(ctx, sessionId, "user", message || "(画像を添付)");
+  await ensureTitle(ctx, sessionId, message || "画像の確認");
 
   // バックグラウンド実行（Pro 以上）：ジョブに積んで即返す。完了は drain がセッションへ追記。
   if (b.background) {
     if (!atLeast(await cachedEntitlement(env), "pro")) return json({ error: "バックグラウンド実行は Pro 以上で利用できます" }, 403);
     const { enqueueAgentJob } = await import("../../lib/agent-jobs.ts");
-    await enqueueAgentJob(ctx, { owner: ses.uid, sessionId, prompt: message, role: ses.role });
+    await enqueueAgentJob(ctx, { owner: ses.uid, sessionId, prompt, role: ses.role });
     return json({ ok: true, queued: true, sessionId, reply: "⏳ バックグラウンドで実行中です。完了するとこの会話に結果が追記されます（数分かかる場合があります）。" });
   }
 
   const model = (["gemini", "claude", "local"].includes(String(b.model)) ? b.model : undefined) as ChatModelId | undefined;
-  const reply = await ctx.agent.run({ owner: ses.uid, text: message, role: ses.role, baseUrl: new URL(request.url).origin, history: toTurns(prior), model });
+  const reply = await ctx.agent.run({ owner: ses.uid, text: prompt, image: b.image, role: ses.role, baseUrl: new URL(request.url).origin, history: toTurns(prior), model });
   await appendMessage(ctx, sessionId, "assistant", reply);
   return json({ ok: true, reply, sessionId });
 };
