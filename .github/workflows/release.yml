@@ -25,6 +25,8 @@ jobs:
         with:
           node-version: 22
       - run: npm ci
+      - name: Typecheck
+        run: npm run typecheck
       - name: Build release bundle
         run: npm -w apps/client run release
       - name: Read version
