@@ -8,6 +8,8 @@ import { processAgentJobs } from "../../../lib/agent-jobs.ts";
 import { guardHeavy } from "../../../lib/diag.ts";
 import { getDriveBackup, backupToDrive } from "../../../lib/drive.ts";
 import { flushReports } from "../../../lib/reports.ts";
+import { addNotification, pushWebhook } from "../../../lib/notifications.ts";
+import { getNotifyWebhook } from "../../../lib/settings.ts";
 
 export const prerender = false;
 const json = (o: unknown, s = 200) => new Response(JSON.stringify(o), { status: s, headers: { "content-type": "application/json" } });
@@ -30,13 +32,21 @@ export const POST: APIRoute = async ({ request, locals }) => {
   // 動画ジョブのポーリング（完成→DL保存＋LINE通知）。
   const vr = await guardHeavy(env, "video jobs", () => pollVideoJobs(env, accessToken ?? undefined));
   const video = vr.ok ? vr.value : { done: 0, pending: 0 };
-  let sent = 0;
-  if (accessToken) {
-    for (const r of await dueReminders(locals.ctx)) {
-      const userId = r.owner.startsWith("line:") ? r.owner.slice(5) : null;
-      if (userId) { await linePush(accessToken, userId, `⏰ リマインド：${r.content}`); sent++; }
-      await markReminderDone(locals.ctx, r.id);
+  // 期限到来リマインダーの配信。LINE 紐付けは push、org 等は アプリ内通知＋任意 Webhook。
+  let sent = 0, notified = 0;
+  const notifyWebhook = await getNotifyWebhook(env);
+  for (const r of await dueReminders(locals.ctx)) {
+    const userId = r.owner.startsWith("line:") ? r.owner.slice(5) : null;
+    if (userId) {
+      if (!accessToken) continue; // LINEトークン未設定なら done にせず次回へ回す
+      await linePush(accessToken, userId, `⏰ リマインド：${r.content}`); sent++;
+    } else {
+      // org 等 LINE 未紐付けスコープ：アプリ内通知＋（設定時）Webhook プッシュ
+      await addNotification(locals.ctx, { owner: r.owner, kind: "reminder", body: `⏰ ${r.content}`, link: "/invoices" });
+      if (notifyWebhook) await pushWebhook(notifyWebhook, `⏰ リマインド：${r.content}`).catch(() => {});
+      notified++;
     }
+    await markReminderDone(locals.ctx, r.id);
   }
   // 任意：Google ドライブへの定期バックアップ（有効時のみ）。
   let driveBackup: { uploaded: number; error?: string } = { uploaded: 0 };
@@ -49,5 +59,5 @@ export const POST: APIRoute = async ({ request, locals }) => {
   const fr = await guardHeavy(env, "flush reports", () => flushReports(env));
   const reportsSent = fr.ok ? fr.value : 0;
 
-  return json({ ok: true, sent, summarized, video, agentJobs, driveBackup, reportsSent });
+  return json({ ok: true, sent, notified, summarized, video, agentJobs, driveBackup, reportsSent });
 };

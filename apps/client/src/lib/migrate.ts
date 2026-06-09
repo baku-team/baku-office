@@ -22,6 +22,7 @@ import m0017 from "../../migrations/0017_a2a_actions.sql?raw";
 import m0018 from "../../migrations/0018_reports.sql?raw";
 import m0019 from "../../migrations/0019_google.sql?raw";
 import m0020 from "../../migrations/0020_invoices.sql?raw";
+import m0021 from "../../migrations/0021_notifications.sql?raw";
 import { logDiag } from "./diag.ts";
 
 // 並び順＝適用順。新しいマイグレーションはここに追記するだけ。
@@ -46,6 +47,7 @@ const MIGRATIONS: { id: string; sql: string }[] = [
   { id: "0018_reports", sql: m0018 },
   { id: "0019_google", sql: m0019 },
   { id: "0020_invoices", sql: m0020 },
+  { id: "0021_notifications", sql: m0021 },
 ];
 
 export const SCHEMA_VERSION = MIGRATIONS.length;
