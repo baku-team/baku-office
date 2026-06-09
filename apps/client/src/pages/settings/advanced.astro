@@ -9,7 +9,7 @@ if (!ses || ses.role !== "admin" || ses.ctx !== "org") return Astro.redirect("/l
 const entitlement = await (await import("../../lib/client.ts")).cachedEntitlement(env);
 const hasPlus = atLeast(entitlement, "plus");
 const hasPro = atLeast(entitlement, "pro");
-const { getAiEngine, getCustomPrompt, getWorkersPaid } = await import("../../lib/settings.ts");
+const { getAiEngine, getCustomPrompt, getWorkersPaid, getNotifyWebhook } = await import("../../lib/settings.ts");
 const workersPaid = hasPlus ? await getWorkersPaid(env) : false;
 const { getAutonomyConfig, ghDeviceAvailable } = await import("../../lib/autonomy.ts");
 const auto = hasPro ? await getAutonomyConfig(env) : { on: false, cfToken: false, cfAccount: "", ghToken: false, ghRepo: "" };
@@ -17,6 +17,7 @@ const ghAuto = hasPro && await ghDeviceAvailable(env);
 const { hasApiKey } = await import("../../lib/client.ts");
 const engine = hasPlus ? await getAiEngine(env) : "gemini";
 const custom = hasPlus ? await getCustomPrompt(env) : "";
+const notifyWebhook = await getNotifyWebhook(env);
 const claudeSet = hasPlus ? await hasApiKey(env, "claude") : false;
 const { storageMode, maxUploadMb } = await import("../../lib/storage.ts");
 const mode = storageMode(env);
@@ -51,6 +52,12 @@ const curMax = hasPlus ? await maxUploadMb(env) : 5;
     <p class="muted">AIへ常に追加する指示。例：「丁寧語で簡潔に」「箇条書き中心」「団体名は○○会」。安全制約（破壊操作の確認など）は変更されません。</p>
     <div class="field"><textarea id="customPrompt" rows="4" placeholder="例：回答は敬語で簡潔に。金額は¥表記。専門用語は補足を添える。">{custom}</textarea></div>
     <button class="btn btn-primary" id="savePrompt">カスタム指示を保存</button>
+  </div>
+
+  <h2>通知 Webhook（任意・Discord 等）</h2>
+  <div class="card">
+    <p class="muted">自動取込（組織宛）の期日リマインダー等を外部へプッシュします。Discord のチャンネル Webhook URL を推奨。未設定でもアプリ内（ヘッダのベル🔔）には通知されます。</p>
+    <div class="row"><input id="notifyWebhook" type="url" placeholder="https://discord.com/api/webhooks/..." value={notifyWebhook} style="flex:1" /><button class="btn btn-primary" id="saveWebhook" style="flex:0 0 auto">保存</button></div>
   </div>
 
   <h2>KVアップロードサイズ上限（標準モード）</h2>
@@ -170,6 +177,10 @@ const curMax = hasPlus ? await maxUploadMb(env) : 5;
       document.getElementById("savePrompt")?.addEventListener("click", async (e) => {
         const prompt = document.getElementById("customPrompt").value;
         await window.bo.api("/api/settings", { _action: "custom_prompt", prompt }, { btn: e.currentTarget, successMsg: "カスタム指示を保存しました" });
+      });
+      document.getElementById("saveWebhook")?.addEventListener("click", async (e) => {
+        const webhook = document.getElementById("notifyWebhook").value.trim();
+        await window.bo.api("/api/settings", { _action: "notify_webhook", webhook }, { btn: e.currentTarget, successMsg: "通知 Webhook を保存しました" });
       });
       document.getElementById("saveMax")?.addEventListener("click", async (e) => { const v = document.getElementById("maxmb").value; const r = await window.bo.api("/api/settings", { _action: "max_upload", mb: Number(v) }, { btn: e.currentTarget, successMsg: "上限を保存しました" }); if (r.ok) setTimeout(() => location.reload(), 600); });
       document.getElementById("saveWpaid")?.addEventListener("click", async (e) => { const workersPaid = document.getElementById("wpaid").checked; const r = await window.bo.api("/api/settings", { _action: "workers_paid", workersPaid }, { btn: e.currentTarget, successMsg: "保存しました" }); if (r.ok) setTimeout(() => location.reload(), 600); });

@@ -29,6 +29,9 @@ const logoUrl = theme.logoUrl;
 const { buildNav, getNavOverrides } = await import("../core/nav.ts");
 const navOv = await getNavOverrides(ctx).catch(() => null);
 const navItems = buildNav(items, [], navOv);
+// アプリ内通知の未読数（自動取込の期日通知など。ヘッダのベルに表示）。
+let unreadNotif = 0;
+if (ses) { try { unreadNotif = await (await import("../lib/notifications.ts")).countUnread(ctx, ses.uid); } catch { /* noop */ } }
 ---
 <!doctype html>
 <html lang="ja">
@@ -50,6 +53,9 @@ const navItems = buildNav(items, [], navOv);
             ))}
           </nav>
           <span class="user">
+            {ses && (
+              <a href="#" id="bo-bell" title="通知" style="position:relative;margin-right:14px;text-decoration:none">🔔{unreadNotif > 0 && <span id="bo-bell-badge" style="position:absolute;top:-8px;right:-10px;background:#e53935;color:#fff;border-radius:9px;font-size:.62rem;line-height:1;padding:2px 5px">{unreadNotif}</span>}</a>
+            )}
             {ses ? <>{ses.name ?? ses.role}・<a href="#" id="bo-logout">ログアウト</a></> : <a href="/login">ログイン</a>}
           </span>
         </div>
@@ -65,6 +71,7 @@ const navItems = buildNav(items, [], navOv);
       <slot />
     </main>
     <div id="toasts" aria-live="polite"></div>
+    <div id="bo-notif" hidden style="position:fixed;top:52px;right:12px;width:320px;max-height:70vh;overflow:auto;background:#fff;border:1px solid #ddd;border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.12);z-index:50;padding:8px"></div>
 
     <script>
       // 共通フィードバック：トースト＋fetchラッパ。全操作で必ず成否を可視化する。
@@ -102,6 +109,28 @@ const navItems = buildNav(items, [], navOv);
       (window as any).bo = { toast, busy, api };
       const lo = document.getElementById("bo-logout");
       if (lo) lo.addEventListener("click", async (e) => { e.preventDefault(); await fetch("/api/login", { method: "DELETE" }); location.href = "/login"; });
+      // 通知ベル：クリックで一覧をパネル表示し、開いたら全既読にしてバッジを消す。
+      const bell = document.getElementById("bo-bell");
+      const panel = document.getElementById("bo-notif");
+      if (bell && panel) {
+        bell.addEventListener("click", async (e) => {
+          e.preventDefault();
+          if (!panel.hidden) { panel.hidden = true; return; }
+          const r = await api("/api/notifications", undefined, { method: "GET", successMsg: null });
+          const items = (r.ok && r.data.items) || [];
+          panel.innerHTML = items.length
+            ? items.map((n: any) => `<a href="${n.link || "#"}" style="display:block;padding:8px;border-bottom:1px solid #f0f0f0;color:#222;text-decoration:none;${n.read_at ? "opacity:.55" : "font-weight:600"}">${String(n.body || "").replace(/</g, "&lt;")}</a>`).join("")
+            : '<p style="padding:10px;color:#888;font-size:.85rem;margin:0">通知はありません</p>';
+          panel.hidden = false;
+          if (items.some((n: any) => !n.read_at)) {
+            await api("/api/notifications", { _action: "read" }, { successMsg: null });
+            document.getElementById("bo-bell-badge")?.remove();
+          }
+        });
+        document.addEventListener("click", (e) => {
+          if (!panel.hidden && !panel.contains(e.target as Node) && e.target !== bell) panel.hidden = true;
+        });
+      }
     </script>
     <slot name="scripts" />
   </body>

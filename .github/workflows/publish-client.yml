@@ -21,6 +21,8 @@ jobs:
           node-version: 22
       - name: Install deps
         run: npm ci
+      - name: Typecheck
+        run: npm run typecheck
       - name: Build release bundle (minified, no TS source / no host)
         run: npm -w apps/client run release
       - name: Push bundle to public distribution repo

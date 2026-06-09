@@ -22,7 +22,8 @@ export async function processAgentJobs(ctx: Ctx, baseUrl = "", limit = 2): Promi
   for (const j of results) {
     await ctx.db.prepare("UPDATE agent_jobs SET status='running', updated_at=? WHERE id=?").bind(nowSec(), j.id).run();
     try {
-      const reply = await runAgent(ctx, j.owner, j.prompt, undefined, baseUrl, (j.role as Role) ?? "member");
+      // agent_jobs は drain 経由の無人実行（人間が監督しない）。対外/破壊系道具を道具レベルで遮断する。
+      const reply = await runAgent(ctx, j.owner, j.prompt, undefined, baseUrl, (j.role as Role) ?? "member", { unattended: true });
       await ctx.db.prepare("UPDATE agent_jobs SET status='done', result=?, updated_at=? WHERE id=?").bind(reply, nowSec(), j.id).run();
       if (j.session_id) await appendMessage(ctx, j.session_id, "assistant", reply).catch(() => {});
       done++;

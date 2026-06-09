@@ -32,6 +32,16 @@ export async function setWorkersPaid(env: Env, enabled: boolean): Promise<boolea
   return enabled;
 }
 
+// 任意：org スコープの通知（期日リマインダー等）をプッシュする Webhook URL。Discord 互換の content/text JSON を POST。
+export async function getNotifyWebhook(env: Env): Promise<string> {
+  return (await env.LICENSE.get("notify_webhook_url")) ?? "";
+}
+export async function setNotifyWebhook(env: Env, url: string): Promise<string> {
+  const v = (url ?? "").trim().slice(0, 500);
+  await env.LICENSE.put("notify_webhook_url", v);
+  return v;
+}
+
 // マルチエージェントの同時実行上限（無料枠は subrequest/CPU 制約のため控えめ、Paid で拡張）。
 export async function maxParallelAgents(env: Env): Promise<number> {
   return (await getWorkersPaid(env)) ? 5 : 2;

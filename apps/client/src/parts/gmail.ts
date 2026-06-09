@@ -142,6 +142,7 @@ export const gmailPart: Part = {
     {
       name: "send_message",
       description: "メールを送信",
+      unattended: false, // 無人ジョブでメール送信させない（プロンプトインジェクション対策・道具レベル遮断）
       parameters: { type: "object", properties: { to: { type: "string" }, subject: { type: "string" }, body: { type: "string" } }, required: ["to", "subject", "body"] },
       run: (ctx, _o, _b, a) => sendMessage(ctx, { to: String(a.to), subject: String(a.subject), body: String(a.body) }),
     },

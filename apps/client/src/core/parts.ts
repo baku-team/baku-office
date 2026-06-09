@@ -11,6 +11,7 @@ export interface AgentTool {
   description: string;
   parameters: object;                 // JSON-Schema風（Gemini/Claude 双方の宣言に使う）
   requiredRole?: readonly Role[];      // 認可（§14-1）。未指定＝全 active 会員。
+  unattended?: boolean;                // 無人ジョブ（cron自動巡回等）での提示可否。明示 false＝対外/破壊系として遮断。未指定＝可。
   run(ctx: Ctx, owner: string, baseUrl: string, args: Record<string, unknown>): Promise<string>;
 }
 
