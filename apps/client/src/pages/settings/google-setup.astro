@@ -86,6 +86,14 @@ const allScopes = (Object.keys(SCOPE_GROUPS) as (keyof typeof SCOPE_GROUPS)[]).f
       </ol>
       <p class="muted">うまくいかない場合：連携時に <code>error=token</code> 等が出るときは、ステップ4のリダイレクト URI 不一致（末尾スラッシュ・http/https・ドメイン違い）が最有力です。</p>
 
+      <details>
+        <summary>技術者向け：ステップ1〜2を gcloud で自動化</summary>
+        <p class="muted">gcloud CLI が使える場合、プロジェクト作成と API 有効化はスクリプトで自動化できます（OAuth クライアント作成＝ステップ3〜5 は引き続き手動）。</p>
+        <pre style="background:#0f172a;color:#e2e8f0;padding:.8rem;border-radius:8px;overflow:auto;font-size:.8rem"><code>gcloud auth login
+scripts/google-oauth-setup.sh</code></pre>
+        <p class="muted">完了後、残りの手動ステップへのリンクと貼り付け用リダイレクト URI が出力されます。</p>
+      </details>
+
       <script slot="scripts" is:inline>
         document.getElementById("copyRedir")?.addEventListener("click", async () => {
           const t = document.getElementById("redir");
