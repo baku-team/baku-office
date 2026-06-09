@@ -118,12 +118,13 @@ export async function runAgent(ctx: Ctx, owner: string, text: string, image?: { 
   // ホストが「除外」した標準同梱アプリ（disabledBuiltins）の道具は提示しない。
   const { disabledBuiltins } = await import("./client.ts");
   const off = new Set(await disabledBuiltins(env).catch(() => []));
-  const parts = enabledParts(await enabledPartIds(ctx)).filter((p) => !off.has(p.id));
+  // エンタイトルメント：Pro判定＋パーツの minPlan ゲートに使う（Pro未満には Pro限定アプリの道具を提示しない）。
+  const ent = await entitlementForGate(env).catch(() => "free" as const);
+  const isPro = atLeast(ent, "pro");
+  const parts = enabledParts(await enabledPartIds(ctx)).filter((p) => !off.has(p.id) && atLeast(ent, p.minPlan ?? "free"));
   const activeTools = toolsOf(parts);
   const partDecls = activeTools.map((t) => ({ name: t.name, description: t.description, parameters: t.parameters }));
   // マルチエージェント（Pro 以上）：スーパーバイザー道具を提示。
-  const ent = await entitlementForGate(env).catch(() => "free" as const);
-  const isPro = atLeast(ent, "pro");
   // オートパイロット（Pro＋opt-in＋トークン有＋管理者）：CF/GitHub の限定ツールを提示。
   const autonomy = isPro && role === "admin" && (await autonomyReady(env).catch(() => false));
   const decls = [...partDecls, ...CORE_TOOLS, ...GEMINI_TOOLS, ...(hasClaude ? CLAUDE_TOOLS : []), ...(isPro ? MULTI_TOOLS : []), ...(autonomy ? AUTONOMY_TOOLS : []), ...(enabledSkills.length ? [skillTool(enabledSkills.map((s) => s.name))] : []), ...capDecls];

@@ -170,6 +170,9 @@ export async function getApiKey(env: Env, name: string): Promise<string | null> 
 export async function hasApiKey(env: Env, name: string): Promise<boolean> {
   return (await env.LICENSE.get(KEY_PREFIX + name)) !== null;
 }
+export async function deleteApiKey(env: Env, name: string): Promise<void> {
+  await env.LICENSE.delete(KEY_PREFIX + name);
+}
 
 // 保存時バリデーション（§7.2/付録A）：対象サービスへテスト呼び出し。
 export async function validateApiKey(name: string, value: string): Promise<{ ok: boolean; detail?: string }> {

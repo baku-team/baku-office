@@ -23,12 +23,13 @@ export type RegistryApp = {
 
 // 標準同梱アプリ（クライアントに常にバンドルされるコアパーツ）。レジストリ配布対象ではないため
 // 「未登録で稼働中」の警告には出さない（要確認＝本当に未知のアプリだけに絞る）。
-// クライアント parts/index.ts の registerBuiltinParts と一致させる（site/import/branding も同梱）。
-export const BUILTIN_APP_IDS = ["chat", "accounting", "memo", "reminders", "knowledge", "members", "site", "import", "branding"];
+// クライアント parts/index.ts の registerBuiltinParts と一致させる（site/import/branding/calendar/gmail/meet も同梱）。
+export const BUILTIN_APP_IDS = ["chat", "accounting", "memo", "reminders", "knowledge", "members", "site", "import", "branding", "calendar", "gmail", "meet", "invoices"];
 // 同梱アプリの表示名（標準同梱アプリ管理UI用）。
 export const BUILTIN_LABELS: Record<string, string> = {
   chat: "AIチャット", accounting: "会計", memo: "メモ", reminders: "リマインダー",
   knowledge: "ナレッジ", members: "会員", site: "サイト", import: "インポート", branding: "ブランディング",
+  calendar: "カレンダー", gmail: "Gmail", meet: "Google Meet", invoices: "請求書管理",
 };
 // 除外不可の必須アプリ（クライアント MANDATORY_APPS と一致）。
 export const MANDATORY_BUILTINS = ["chat"];

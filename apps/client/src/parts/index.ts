@@ -10,6 +10,10 @@ import { membersPart } from "./members.ts";
 import { sitePart } from "./site.ts";
 import { importPart } from "./import.ts";
 import { brandingPart } from "./branding.ts";
+import { calendarPart } from "./calendar.ts";
+import { gmailPart } from "./gmail.ts";
+import { meetPart } from "./meet.ts";
+import { invoicesPart } from "./invoices.ts";
 
 export function registerBuiltinParts(): void {
   registerPart(chatApp);
@@ -21,6 +25,10 @@ export function registerBuiltinParts(): void {
   registerPart(sitePart);
   registerPart(importPart);
   registerPart(brandingPart);
+  registerPart(calendarPart);
+  registerPart(gmailPart);
+  registerPart(meetPart);
+  registerPart(invoicesPart);
 }
 
 registerBuiltinParts();

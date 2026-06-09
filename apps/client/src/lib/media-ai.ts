@@ -103,3 +103,38 @@ export async function makeDocument(env: Env, owner: string, baseUrl: string, a: 
   const saved = await saveFile(env, file, owner);
   return `資料を作成しました：${a.title}.${type}\nダウンロード：${baseUrl}/files/${saved.id}`;
 }
+
+// --- 請求書/領収書の抽出（Claude マルチモーダル）。画像/PDFから請求元・金額・期日を読み取りJSONで返す。 ---
+function bufToB64(buf: ArrayBuffer): string {
+  const bytes = new Uint8Array(buf);
+  let s = "";
+  const chunk = 0x8000; // スタック溢れ回避のため分割（大きめのPDF対策）
+  for (let i = 0; i < bytes.length; i += chunk) s += String.fromCharCode(...bytes.subarray(i, i + chunk));
+  return btoa(s);
+}
+export type InvoiceExtract = { vendor?: string; amount?: number; issued_date?: string; due_date?: string };
+export async function extractInvoiceData(env: Env, file: { buf: ArrayBuffer; mime: string; name: string }): Promise<InvoiceExtract> {
+  const key = await getApiKey(env, "claude");
+  if (!key) return {};
+  const isPdf = file.mime === "application/pdf" || /\.pdf$/i.test(file.name);
+  const data = bufToB64(file.buf);
+  const imgMime = ["image/png", "image/jpeg", "image/gif", "image/webp"].includes(file.mime) ? file.mime : "image/jpeg";
+  const block = isPdf
+    ? { type: "document", source: { type: "base64", media_type: "application/pdf", data } }
+    : { type: "image", source: { type: "base64", media_type: imgMime, data } };
+  const prompt = "この請求書/領収書から請求元・金額・発行日・支払期日を読み取り、JSONのみ出力（前置き・コードフェンス無し）：" +
+    '{"vendor":"請求元名 or null","amount":金額の数値(円・整数。不明ならnull),"issued_date":"YYYY-MM-DD or null","due_date":"YYYY-MM-DD or null"}';
+  const r = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+    body: JSON.stringify({ model: "claude-sonnet-4-6", max_tokens: 500, messages: [{ role: "user", content: [block, { type: "text", text: prompt }] }] }),
+  });
+  await recordUsage(env, "claude");
+  if (!r.ok) { console.log("[invoice-extract]", r.status, (await r.text()).slice(0, 150)); return {}; }
+  const d = (await r.json()) as { content?: { text?: string }[] };
+  const raw = (d.content?.map((c) => c.text ?? "").join("") ?? "").replace(/^```(?:json)?|```$/g, "").trim();
+  try {
+    const j = JSON.parse(raw) as InvoiceExtract;
+    return { vendor: j.vendor ?? undefined, amount: typeof j.amount === "number" ? j.amount : undefined, issued_date: j.issued_date ?? undefined, due_date: j.due_date ?? undefined };
+  } catch { return {}; }
+}

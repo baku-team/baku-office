@@ -68,8 +68,9 @@ const navItems = buildNav(items, [], navOv);
 
     <script>
       // 共通フィードバック：トースト＋fetchラッパ。全操作で必ず成否を可視化する。
+      type ApiOpts = { btn?: HTMLButtonElement | null; method?: string; errMsg?: string | null; successMsg?: string | null };
       const wrap = document.getElementById("toasts");
-      function toast(msg, kind = "ok") {
+      function toast(msg: string, kind = "ok") {
         // エラーは assertive で即読み上げ（成功/情報は polite）。
         if (wrap) wrap.setAttribute("aria-live", kind === "err" ? "assertive" : "polite");
         const el = document.createElement("div");
@@ -80,25 +81,25 @@ const navItems = buildNav(items, [], navOv);
         setTimeout(() => { el.classList.remove("show"); setTimeout(() => el.remove(), 250); }, kind === "err" ? 5000 : 2800);
       }
       // ボタン押下中の視覚状態。
-      function busy(btn, on) {
+      function busy(btn: HTMLButtonElement | null, on: boolean) {
         if (!btn) return;
         if (on) { btn.disabled = true; btn.dataset.label = btn.innerHTML; btn.innerHTML = '<span class="spin"></span>処理中…'; }
         else { btn.disabled = false; if (btn.dataset.label) btn.innerHTML = btn.dataset.label; }
       }
       // JSON API 呼び出し＋自動トースト。成功/失敗を必ず表示。
-      async function api(url, body, opts = {}) {
-        const btn = opts.btn; busy(btn, true);
+      async function api(url: string, body?: unknown, opts: ApiOpts = {}) {
+        const btn = opts.btn ?? null; busy(btn, true);
         try {
           const r = await fetch(url, { method: opts.method || "POST", headers: { "content-type": "application/json" }, body: body !== undefined ? JSON.stringify(body) : undefined });
-          let j = {}; try { j = await r.json(); } catch { /* non-json */ }
+          let j: any = {}; try { j = await r.json(); } catch { /* non-json */ }
           if (!r.ok || j.error) { toast(opts.errMsg || ("エラー：" + (j.error || r.status)), "err"); return { ok: false, data: j }; }
           if (opts.successMsg !== null) toast(opts.successMsg || "完了しました", "ok");
           return { ok: true, data: j };
         } catch (e) {
-          toast("通信に失敗しました：" + (e?.message || ""), "err"); return { ok: false, error: e };
+          toast("通信に失敗しました：" + ((e as Error)?.message || ""), "err"); return { ok: false, error: e };
         } finally { busy(btn, false); }
       }
-      window.bo = { toast, busy, api };
+      (window as any).bo = { toast, busy, api };
       const lo = document.getElementById("bo-logout");
       if (lo) lo.addEventListener("click", async (e) => { e.preventDefault(); await fetch("/api/login", { method: "DELETE" }); location.href = "/login"; });
     </script>
