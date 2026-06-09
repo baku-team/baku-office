@@ -1,6 +1,6 @@
 > ⚠️ **レガシー設計（背景資料）**：本書は旧 `cf-line-agent-kit`（LINEエージェント単体・Workers AI二層）の設計です。
-> 現行 **baku-office**（会計・庶務SaaS／ホスト・クライアント自己ホスト）の**正本は [integrated_design_package_v1.0.md](integrated_design_package_v1.0.md)**、
-> 実装は `apps/`、運用は [OPERATIONS.md](OPERATIONS.md) を参照。本書は経緯・参考として保持。
+> 現行 **baku-office**（会計・庶務SaaS／ホスト・クライアント自己ホスト）の**正本は [integrated_design_package_v1.0.md](../spec/integrated_design_package_v1.0.md)**、
+> 実装は `apps/`、運用は [OPERATIONS.md](../../OPERATIONS.md) を参照。本書は経緯・参考として保持。
 
 # 01. デプロイ基盤 — GitHub ⇔ Cloudflare ⇔ LINE 連動
 

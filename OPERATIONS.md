@@ -40,7 +40,7 @@
 | 7 | クライアント | 初回ログイン者＝**組織最上位管理者**として束縛。会計/名簿/ファイル等を **Free で利用開始**。連携設定で Gemini/LINE/Claude キーを登録。 |
 | 8 | クライアント | **アップグレードは導入後に管理画面で**：`/billing` から Plus/Pro を選び Stripe Checkout。カード=即時昇格、振込/コンビニ=入金確認(Webhook署名検証)で昇格。入金前は free 相当（プロビジョナル）。 |
 
-→ 詳細手順は [A. ホスト側](#a-ホスト側の操作)／[B. クライアント側](#b-クライアント側の操作)、配備の内部仕様は [baku-office_deploy-update_spec.md](baku-office_deploy-update_spec.md)。
+→ 詳細手順は [A. ホスト側](#a-ホスト側の操作)／[B. クライアント側](#b-クライアント側の操作)、配備の内部仕様は [docs/spec/baku-office_deploy-update_spec.md](docs/spec/baku-office_deploy-update_spec.md)。
 
 ### 流れ② UI変更（共通ベース＋上書き・3層）
 
@@ -80,7 +80,7 @@
 - **個別（特定団体のみ）**：当該団体の配布バンドル（throwaway リポ）にそのパーツ＋必要画面/override を**追加同梱**して納品。コア本体は触らないため共通更新と両立。
 - **検収**：`npm -w apps/client run typecheck` / `test` / `build` を通す。プラン・ロールゲートと有効パーツ設定の反映を確認。
 
-→ 開発の設計指針は [ARCHITECTURE.md](ARCHITECTURE.md)／[baku-office_portable-core_architecture.md](baku-office_portable-core_architecture.md)。
+→ 開発の設計指針は [ARCHITECTURE.md](ARCHITECTURE.md)／[docs/spec/baku-office_portable-core_architecture.md](docs/spec/baku-office_portable-core_architecture.md)。
 
 ---
 

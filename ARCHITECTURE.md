@@ -3,7 +3,7 @@
 > 本システムは **「自社専用AIの相棒」をクライアントが丸ごと所有するための「ポータブルコア＋パーツ」基盤**。
 > コア（DB・ストレージ・AI・エージェント・認証・アプリ管理）を Port で抽象化し、業務機能は Part（＝アプリ）として
 > 載せ替える。**コアは共通（全顧客同一）／パーツと UI は団体ごとに差し替え・AIで自作**、が基本＋カスタムの土台。
-> 詳細：[baku-office_portable-core_architecture.md](baku-office_portable-core_architecture.md)。
+> 詳細：[docs/spec/baku-office_portable-core_architecture.md](docs/spec/baku-office_portable-core_architecture.md)。
 
 ## リポジトリと配布（CI）
 
