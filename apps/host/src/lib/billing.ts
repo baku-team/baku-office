@@ -39,7 +39,14 @@ export async function createCheckout(env: Env, licenseId: string, plan: Plan, su
 }
 
 // エンタイトルメント昇格（入金確認時）。plan を実体化（free→plus→pro）。
+// nonprofit（全機能無料・rank最上位）が付与済みの団体は Stripe 入金で降格上書きしない（plan のみ更新）。
+// WHY: nonprofit×課金が混在する団体で webhook 着信ごとに資格が nonprofit↔plan で揺れるのを防ぐ。
 export async function activateEntitlement(env: Env, licenseId: string, plan: Plan): Promise<void> {
+  const cur = await env.DB.prepare("SELECT entitlement FROM licenses WHERE license_id=?").bind(licenseId).first<{ entitlement: string }>();
+  if (cur?.entitlement === "nonprofit") {
+    await env.DB.prepare("UPDATE licenses SET plan=?, last_seen=? WHERE license_id=?").bind(plan, nowSec(), licenseId).run();
+    return;
+  }
   const ent: Entitlement = plan === "free" ? "free" : plan;
   await env.DB.prepare("UPDATE licenses SET plan=?, entitlement=?, last_seen=? WHERE license_id=?")
     .bind(plan, ent, nowSec(), licenseId)

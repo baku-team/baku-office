@@ -1,7 +1,7 @@
 // Proプランの会計・庶務エージェント（設計書§2/付録B）。
 // Gemini function-calling のツールループで、新データモデル（personal_items/knowledge/reminders/users）を操作。
 // APIキーは連携設定の暗号KVから復号して使用。
-import { getApiKey, cachedEntitlement } from "./client.ts";
+import { getApiKey, entitlementForGate } from "./client.ts";
 import { type Role, atLeast } from "@baku-office/shared";
 import type { Ctx } from "../core/ports.ts";
 import { enabledParts, toolsOf, enabledPartIds, type AgentTool } from "../core/parts.ts";
@@ -119,7 +119,7 @@ export async function runAgent(ctx: Ctx, owner: string, text: string, image?: { 
   const activeTools = toolsOf(parts);
   const partDecls = activeTools.map((t) => ({ name: t.name, description: t.description, parameters: t.parameters }));
   // マルチエージェント（Pro 以上）：スーパーバイザー道具を提示。
-  const ent = await cachedEntitlement(env).catch(() => "free" as const);
+  const ent = await entitlementForGate(env).catch(() => "free" as const);
   const isPro = atLeast(ent, "pro");
   // オートパイロット（Pro＋opt-in＋トークン有＋管理者）：CF/GitHub の限定ツールを提示。
   const autonomy = isPro && role === "admin" && (await autonomyReady(env).catch(() => false));
