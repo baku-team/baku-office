@@ -252,14 +252,15 @@ npm -w apps/client run release   # apps/client/release/ に _worker.js+migration
 ## セキュリティ・データ
 
 - 業務データ・会員PII・APIキーは**クライアントのCloudflare内のみ**。当社は到達経路を持たない（構造的不可触）。
-- **アクティベート**：ホスト署名 relay（Ed25519）を検証してライセンス発行（生メール直叩きを遮断）。
+- **アクティベート**：本番はホスト署名 relay（Ed25519・Google ログイン経由）を検証してライセンス発行。dev のゼロ入力経路（`/api/activate`・`/api/token`）は `ENV=development` 限定＋`callback` を https に限定（生メール直叩き・オープンリダイレクトを遮断）。deploy 完了後は公開 throwaway リポを即削除。
 - **AIアプリ開発の安全**：破壊的操作・認証バイパス等を拒絶。要求権限は事前4確認（環境/権限/安全/コスト）で点検し、公開はホスト承認＋署名で配信。
 - **エージェント認可**：発話者を登録済み active 会員に限定。組織横断の道具（名簿照会等）は role 検査（§14-1）。
-- **認証**：パスワードは PBKDF2（塩・ストレッチ・定数時間比較）、一時Cookie/セッションは HMAC 署名。管理者セッション鍵 `ADMIN_KEY` は**本番（`ENV≠development`）で必須＝fail-closed**、dev 管理者ログインは `ENV=development` 限定。
-- **SSRF 対策**：ホストがサーバーサイド fetch する `deploy_url`（A2A 中継・統合チェック保存）は `isSafeDeployUrl` で検査（https 必須・IP/内部ホスト名拒否）。
-- **アプリ配布**：公開申請（`/api/registry/submit`）は署名ライセンストークン認証。停止（blocked）は統合チェックの `revokedApps` で**導入済みクライアントからも即時無効化（キルスイッチ）**。
-- **監査**：ホスト管理操作（プラン変更・顧客削除・アプリ承認/停止・NonProfit 審査）は `host_audit` に記録（`/audit`）。
-- **課金/Webhook**：Stripe 署名はタイムスタンプ鮮度＋定数時間比較。申込導線は IP レート制限＋入力検証（長さ・メール形式）。
+- **認証**：パスワードは PBKDF2（塩・ストレッチ・定数時間比較）、一時Cookie/セッションは HMAC 署名（**鍵は MASTER_KEY から HKDF サブ鍵で分離**し暗号化鍵と用途分離）。管理者セッション鍵 `ADMIN_KEY` は**本番（`ENV≠development`）で必須＝fail-closed**、dev 管理者ログインは `ENV=development` 限定。
+- **SSRF 対策**：ホストがサーバーサイド fetch する `deploy_url`（A2A 中継・統合チェック保存）は `isSafeDeployUrl` で検査（https 必須・FQDN 必須・IP/内部ホスト名・credentials 拒否）。A2A の fetch は `redirect:"manual"`（内部URL追従を遮断）。
+- **A2A**：相互同意＋ホスト署名に加え、署名エンベロープに **nonce** を載せクライアント側で使い捨て化（リプレイ防止）。公開アクションは権限検査を必ず通す。中継レートは実中継のみ計上。
+- **アプリ配布**：公開申請（`/api/registry/submit`）は署名ライセンストークン認証＋**所有権検査**（予約id拒否・別提供者のidは拒否）。停止（blocked）は統合チェックの `revokedApps` で**導入済みクライアント＋ドラフトからも即時無効化（キルスイッチ）**。
+- **監査**：ホスト管理操作（プラン変更・顧客削除・アプリ承認/停止・NonProfit 審査・公開申請）は `host_audit` に記録（`/audit`・検索/フィルタ/ページング）。
+- **課金/Webhook**：Stripe 署名はタイムスタンプ鮮度＋定数時間比較。未入金（past_due 等）は Free へ降格。申込導線は IP レート制限＋入力検証（長さ・メール形式）。
 - 署名鍵は当社（**本番ゲート：KMS化／FIDO2／admin JIT は課題として保留中**）。クライアントは公開鍵で検証のみ。
 - バックアップは各団体の責任（当社はデータを預からない）。退避補助ツールは将来提供。
 - ライセンス無効・未入金時は**機能のみ停止**（データはロック・削除しない）。解約後もアプリ・データは手元に残る。
@@ -268,4 +269,5 @@ npm -w apps/client run release   # apps/client/release/ に _worker.js+migration
 
 実装済み：申込（プラン非選択）/ライセンス/自動アクティベート、4画面UI（ホーム/AI/アプリ/設定）、AIチャット（セッション保存・モデル選択）、AIアプリ開発（企画→4確認→公開）、会計コア、マルチユーザー、ファイル/予定/議事録、共有承認、Stripe接続（鍵投入で稼働）、認証OAuth（dev併用）、エージェント＋各AI機能、任意API、Agent Skills、診断/Workers Paid案内、ポータブルコア（Ports & Parts／契約テスト）、ローカルLLM＋ローカル認証（Profile C）、UI3層カスタマイズ、自動マイグレーション、配布CI、署名リリース。
 **2026-06-08〜09 追加**：マルチエージェント（社内・Pro）、A2A（他団体連携・1:1/グループ/公開アクション・Pro）、ホスト主体マーケット（DL/5段階評価/ランキング・ユニーク導入数）、NonProfit プラン（非営利・全機能無料・ホスト審査）、オートパイロット（AIサーバー自治・GitHub OAuth デバイスフロー・CI 成功時のみ squash マージ＋コア領域はマージ拒否）、ホスト監査ログ（`/audit`）、運用堅牢化（顧客削除の安全化＋カスケード、一覧の検索/フィルタ/ページング、申込入力検証）、セキュリティ追加（SSRF 検査／`ADMIN_KEY` fail-closed＋dev login 封鎖／アプリ キルスイッチ／submit 署名トークン認証）。本番3 Worker 反映済み。
+**2026-06-09 第三者レビュー全改善（Phase1〜6）**：無認証活性化の取り残しを ENV ゲート／nonprofit 却下の戻し先バグ修正／公開リポ deploy_code の即削除／SSRF 強化（FQDN・redirect:manual）／A2A nonce・権限・レート是正／セッション鍵 HKDF 分離／キルスイッチのドラフト無効化／Stripe past_due 降格・nonprofit 保護／自口座振替ガード／autopilot 鮮度ゲート／gh_merge_pr ページング／UI/UX 統一・a11y・/audit 検索。本番反映済み（詳細は [baku-office_review_確認事項と改善点.md](baku-office_review_確認事項と改善点.md)）。
 本番化に必要：各APIクレデンシャル（Google/LINE/Discord/Stripe/Gemini/Claude）、`PUBLISH_TOKEN`、セキュリティ3ゲート（KMS署名／FIDO2／admin JIT）。
