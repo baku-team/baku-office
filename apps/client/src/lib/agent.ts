@@ -103,7 +103,10 @@ async function execTool(ctx: Ctx, owner: string, baseUrl: string, name: string, 
 // テキスト発話 → ツールループ。最大4ホップで関数呼び出しを解決して最終テキストを返す。
 // owner はデータスコープ識別子（LINE は `line:<userId>`、Web は session.uid）。呼び出し側で付与する。
 // API依存ツール（web_search=Gemini／make_document=Claude）は対応キーがある時だけモデルに提示。
-export async function runAgent(ctx: Ctx, owner: string, text: string, image?: { mimeType: string; dataB64: string }, baseUrl = "", role: Role = "member", opts: { history?: Turn[]; model?: "gemini" | "claude" | "local" } = {}): Promise<string> {
+// 無人ジョブ（cron 自動巡回など人間が監督しない実行）で提示しない対外系マルチエージェント道具。
+const UNATTENDED_BLOCK_MULTI = new Set(["call_partner", "broadcast_group", "call_group_member"]);
+
+export async function runAgent(ctx: Ctx, owner: string, text: string, image?: { mimeType: string; dataB64: string }, baseUrl = "", role: Role = "member", opts: { history?: Turn[]; model?: "gemini" | "claude" | "local"; unattended?: boolean } = {}): Promise<string> {
   const env = ctx.env;
   const geminiKey = await getApiKey(env, "gemini");
   const claudeKey = await getApiKey(env, "claude");
@@ -122,12 +125,15 @@ export async function runAgent(ctx: Ctx, owner: string, text: string, image?: { 
   const ent = await entitlementForGate(env).catch(() => "free" as const);
   const isPro = atLeast(ent, "pro");
   const parts = enabledParts(await enabledPartIds(ctx)).filter((p) => !off.has(p.id) && atLeast(ent, p.minPlan ?? "free"));
-  const activeTools = toolsOf(parts);
+  // 無人ジョブでは対外/破壊系道具（unattended:false）をそもそも提示せず、execTool 経路でも実行不可にする。
+  const activeTools = opts.unattended ? toolsOf(parts).filter((t) => t.unattended !== false) : toolsOf(parts);
   const partDecls = activeTools.map((t) => ({ name: t.name, description: t.description, parameters: t.parameters }));
   // マルチエージェント（Pro 以上）：スーパーバイザー道具を提示。
   // オートパイロット（Pro＋opt-in＋トークン有＋管理者）：CF/GitHub の限定ツールを提示。
   const autonomy = isPro && role === "admin" && (await autonomyReady(env).catch(() => false));
-  const decls = [...partDecls, ...CORE_TOOLS, ...GEMINI_TOOLS, ...(hasClaude ? CLAUDE_TOOLS : []), ...(isPro ? MULTI_TOOLS : []), ...(autonomy ? AUTONOMY_TOOLS : []), ...(enabledSkills.length ? [skillTool(enabledSkills.map((s) => s.name))] : []), ...capDecls];
+  // 無人ジョブでは対外系の他団体連携（A2A）道具を除外する。
+  const multiTools = opts.unattended ? MULTI_TOOLS.filter((t) => !UNATTENDED_BLOCK_MULTI.has(t.name)) : MULTI_TOOLS;
+  const decls = [...partDecls, ...CORE_TOOLS, ...GEMINI_TOOLS, ...(hasClaude ? CLAUDE_TOOLS : []), ...(isPro ? multiTools : []), ...(autonomy ? AUTONOMY_TOOLS : []), ...(enabledSkills.length ? [skillTool(enabledSkills.map((s) => s.name))] : []), ...capDecls];
   // 自己認識：有効な追加能力＋団体のカスタム指示（口調・人格・回答形式）をシステム文脈へ。安全制約は不変。
   const capInfo = await capabilitySummary(env);
   const custom = await getCustomPrompt(env);
@@ -167,7 +173,9 @@ export async function runAgent(ctx: Ctx, owner: string, text: string, image?: { 
   ] as ToolDecl[];
   async function spawn(roleStr: string, task: string): Promise<string> {
     const roleKey = normalizeRole(roleStr);
-    const subTools = toolsForRole(roleKey, parts);
+    const subToolsRaw = toolsForRole(roleKey, parts);
+    // 親が無人ジョブなら子エージェントの道具も対外/破壊系を除外（提示・実行とも）。
+    const subTools = opts.unattended ? subToolsRaw.filter((t) => t.unattended !== false) : subToolsRaw;
     const subExec = (n: string, a: Record<string, unknown>) => execTool(ctx, owner, baseUrl, n, a, role, subTools);
     await recordUsage(env, provider); // 子エージェント分のコストも計上
     return runToolLoop(model!, `${ROLES[roleKey].system}\n割り当てられたタスクのみを遂行し、結果を簡潔に返す。`, { text: task || "（タスク）" }, subDeclsFor(subTools), subExec, 3, []);
@@ -176,6 +184,7 @@ export async function runAgent(ctx: Ctx, owner: string, text: string, image?: { 
   const cap = await maxParallelAgents(env);
   // スーパーバイザーの exec：マルチエージェント道具を捌き、それ以外は通常の execTool。
   const exec = async (n: string, a: Record<string, unknown>): Promise<string> => {
+    if (opts.unattended && UNATTENDED_BLOCK_MULTI.has(n)) return "この操作（対外連携）は自動処理では実行できません。";
     if (isPro && n === "run_subagent") return spawn(String(a.role ?? "general"), String(a.task ?? ""));
     if (isPro && n === "run_team") {
       const tasks = (Array.isArray(a.tasks) ? a.tasks : []) as { role?: string; task?: string }[];

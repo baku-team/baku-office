@@ -106,12 +106,14 @@ export const calendarPart: Part = {
     {
       name: "update_event",
       description: "既存の予定を更新（event_id 指定）",
+      unattended: false, // 無人ジョブで既存予定を改変させない
       parameters: { type: "object", properties: { event_id: { type: "string" }, title: { type: "string" }, start: ISO, end: ISO, description: { type: "string" } }, required: ["event_id"] },
       run: (ctx, _owner, _b, a) => updateEvent(ctx, { event_id: String(a.event_id), title: a.title as string, start: a.start as string, end: a.end as string, description: a.description as string }),
     },
     {
       name: "delete_event",
       description: "予定を削除（event_id 指定）",
+      unattended: false, // 無人ジョブで予定削除させない（破壊系）
       parameters: { type: "object", properties: { event_id: { type: "string" } }, required: ["event_id"] },
       run: (ctx, _owner, _b, a) => deleteEvent(ctx, { event_id: String(a.event_id) }),
     },
