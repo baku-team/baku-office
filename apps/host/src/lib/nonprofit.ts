@@ -1,6 +1,6 @@
 // NonProfit 申込・審査（ホスト）。承認で licenses.entitlement='nonprofit'（全機能・無料）。
 import { nowSec } from "./host.ts";
-import { initialEntitlement, type Plan } from "@baku-office/shared";
+import { entitlementForPlan, type Plan } from "@baku-office/shared";
 
 export type NonprofitApp = { license_id: string; org_type: string | null; doc_ref: string | null; description: string | null; status: string; reason: string | null; reviewed_at: number | null; created_at: number };
 
@@ -30,6 +30,6 @@ export async function reject(env: Env, licenseId: string, reason: string): Promi
   await env.DB.prepare("UPDATE nonprofit_applications SET status='rejected', reason=?, reviewed_at=? WHERE license_id=?").bind(reason || null, nowSec(), licenseId).run();
   const lic = await env.DB.prepare("SELECT plan, entitlement FROM licenses WHERE license_id=?").bind(licenseId).first<{ plan: string; entitlement: string }>();
   if (lic?.entitlement === "nonprofit") {
-    await env.DB.prepare("UPDATE licenses SET entitlement=? WHERE license_id=?").bind(initialEntitlement(lic.plan as Plan), licenseId).run();
+    await env.DB.prepare("UPDATE licenses SET entitlement=? WHERE license_id=?").bind(entitlementForPlan(lic.plan as Plan), licenseId).run();
   }
 }
