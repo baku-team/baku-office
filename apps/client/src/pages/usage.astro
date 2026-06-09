@@ -40,6 +40,8 @@ const caps = hasPlus ? await listCapabilities(env).catch(() => []) : [];
 // ストレージ容量（D1/KV/R2/Drive）。API使用量と同体裁で表示。上限編集は管理者。
 const { getStorageUsage, getStorageLimits, fmtBytes } = await import("../lib/storage-usage.ts");
 const storage = hasPlus ? await getStorageUsage(env).catch(() => []) : [];
+const { getRetentionDays } = await import("../lib/storage.ts");
+const retentionDays = hasPlus && isAdmin ? await getRetentionDays(env).catch(() => 0) : 0;
 const slimits: Partial<Record<string, number>> = hasPlus && isAdmin ? await getStorageLimits(env).catch(() => ({})) : {};
 const spct = (u: number, l: number) => (u < 0 || l <= 0 ? 0 : Math.min(100, Math.round((u / l) * 100)));
 ---
@@ -128,6 +130,18 @@ const spct = (u: number, l: number) => (u < 0 || l <= 0 ? 0 : Math.min(100, Math
       </table></div>
       {isAdmin && (<button class="btn btn-primary" id="saveStorage">容量上限を保存</button>)}
 
+      {isAdmin && (
+        <Fragment>
+          <h2>ファイルの保存と保持</h2>
+          <div class="banner banner-info">アップロードされたファイル本体は <strong>MASTER_KEY 由来鍵で保存時暗号化（AES-GCM）</strong>されます（R2/KV）。鍵が Worker Secret 未投入の本番では保存できません（診断を確認）。</div>
+          <p class="muted">保持期限を設定すると、期限を過ぎたファイルは削除ジョブ（定期）で<strong>物理削除</strong>されます。0＝無期限。領収書/議事録/Gmail添付など機微ファイルの保持を最小化できます。</p>
+          <div class="row">
+            <label>保持期限（日）：<input id="retDays" type="number" min="0" value={retentionDays || ""} placeholder="0（無期限）" style="width:120px" /></label>
+            <button class="btn btn-primary" id="saveRetention">保持期限を保存</button>
+          </div>
+        </Fragment>
+      )}
+
       <script slot="scripts" is:inline>
         (function () {
           document.getElementById("saveLimits")?.addEventListener("click", async (e) => {
@@ -158,6 +172,12 @@ const spct = (u: number, l: number) => (u < 0 || l <= 0 ? 0 : Math.min(100, Math
             const limits = {};
             document.querySelectorAll("tr[data-skey]").forEach((tr) => { const v = tr.querySelector(".lim-gb").value; limits[tr.dataset.skey] = v ? Number(v) : 0; });
             const r = await window.bo.api("/api/settings", { _action: "storage_limits", limits }, { btn: e.currentTarget, successMsg: "容量上限を保存しました" });
+            if (r.ok) setTimeout(() => location.reload(), 600);
+          });
+          // ファイル保持期限。
+          document.getElementById("saveRetention")?.addEventListener("click", async (e) => {
+            const days = document.getElementById("retDays").value;
+            const r = await window.bo.api("/api/settings", { _action: "file_retention", days: days ? Number(days) : 0 }, { btn: e.currentTarget, successMsg: "保持期限を保存しました" });
             if (r.ok) setTimeout(() => location.reload(), 600);
           });
         })();

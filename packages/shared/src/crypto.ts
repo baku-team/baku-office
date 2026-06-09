@@ -42,6 +42,25 @@ export async function decryptField(masterKeyB64: string, stored: string, domain 
   return DEC.decode(pt);
 }
 
+// ファイル本体など大容量バイナリの保存時暗号化（base64化しない＝R2/KVへバイト列のまま保存）。
+// 返り値 = IV(12) ‖ 暗号文‖タグ。domain 既定 "files" で他用途(api-keys/member-pii)と鍵分離（§10.1）。
+export async function encryptBytes(masterKeyB64: string, data: ArrayBuffer, domain = "files"): Promise<ArrayBuffer> {
+  const key = await deriveKey(masterKeyB64, domain);
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ct = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, data);
+  const out = new Uint8Array(iv.length + ct.byteLength);
+  out.set(iv, 0);
+  out.set(new Uint8Array(ct), iv.length);
+  return out.buffer;
+}
+export async function decryptBytes(masterKeyB64: string, stored: ArrayBuffer, domain = "files"): Promise<ArrayBuffer> {
+  const key = await deriveKey(masterKeyB64, domain);
+  const buf = new Uint8Array(stored);
+  const iv = buf.slice(0, 12);
+  const ct = buf.slice(12);
+  return crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, ct);
+}
+
 // 32バイト乱数の MASTER_KEY を生成（base64）。「無ければ生成」用。
 export function generateMasterKey(): string {
   return toB64(crypto.getRandomValues(new Uint8Array(32)).buffer);
