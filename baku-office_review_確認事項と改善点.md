@@ -33,6 +33,23 @@
 
 **本書になかった追加発見への対応（2026-06-09）**：①ホスト側 fetch（A2A/統合チェック）の `deploy_url` SSRF を `isSafeDeployUrl` で検査 ②本番（`ENV≠development`）は `ADMIN_KEY` を必須化し fail-closed、dev 管理者ログインを ENV で封鎖 ③配布アプリのキルスイッチ（blocked を導入済みクライアントからも無効化）④アプリ公開申請 `registry/submit` を署名ライセンストークン認証へ（なりすまし pending 登録の遮断）⑤ホスト管理操作の監査ログ（`host_audit`・`/audit`）。詳細は [PROGRESS.md](PROGRESS.md) の 2026-06-08/09 セクション。
 
+### 第2次レビュー対応（2026-06-09・別途レビューで検出した残穴を改修）
+
+| 区分 | 指摘 | 対応 |
+|---|---|---|
+| 🔴 | `/api/activate`(GET)・`/api/token` が無認証（L1 の兄弟経路の取り残し） | dev 経路として `ENV=development` 限定にゲート。本番は Google relay のみ。`callback` を https/localhost に限定（オープンリダイレクト封鎖） |
+| 🔴 | nonprofit 却下が課金 Pro/Plus を free に転落（`initialEntitlement` スタブ誤用） | `entitlementForPlan(plan)` を新設し却下/剥奪の戻し先を実プランへ |
+| 🔴 | 公開 throwaway リポに deploy_code 平文 | deploy_url 受領時に当該リポを即削除（private 化は Deploy ボタンを壊すため不可） |
+| 🟠 | SSRF（FQDN なし内部名・credentials・リダイレクト追従） | FQDN 必須・credentials 拒否＋A2A fetch を `redirect:"manual"`。DNS rebinding は残存リスク明記 |
+| 🟠 | submit の id 乗っ取り（既存 submitted_by 上書き） | 予約 id 拒否＋所有者不一致は 409＋submit 監査 |
+| 🟠 | A2A リプレイ（nonce 不在）／app-action 権限バイパス／レート自己ロック | nonce 使い捨て・固定 caller で権限検査・レートは status='ok' のみ計上 |
+| 🟠 | セッション鍵＝暗号化鍵の同居 | HKDF サブ鍵で用途分離（根本は L3 の Secret 必須化） |
+| 🟠 | キルスイッチが drafts/builtin に無力／nonprofit×Stripe 競合／自口座振替で残高破壊 | drafts も無効化・webhook 昇格で nonprofit 保護・自口座振替を 400 拒否 |
+| 🟡 | gh_merge_pr のページング未対応／CSV 振替符号／課金 past_due 未処理 | files/check-runs を全ページ取得・符号付金額列・past_due で Free 降格 |
+| UI/UX | host alert/prompt 非統一・apply 無限スピナー・sticky ヘッダ・会計検証・a11y（toast/label）・/audit 検索 | window.bo.api 統一・タイムアウト導線・sticky 解除・入力検証・assertive/label・検索/フィルタ/ページング |
+
+詳細な変更点は [PROGRESS.md](PROGRESS.md) の 2026-06-09（第三者レビュー全改善）を参照。
+
 ---
 
 ## 0. まず確認したいこと（仕様意図の突合）
