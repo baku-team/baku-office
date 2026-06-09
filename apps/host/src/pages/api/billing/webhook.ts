@@ -12,7 +12,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
   const sig = request.headers.get("stripe-signature") ?? "";
   if (!(await verifyStripeSig(env.STRIPE_WEBHOOK_SECRET, payload, sig))) return new Response("署名不正", { status: 400 });
 
-  const evt = JSON.parse(payload) as { type: string; data: { object: { client_reference_id?: string; metadata?: Record<string, string> } } };
+  const evt = JSON.parse(payload) as { type: string; data: { object: { client_reference_id?: string; metadata?: Record<string, string>; status?: string } } };
   const o = evt.data.object;
   const licenseId = o.client_reference_id ?? o.metadata?.license_id;
   if (!licenseId) return new Response("ok");
@@ -22,6 +22,12 @@ export const POST: APIRoute = async ({ request, locals }) => {
   } else if (evt.type === "customer.subscription.deleted") {
     // 解約：無料(Free)へダウングレード（データは保持・§2.4）。
     await activateEntitlement(env, licenseId, "free");
+  } else if (evt.type === "customer.subscription.updated") {
+    // 未入金・更新失敗：Stripe のリトライ猶予を経て past_due/unpaid 等に遷移した時点で Free へ降格
+    // （売掛で有料機能を提供し続けない）。復帰は invoice.paid で再昇格。
+    if (o.status && ["past_due", "unpaid", "incomplete_expired", "canceled"].includes(o.status)) {
+      await activateEntitlement(env, licenseId, "free");
+    }
   }
   return new Response("ok");
 };
