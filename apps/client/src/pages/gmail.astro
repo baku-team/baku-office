@@ -15,7 +15,7 @@ let configured = false, connected = false;
 let granted: string[] = [];
 let lastUsed: number | null = null;
 if (hasPro) {
-  configured = googleConfigured(env);
+  configured = await googleConfigured(env);
   const st = await googleStatus(env);
   connected = st.connected;
   granted = st.groups;
