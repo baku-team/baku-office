@@ -7,6 +7,7 @@
 ## 前提
 - Node 22 / Cloudflare アカウント（無料枠でOK・MEDIAはKVのためカード不要）。
 - ルートで `npm install`（npm workspaces）。
+- 当社の開発・運用ターゲットは **env.production（baku-llc・`*.baku-027.workers.dev`）**。`wrangler.jsonc` の top-level（コメント上「amber-links 動作確認」）は現在不使用。**本番系コマンドは `--env production` を付ける**（付けないと top-level 構成に向く）。
 
 ## リソース作成（初回）
 ```bash
@@ -24,17 +25,23 @@ npx wrangler kv namespace create baku-office-app-MEDIA     # → MEDIA id
 npx wrangler secret put MASTER_KEY          # AES-256-GCM（API鍵・PII暗号化）。32バイト乱数のbase64
 npx wrangler secret put VERIFY_PUBLIC_JWK   # 当社配布の公開検証鍵（ホストの /admin/pubkey）
 npx wrangler secret put INTERNAL_KEY        # /api/cron/drain 保護（外部スケジューラ用）
-# 任意：GOOGLE_CLIENT_ID/SECRET（組織ログイン）、LINE_LOGIN_*/DISCORD_*（個人ログイン）
+# GOOGLE_CLIENT_ID/SECRET：組織ログイン＋Google Workspace連携（gmail/calendar/meet）で使用。
+#   Workspace連携（Pro以上）を使うテナントでは実質必須。本番は `wrangler secret put GOOGLE_CLIENT_ID --env production`
+# 任意：LINE_LOGIN_*/DISCORD_*（個人ログイン）
 # 連携設定(Gemini/LINE/Claude キー)は CFダッシュボード不要・管理画面の「連携設定」から暗号化保存
 ```
+> 本番シークレットは `--env production` 付きで投入：`npx wrangler secret put <NAME> --env production`
 > 未設定のOAuthは dev ログインに自動フォールバック（組織=即管理者／個人=ID・PASS）。
 
 ## デプロイ
 ```bash
-npm -w apps/client run deploy     # astro build && wrangler deploy
+# 本番（env.production・baku-llc / baku-office-app）
+cd apps/client && npx wrangler deploy --env production   # astro build は事前に: npm -w apps/client run build
+# 注意：npm run deploy は `astro build && wrangler deploy` で --env が付かない＝top-level 構成に出る。
+#       env.production へ反映するには上記のとおり手動で --env production を指定する。
 ```
-- **D1スキーマは初回リクエストで自動適用**（`src/lib/migrate.ts`／`schema_migrations`）。手動適用は不要。
-  手動で当てる場合：`npx wrangler d1 execute baku-office-app-db --remote --file migrations/<n>.sql`
+- **D1スキーマは初回リクエストで自動適用**（`src/lib/migrate.ts`／`schema_migrations`＋KV `schema_version` ゲート。現 SCHEMA_VERSION=20）。**手動の `wrangler d1 migrations apply` は使わない**（このアプリは wrangler の `d1_migrations` ではなく独自の `schema_migrations` で管理）。
+  - 緊急の確認用に1本だけ当てたい場合のみ：`npx wrangler d1 execute baku-office-app-db --remote --env production --file migrations/<n>.sql`（通常は不要）
 
 ## 動作確認（要点）
 - 初回アクセス→ライセンス未保持なら `/activate` へ。`…/activate?license_id=…` で取得。

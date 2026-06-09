@@ -198,7 +198,7 @@ baku-office/
     src/overrides/    UI上書き（配布時・第3層）
     src/lib/          会計/認証/チャットセッション/ストレージ/メディアAI/外部アプリ/マイグレーション 等
     test/             適合性テスト（Node + node:sqlite・node:test）
-    migrations/       D1スキーマ（初回リクエストで自動適用）
+    migrations/       D1スキーマ（src/lib/migrate.ts の schema_migrations が初回リクエストで未適用分のみ自動適用・KV schema_version でゲート。wrangler d1_migrations は不使用。現 SCHEMA_VERSION=20）
     deploy/           配布テンプレ（wrangler.release.jsonc・DeployボタンREADME）
   packages/shared/  暗号(AES-GCM/Ed25519)・ライセンストークン・型（Entitlement: free/plus/pro/nonprofit/enterprise/test）・GitHub(provisionRepo/createIssue)
   worker/           旧LINEエージェント（温存・参考。エージェントは apps/client に統合）
@@ -270,6 +270,8 @@ npm -w apps/client run release   # apps/client/release/ に _worker.js+migration
 - ライセンス無効・未入金時は**機能のみ停止**（データはロック・削除しない）。解約後もアプリ・データは手元に残る。
 
 ## 状態（2026-06-09）
+
+> 本節の「本番反映済み」は当社（baku-llc）の Cloudflare アカウント（env.production・`*.baku-027.workers.dev`）への deploy を指す。**外部顧客向けの本番提供はまだ開始していない（開発段階）**。amber-links アカウントは現在不使用。
 
 実装済み：申込（プラン非選択）/ライセンス/自動アクティベート、4画面UI（ホーム/AI/アプリ/設定）、AIチャット（セッション保存・モデル選択）、AIアプリ開発（企画→4確認→公開）、会計コア、マルチユーザー、ファイル/予定/議事録、共有承認、Stripe接続（鍵投入で稼働）、認証OAuth（dev併用）、エージェント＋各AI機能、任意API、Agent Skills、診断/Workers Paid案内、ポータブルコア（Ports & Parts／契約テスト）、ローカルLLM＋ローカル認証（Profile C）、UI3層カスタマイズ、自動マイグレーション、配布CI、署名リリース、Google Workspace連携（Gmail/カレンダー/Meet議事録/請求書）。
 **2026-06-08〜09 追加**：マルチエージェント（社内・Pro）、A2A（他団体連携・1:1/グループ/公開アクション・Pro）、ホスト主体マーケット（DL/5段階評価/ランキング・ユニーク導入数）、NonProfit プラン（非営利・全機能無料・ホスト審査）、オートパイロット（AIサーバー自治・GitHub OAuth デバイスフロー・CI 成功時のみ squash マージ＋コア領域はマージ拒否）、ホスト監査ログ（`/audit`）、運用堅牢化（顧客削除の安全化＋カスケード、一覧の検索/フィルタ/ページング、申込入力検証）、セキュリティ追加（SSRF 検査／`ADMIN_KEY` fail-closed＋dev login 封鎖／アプリ キルスイッチ／submit 署名トークン認証）。本番3 Worker 反映済み。

@@ -100,11 +100,11 @@
 | Identity | （横断） | Portal+OAuth | ローカル(pass/passkey・LAN) | クラウドIdP |
 | Licensing | （横断） | Portal | 署名永続 / None | Portal |
 | Channel | エージェント入出力 | LINE/Discord(要公開受口) | LAN内チャットUI / None | LINE/Discord |
-| Runtime/Scheduler | 全体 | Workers＋Cron/外部ping | workerd / Node+Miniflare＋OS cron | 任意 |
+| Runtime/Scheduler | 全体 | Workers＋Cron Triggers（専用 scheduler Worker・Service Binding） | workerd / Node+Miniflare＋OS cron | 任意 |
 
 - 現行の `env.d.ts`：`DB/LICENSE/MEDIA/MEDIA_R2/HOST_BASE_URL/HOST/GOOGLE_*/LINE_LOGIN_*/DISCORD_*/
   INTERNAL_KEY` が、上表の各 Port に対応。**認証は未設定時 dev/local フォールバックの種が既にある**。
-- 定期実行は `scheduled()` 不使用で **`/api/cron/drain` を外部トリガ**＝既にポータブル。
+- 定期実行は専用 scheduler Worker（`apps/scheduler`・Cloudflare Cron Triggers `*/5`）が **Service Binding 経由**で host `/api/cron/sweep`・client `/api/cron/drain` を起動（同一 workers.dev 直fetchは 1042 で遮断のため）。コア側は Runtime/Scheduler Port で隔離＝環境非依存（CF以外では OS cron 等へ差し替え）。
 
 ---
 
@@ -141,6 +141,10 @@ interface AgentTool {
 - **庶務／名簿**：users/members スキーマ＋道具 `search_members`。
 - **議事録**：音声→`ctx.ai.transcribe`→要約保存（要約ジョブ drain）＋画面。AI能力を“使う側”の代表。
 - **リマインダー**：reminders スキーマ＋道具 `list_reminders`＋drain での配信。
+- **Google Workspace連携（calendar/gmail/meet）**：外部API依存パーツの代表。OAuth で接続し、カレンダー予定CRUD＋Meetリンク発行・Gmail受信検索/本文取得・Meet録画トランスクリプト→`ctx.ai` 要約→ナレッジ保存。`ctx` と外部APIのみに依存し環境非依存。
+- **請求書（invoices）**：請求書ファイル→`ctx.ai` 抽出→`invoices` スキーマ保存＋未払一覧・消込・期日リマインド。
+
+> 現行の正準パーツ集合（13種）は契約テスト `apps/client/test/parts-config.contract.test.ts` を正本とする：accounting/branding/calendar/chat/gmail/import/invoices/knowledge/meet/members/memo/reminders/site。増減はそこで管理。
 
 団体ごとに**有効化するパーツの集合**を変えれば、同じコア上で「会計だけの団体」「議事録＋ナレッジの団体」等、
 専用ツールとして振る舞う。パーツの追加＝新モジュールの登録、で水平に拡張できる。

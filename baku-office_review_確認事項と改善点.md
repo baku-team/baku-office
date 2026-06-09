@@ -1,7 +1,7 @@
 # baku-office 第三者レビュー — 確認事項・改善点
 
 **対象リポジトリ**
-- `baku-team/baku-office`（正本モノレポ：apps/host, apps/client, apps/apply, packages/shared, worker）
+- `baku-team/baku-office`（正本モノレポ：apps/host, apps/client, apps/apply, apps/scheduler, packages/shared, worker）
 - `baku-team/baku-office-app`（公開配布バンドル）
 
 **レビュー基盤**：上記2リポジトリの実コードを直接精査（クローン・全主要ソース読込）。仕様書／PROGRESS の記述ではなく**実装の挙動**を一次情報とした。
@@ -68,6 +68,9 @@
 | C8 | レート制限・WAF | 各Worker（host/apply/client）にアプリ層のレート制限コードは未確認 | CF WAF/Rate Limiting Rules をダッシュボード側で設定する前提か |
 | C9 | バックアップ提供時期 | 「データは顧客自己責任・退避ツールは将来提供」 | 電帳法の保存義務（最長7年）に対し、提供時期と適合範囲の整理状況 |
 | C10 | 課金のインボイス対応 | host billing は Stripe Checkout 直叩き | 貘発行のサブスク請求の適格請求書（登録番号・様式）対応状況 |
+| C11 | Google OAuth スコープの最小化 | `google.ts` の SCOPE が `gmail.modify`＋`gmail.send`＋`calendar.events`＋`meetings`（書込込みの広域）を**1同意で一括要求** | 閲覧系で足りる用途は `*.readonly` への分割が可能か／同意画面でのスコープ説明・段階同意の要否 |
+| C12 | `google_refresh` トークンの保管 | `saveApiKey(env,"google_refresh",…)`＝`apikey` ストア（KV）に MASTER_KEY 暗号化保管。access token は短命でメモリのみ | L3（MASTER_KEY の Secret 必須化）完了が前提条件。KV＋鍵同居の残存リスクをどう扱うか（Gmail全文/Meet録画/Drive への永続アクセス＝クラウンジュエル級） |
+| C13 | 外部テキスト経由のインジェクション/PII | Gmail本文・Meetトランスクリプトを取得し、Meet議事録は AI 要約して**組織ナレッジへ保存**（請求書はファイル→Claude抽出） | 外部由来テキストの信頼境界（データ≠指示）・取込PII（取引先情報等）のマスキング/保持期間/学習不使用エンドポイントの方針（脅威モデル04 ⑤/⑩と連動） |
 
 ---
 
