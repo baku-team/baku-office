@@ -116,15 +116,35 @@ function kvOf(ns: KVNamespace): KvPort {
     list: async (p) => (await ns.list({ prefix: p })).keys.map((x) => x.name),
   };
 }
-// 鍵の「保管」を KvPort 経由に分離（§14-3）。secret(env.MASTER_KEY) 優先、無ければ kv に自動生成。
+// デプロイ環境が本番か。env.production の vars に ENVIRONMENT="production" を設定する。
+export function isProduction(env: Env): boolean {
+  return env.ENVIRONMENT === "production";
+}
+
+// MASTER_KEY 未投入を本番で検出したときの重大ブロック用エラー。
+// 暗号処理（APIキー/PII/ファイル）を停止し、管理画面で警告できるようにする。
+export class MasterKeyMissingError extends Error {
+  constructor() {
+    super("MASTER_KEY が本番で未設定です。`wrangler secret put MASTER_KEY --env production` で投入してください（KV自動生成は本番では禁止・§10.1）。");
+    this.name = "MasterKeyMissingError";
+  }
+}
+
+// 鍵の「保管」を KvPort 経由に分離（§14-3）。secret(env.MASTER_KEY) 優先。
+// 本番（ENVIRONMENT=production）では secret 未投入時に KV 自動生成せずブロック（鍵と暗号文の同居回避・§10.1）。
+// dev/test のみ zero-config 維持のため KV 自動生成を許可する。
 // 演算（HKDF/AES-GCM）は shared の純粋関数のまま。保管先だけ Profile で差し替え可能。
 async function resolveMasterKey(env: Env, kv: KvPort): Promise<string> {
   let k = await kv.get("master_key");
   if (!k) {
+    if (isProduction(env)) {
+      await logDiag(env, "error", "security", "MASTER_KEY が本番で未設定です。暗号処理をブロックしました。Worker Secret(MASTER_KEY)を投入してください（§10.1）。");
+      throw new MasterKeyMissingError();
+    }
     k = generateMasterKey();
     await kv.put("master_key", k);
     await kv.put("master_key_source", "kv-autogen");
-    await logDiag(env, "warn", "security", "MASTER_KEY 未設定のため KV に自動生成しました。本番は Worker Secret(MASTER_KEY)の投入を推奨します（鍵と暗号文の同居を避けるため）。");
+    await logDiag(env, "warn", "security", "MASTER_KEY 未設定のため KV に自動生成しました（dev/test）。本番は Worker Secret(MASTER_KEY)の投入が必須です（鍵と暗号文の同居を避けるため）。");
   }
   return k;
 }
@@ -138,10 +158,15 @@ export async function masterKeyCtx(ctx: Ctx): Promise<string> {
   return resolveMasterKey(ctx.env, ctx.storage.kv);
 }
 
-// 鍵の保管状態（管理画面の診断表示用）。"secret"=Worker Secret運用（推奨）、"kv-autogen"=KV自動生成（要対応）。
-export async function masterKeySource(env: Env): Promise<"secret" | "kv-autogen" | "unknown"> {
+// 鍵の保管状態（管理画面の診断表示用）。
+// "secret"=Worker Secret運用（推奨）、"kv-autogen"=KV自動生成（dev/test）、
+// "missing-prod"=本番でsecret未投入＝暗号処理ブロック中（重大）、"unknown"=不明。
+export async function masterKeySource(env: Env): Promise<"secret" | "kv-autogen" | "missing-prod" | "unknown"> {
   if (env.MASTER_KEY) return "secret";
-  return ((await env.LICENSE.get("master_key_source")) as "kv-autogen" | null) ?? "unknown";
+  const stored = (await env.LICENSE.get("master_key_source")) as "kv-autogen" | null;
+  if (stored) return stored;
+  if (isProduction(env)) return "missing-prod";
+  return "unknown";
 }
 
 // ライセンス署名の検証鍵（公開鍵）。secret があれば優先、無ければホストの /api/pubkey から取得して KV キャッシュ。
