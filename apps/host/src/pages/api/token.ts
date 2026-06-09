@@ -1,5 +1,5 @@
 import type { APIRoute } from "astro";
-import { nowSec, issueLicenseToken } from "../../lib/host.ts";
+import { nowSec, issueLicenseToken, isSafeDeployUrl } from "../../lib/host.ts";
 import type { Entitlement } from "@baku-office/shared";
 
 export const prerender = false;
@@ -24,7 +24,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
   if (!lic) return json({ error: "ライセンス無効" }, 400);
 
   await env.DB.prepare("UPDATE activation_codes SET used = 1 WHERE code = ?").bind(b.code).run();
-  if (b.deployUrl) {
+  if (b.deployUrl && isSafeDeployUrl(b.deployUrl)) {
     await env.DB.prepare("UPDATE licenses SET deploy_url = ?, last_seen = ? WHERE license_id = ?")
       .bind(b.deployUrl, now, row.license_id)
       .run();

@@ -10,25 +10,59 @@ type Row = {
   plan: string; entitlement: string; status: string; version: string | null; deploy_url: string | null;
   created_at: number; last_seen: number | null;
 };
+const sp = Astro.url.searchParams;
+const q = (sp.get("q") ?? "").trim();
+const fStatus = sp.get("status") ?? "";
+const fEnt = sp.get("ent") ?? "";
+const PER = 50;
+const page = Math.max(1, parseInt(sp.get("page") ?? "1", 10) || 1);
+// 検索（団体名/メール）・状態・エンタイトルメントで絞り込み。
+const where: string[] = [];
+const binds: unknown[] = [];
+if (q) { where.push("(c.org_name LIKE ? OR c.contact_email LIKE ?)"); binds.push(`%${q}%`, `%${q}%`); }
+if (["active", "suspended"].includes(fStatus)) { where.push("l.status = ?"); binds.push(fStatus); }
+if (["free", "plus", "pro", "nonprofit", "enterprise", "test"].includes(fEnt)) { where.push("l.entitlement = ?"); binds.push(fEnt); }
+const wsql = where.length ? "WHERE " + where.join(" AND ") : "";
+const total = (await env.DB.prepare(`SELECT COUNT(*) AS n FROM licenses l JOIN customers c ON c.id = l.customer_id ${wsql}`).bind(...binds).first<{ n: number }>())?.n ?? 0;
+const pages = Math.max(1, Math.ceil(total / PER));
+const cur = Math.min(page, pages);
+const offset = (cur - 1) * PER;
 const { results } = await env.DB.prepare(
   `SELECT l.license_id, c.org_name, c.contact_name, c.contact_email,
           l.plan, l.entitlement, l.status, l.version, l.deploy_url, l.created_at, l.last_seen
-   FROM licenses l JOIN customers c ON c.id = l.customer_id ORDER BY l.created_at DESC LIMIT 200`,
-).all<Row>();
+   FROM licenses l JOIN customers c ON c.id = l.customer_id ${wsql} ORDER BY l.created_at DESC LIMIT ? OFFSET ?`,
+).bind(...binds, PER, offset).all<Row>();
 const fmt = (s: number | null) => (s ? new Date(s * 1000).toISOString().slice(0, 16).replace("T", " ") : "—");
 const PLANS = ["free", "plus", "pro"];
-// エンタイトルメントは nonprofit（非営利・全機能・審査）/ enterprise（大企業・個別相談・全機能）/ test（全機能解放・非売・管理者付与）を含む。
 const ENTS = ["free", "plus", "pro", "nonprofit", "enterprise", "test"];
-const opt = (cur: string, v: string) => ({ value: v, selected: cur === v });
+const opt = (cur2: string, v: string) => ({ value: v, selected: cur2 === v });
+const pageLink = (p: number) => { const u = new URLSearchParams(); if (q) u.set("q", q); if (fStatus) u.set("status", fStatus); if (fEnt) u.set("ent", fEnt); u.set("page", String(p)); return "?" + u.toString(); };
 ---
 <Host title="クライアント管理" active="/clients">
   <h1>クライアント管理</h1>
   <p class="muted">団体の詳細を確認し、プラン／エンタイトルメント／ステータスを手動変更できます。エンタイトルメントは次回の統合チェックで反映、停止してもデータは保持されます。</p>
+
+  <form method="get" class="filters" style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:center;margin:.5rem 0 1rem">
+    <input type="search" name="q" value={q} placeholder="団体名・メールで検索" style="flex:1;min-width:200px" />
+    <select name="status">
+      <option value="" selected={fStatus === ""}>状態：すべて</option>
+      <option value="active" selected={fStatus === "active"}>active</option>
+      <option value="suspended" selected={fStatus === "suspended"}>suspended</option>
+    </select>
+    <select name="ent">
+      <option value="" selected={fEnt === ""}>プラン：すべて</option>
+      {ENTS.map((v) => (<option value={v} selected={fEnt === v}>{v}</option>))}
+    </select>
+    <button class="btn btn-sm btn-primary" type="submit">検索</button>
+    <a class="btn btn-sm btn-ghost" href="/clients">クリア</a>
+  </form>
+  <p class="muted" style="font-size:.85rem">{total} 件中 {total === 0 ? 0 : offset + 1}–{Math.min(offset + PER, total)} 件を表示（{cur}/{pages} ページ）</p>
+
   <div class="table-wrap"><table>
     <thead><tr><th>団体 / 連絡先</th><th>プラン</th><th>エンタイトルメント</th><th>状態</th><th>稼働ver</th><th>登録日</th><th>最終受信</th><th>操作</th></tr></thead>
     <tbody>
       {results.map((r) => (
-        <tr data-lic={r.license_id}>
+        <tr data-lic={r.license_id} data-org={r.org_name}>
           <td>
             <strong>{r.org_name}</strong>
             <div class="muted" style="font-size:.8rem">代表：{r.contact_name ?? "—"} ／ {r.contact_email ?? "—"}</div>
@@ -44,9 +78,17 @@ const opt = (cur: string, v: string) => ({ value: v, selected: cur === v });
           <td style="white-space:nowrap"><button class="btn btn-sm btn-primary c-save">保存</button> <button class="btn btn-sm btn-danger c-del">削除</button></td>
         </tr>
       ))}
-      {results.length === 0 && (<tr><td colspan="8" class="muted">まだ申込がありません。</td></tr>)}
+      {results.length === 0 && (<tr><td colspan="8" class="muted">該当する団体がありません。</td></tr>)}
     </tbody>
   </table></div>
+
+  {pages > 1 && (
+    <nav class="pager" style="display:flex;gap:.5rem;justify-content:center;margin:1rem 0">
+      {cur > 1 && (<a class="btn btn-sm btn-ghost" href={pageLink(cur - 1)}>← 前へ</a>)}
+      <span class="muted" style="align-self:center">{cur} / {pages}</span>
+      {cur < pages && (<a class="btn btn-sm btn-ghost" href={pageLink(cur + 1)}>次へ →</a>)}
+    </nav>
+  )}
 
   <script slot="scripts" is:inline>
     document.querySelectorAll("tr[data-lic]").forEach((tr) => {
@@ -62,7 +104,10 @@ const opt = (cur: string, v: string) => ({ value: v, selected: cur === v });
         await window.bo.api("/api/clients", body, { btn: e.currentTarget, successMsg: "更新しました" });
       });
       tr.querySelector(".c-del")?.addEventListener("click", async (e) => {
-        if (!confirm("この団体を削除（アクティベート解除）しますか？\n有料機能は停止し、再開には再申込が必要です。")) return;
+        const org = tr.dataset.org || "";
+        const input = prompt("削除すると顧客レコード・配布リポまで削除され、取り消せません。\n削除するには団体名「" + org + "」を入力してください：");
+        if (input === null) return;
+        if (input.trim() !== org) { window.bo.toast("団体名が一致しません。削除を中止しました。", "err"); return; }
         const r = await window.bo.api("/api/clients", { _action: "delete", license_id: tr.dataset.lic }, { btn: e.currentTarget, successMsg: "削除しました" });
         if (r.ok) setTimeout(() => location.reload(), 500);
       });

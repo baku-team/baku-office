@@ -26,16 +26,21 @@ export const POST: APIRoute = async ({ request, locals }) => {
     googleSub?: string;
     nonprofit?: { orgType?: string; docRef?: string; description?: string };
   };
-  if (!b.orgName || !b.contactEmail) {
-    return json({ error: "orgName・contactEmail が必要" }, 400);
-  }
+  const orgName = (b.orgName ?? "").trim();
+  const contactEmail = (b.contactEmail ?? "").trim();
+  const contactName = (b.contactName ?? "").trim();
+  if (!orgName || !contactEmail) return json({ error: "orgName・contactEmail が必要" }, 400);
+  // 入力検証（D1肥大・偽メールでのなりすまし突合汚染を防ぐ）。
+  if (orgName.length > 200) return json({ error: "団体名が長すぎます" }, 400);
+  if (contactName.length > 100) return json({ error: "担当者名が長すぎます" }, 400);
+  if (contactEmail.length > 254 || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(contactEmail)) return json({ error: "メールアドレスの形式が不正です" }, 400);
   // 基本 Free で開始（後から /billing で Plus/Pro）。NonProfit のみ申込時選択＝審査待ち（通過まで free 相当）。
   const plan: Plan = b.nonprofit ? "nonprofit" : "free";
   const now = nowSec();
   const customerId = randomId();
   const licenseId = randomId();
   await env.DB.prepare("INSERT INTO customers (id, org_name, contact_name, contact_email, created_at) VALUES (?,?,?,?,?)")
-    .bind(customerId, b.orgName, b.contactName ?? null, b.contactEmail ?? null, now)
+    .bind(customerId, orgName, contactName || null, contactEmail, now)
     .run();
   // 使い捨て deploy_code（nonce）。団体ごとリポに焼き込み、初回デプロイの自動点灯に使う（§2.2）。
   const deployCode = randomId();

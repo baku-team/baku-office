@@ -193,7 +193,19 @@ export async function ghMergePr(env: Env, number: number): Promise<string> {
   const pr = await gh(env, "GET", `/pulls/${number}`);
   if (!pr.ok) return `PR取得失敗：${pr.error}`;
   if (pr.data.state !== "open") return "オープンなPRではありません。";
-  if (pr.data.mergeable === false) return "コンフリクトがあり自動マージできません。解消後に再依頼してください。";
+  // mergeable は GitHub が非同期算出。null（算出中）は1回だけ再取得し、true 以外は拒否（コンフリクト/不明を素通りさせない）。
+  let mergeable = pr.data.mergeable;
+  if (mergeable === null || mergeable === undefined) {
+    await new Promise((s) => setTimeout(s, 1500));
+    const pr2 = await gh(env, "GET", `/pulls/${number}`);
+    mergeable = pr2.ok ? pr2.data.mergeable : null;
+  }
+  if (mergeable !== true) return "コンフリクトがあるか可否を確認できないため自動マージしません。解消後に再依頼してください。";
+  // コア領域を含むPRはマージ禁止（gh_commit_file の denylist を PR 経由で回避させない）。
+  const fl = await gh(env, "GET", `/pulls/${number}/files?per_page=100`);
+  const files = (fl.ok ? fl.data : []) as { filename: string }[];
+  const core = (files ?? []).find((f) => isCorePath(f.filename));
+  if (core) return `コア領域（${core.filename}）を含むPRは自動マージできません。手動レビューが必要です。`;
   const sha = pr.data.head?.sha as string;
   const cr = await gh(env, "GET", `/commits/${sha}/check-runs`);
   const runs = (cr.ok ? cr.data.check_runs : []) as { name: string; status: string; conclusion: string | null }[];

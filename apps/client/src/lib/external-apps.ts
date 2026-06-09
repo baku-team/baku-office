@@ -1,6 +1,6 @@
 // 外部アプリ：レジストリからの署名検証付き取り込み（ランタイム型）＋ AI生成ドラフト→申請。
 import type { Ctx } from "../core/ports.ts";
-import { hostFetch, getVerifyJwk, getLicenseId, getToken } from "./client.ts";
+import { hostFetch, getVerifyJwk, getToken } from "./client.ts";
 import { importVerifyKey, verifyEnvelope, payloadOf, randomId } from "@baku-office/shared";
 import { nowSec } from "./accounting.ts";
 import { preflight, type PreflightResult } from "./preflight.ts";
@@ -70,11 +70,11 @@ export async function submitDraft(ctx: Ctx, id: string): Promise<{ ok: boolean; 
   const d = await ctx.db.prepare("SELECT * FROM app_drafts WHERE id=?").bind(id).first<{ id: string; name: string; version: string; description: string | null; permissions: string; definition: string | null; gate_status: string }>();
   if (!d) return { ok: false, error: "ドラフトが見つかりません" };
   if (d.gate_status !== "ready") return { ok: false, error: "事前確認（環境/権限/安全/コスト）に未通過のため公開申請できません。" };
-  const licenseId = await getLicenseId(env);
-  if (!licenseId) return { ok: false, error: "ライセンス未取得" };
+  const token = await getToken(env);
+  if (!token) return { ok: false, error: "ライセンス未取得" };
   const app = { id: d.id, name: d.name, version: d.version, description: d.description, permissions: JSON.parse(d.permissions || "[]"), definition: d.definition ? JSON.parse(d.definition) : null };
   let r: Response;
-  try { r = await hostFetch(env, "/api/registry/submit", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ licenseId, app }) }); } catch { return { ok: false, error: "ホストへ接続できません" }; }
+  try { r = await hostFetch(env, "/api/registry/submit", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ token, app }) }); } catch { return { ok: false, error: "ホストへ接続できません" }; }
   if (!r.ok) { const j = (await r.json().catch(() => ({}))) as { error?: string }; return { ok: false, error: j.error ?? "申請に失敗" }; }
   await ctx.db.prepare("UPDATE app_drafts SET status='submitted' WHERE id=?").bind(id).run();
   return { ok: true };

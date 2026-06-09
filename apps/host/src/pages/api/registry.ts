@@ -1,5 +1,6 @@
 import type { APIRoute } from "astro";
 import { getHostSession } from "../../lib/hostauth.ts";
+import { recordAudit } from "../../lib/host.ts";
 import { listApps, registerApp, setAppStatus, usageByApp, hostSetListed } from "../../lib/registry.ts";
 
 export const prerender = false;
@@ -20,11 +21,13 @@ export const POST: APIRoute = async ({ request, locals }) => {
   if (b._action === "status") {
     if (!b.id || !["pending", "approved", "blocked"].includes(String(b.status))) return json({ error: "id・status(pending/approved/blocked) が必要" }, 400);
     await setAppStatus(env, b.id, b.status as "pending" | "approved" | "blocked");
+    await recordAudit(env, ses.email, "app.status", b.id, String(b.status));
     return json({ ok: true });
   }
   if (b._action === "set_listed") {
     if (!b.id) return json({ error: "id が必要" }, 400);
     await hostSetListed(env, b.id, !!b.listed, b.minEntitlement);
+    await recordAudit(env, ses.email, "app.set_listed", b.id, `listed=${!!b.listed} min=${b.minEntitlement ?? "-"}`);
     return json({ ok: true });
   }
   if (b._action === "list") {

@@ -1,5 +1,6 @@
 import type { APIRoute } from "astro";
 import { getHostSession } from "../../lib/hostauth.ts";
+import { recordAudit } from "../../lib/host.ts";
 import { deleteRepo } from "@baku-office/shared";
 
 export const prerender = false;
@@ -20,6 +21,14 @@ export const POST: APIRoute = async ({ request, locals }) => {
     const row = await env.DB.prepare("SELECT customer_id FROM licenses WHERE license_id = ?").bind(b.license_id).first<{ customer_id: string }>();
     await env.DB.prepare("DELETE FROM licenses WHERE license_id = ?").bind(b.license_id).run();
     await env.DB.prepare("DELETE FROM activation_codes WHERE license_id = ?").bind(b.license_id).run();
+    // 関連レコードの孤児化を防ぐ（D1 に FK/CASCADE が無いため明示削除）。a2a_audit は監査履歴として残す。
+    await env.DB.prepare("DELETE FROM app_usage WHERE license_id = ?").bind(b.license_id).run();
+    await env.DB.prepare("DELETE FROM app_downloads WHERE license_id = ?").bind(b.license_id).run();
+    await env.DB.prepare("DELETE FROM app_reviews WHERE license_id = ?").bind(b.license_id).run();
+    await env.DB.prepare("DELETE FROM nonprofit_applications WHERE license_id = ?").bind(b.license_id).run();
+    await env.DB.prepare("DELETE FROM a2a_group_members WHERE member_license = ?").bind(b.license_id).run();
+    await env.DB.prepare("DELETE FROM a2a_groups WHERE owner_license = ?").bind(b.license_id).run();
+    await env.DB.prepare("DELETE FROM a2a_connections WHERE org_a_license = ? OR org_b_license = ?").bind(b.license_id, b.license_id).run();
     if (row?.customer_id) {
       const other = await env.DB.prepare("SELECT 1 FROM licenses WHERE customer_id = ? LIMIT 1").bind(row.customer_id).first();
       if (!other) await env.DB.prepare("DELETE FROM customers WHERE id = ?").bind(row.customer_id).run();
@@ -28,6 +37,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
     if (env.GITHUB_TOKEN && env.GITHUB_OWNER) {
       try { await deleteRepo({ token: env.GITHUB_TOKEN, owner: env.GITHUB_OWNER }, b.license_id); } catch { /* best-effort */ }
     }
+    await recordAudit(env, ses.email, "client.delete", b.license_id, null);
     return json({ ok: true });
   }
 
@@ -40,5 +50,6 @@ export const POST: APIRoute = async ({ request, locals }) => {
 
   binds.push(b.license_id);
   await env.DB.prepare(`UPDATE licenses SET ${sets.join(", ")} WHERE license_id = ?`).bind(...binds).run();
+  await recordAudit(env, ses.email, "client.update", b.license_id, sets.join(", "));
   return json({ ok: true });
 };

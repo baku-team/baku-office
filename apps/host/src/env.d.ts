@@ -35,6 +35,9 @@ interface Env {
   STRIPE_WEBHOOK_SECRET?: string;
   STRIPE_PRICE_PLUS?: string;
   STRIPE_PRICE_PRO?: string;
+  // 実行環境。"development" のときだけ dev 管理者ログイン／HMAC鍵フォールバックを許可。
+  // 未設定（本番）は厳格側に倒す＝設定漏れでも安全（fail-secure）。
+  ENV?: string;
 }
 
 type Runtime = import("@astrojs/cloudflare").Runtime<Env>;

@@ -23,6 +23,8 @@ export type CheckResponse = {
   entitlement: Entitlement;
   latestVersion: string;
   notices: Notice[];
+  // blocked にされたアプリ id。クライアントは取り込み済みでも無効化する（緊急停止）。
+  revokedApps?: string[];
 };
 
 export type Notice = {

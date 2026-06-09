@@ -1,0 +1,30 @@
+---
+export const prerender = false;
+import Host from "../layouts/Host.astro";
+const env = Astro.locals.runtime.env;
+const { getHostSession } = await import("../lib/hostauth.ts");
+const ses = await getHostSession(env, Astro.request);
+if (!ses?.isAdmin) return Astro.redirect("/login", 302);
+const { listAudit } = await import("../lib/host.ts");
+const rows = await listAudit(env, 300);
+const t = (s: number) => new Date(s * 1000).toISOString().slice(0, 19).replace("T", " ");
+---
+<Host title="監査ログ" active="/audit">
+  <h1>監査ログ</h1>
+  <p class="muted">管理者によるプラン／エンタイトルメント変更・顧客削除・アプリ承認/掲載・NonProfit 審査の操作履歴（直近300件）。</p>
+  <div class="table-wrap"><table>
+    <thead><tr><th>日時</th><th>実行者</th><th>操作</th><th>対象</th><th>詳細</th></tr></thead>
+    <tbody>
+      {rows.map((r) => (
+        <tr>
+          <td style="white-space:nowrap">{t(r.created_at)}</td>
+          <td class="muted" style="font-size:.85rem">{r.actor_email ?? "—"}</td>
+          <td><code>{r.action}</code></td>
+          <td class="muted" style="font-size:.8rem"><code>{r.target ?? "—"}</code></td>
+          <td class="muted" style="font-size:.8rem">{r.detail ?? "—"}</td>
+        </tr>
+      ))}
+      {rows.length === 0 && (<tr><td colspan="5" class="muted">記録はまだありません。</td></tr>)}
+    </tbody>
+  </table></div>
+</Host>

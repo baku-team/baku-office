@@ -16,16 +16,42 @@ export async function issueLicenseToken(env: Env, licenseId: string, entitlement
   return btoa(JSON.stringify(env2)); // {body,sig} を base64 で1トークン化
 }
 
-// 統合チェック（§13.1）：エンタイトルメント＋最新版＋通知。
+// 統合チェック（§13.1）：エンタイトルメント＋最新版＋通知＋失効アプリ（キルスイッチ）。
 export async function buildCheck(env: Env, entitlement: Entitlement): Promise<CheckResponse> {
   const { results } = await env.DB.prepare(
     "SELECT id, severity, body FROM notices WHERE active = 1 ORDER BY created_at DESC LIMIT 20",
   ).all<{ id: string; severity: string; body: string }>();
+  // blocked にしたアプリ id をクライアントへ配り、取り込み済みでも無効化させる（緊急停止）。
+  const { results: blocked } = await env.DB.prepare("SELECT id FROM registry_apps WHERE status='blocked'").all<{ id: string }>();
   return {
     entitlement,
     latestVersion: env.LATEST_VERSION ?? "0.0.0",
     notices: results.map((n) => ({ id: n.id, severity: n.severity as "info" | "important" | "critical", body: n.body })),
+    revokedApps: blocked.map((b) => b.id),
   };
+}
+
+// A2A 等でホストがサーバーサイド fetch する宛先 URL の安全性検査（SSRF対策）。
+// https 必須＋IPリテラル・内部ホスト名を拒否。カスタムドメイン運用を壊さないため allowlist は採らない。
+export function isSafeDeployUrl(raw: string | null | undefined): boolean {
+  if (!raw) return false;
+  let u: URL;
+  try { u = new URL(raw); } catch { return false; }
+  if (u.protocol !== "https:") return false;
+  const h = u.hostname.toLowerCase();
+  if (h === "localhost" || h.endsWith(".localhost") || h.endsWith(".local") || h.endsWith(".internal")) return false;
+  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(h) || h.includes(":")) return false; // IPv4/IPv6 リテラル拒否
+  return true;
+}
+
+// ホスト管理操作の監査記録（誰がいつ何を）。失敗は握り潰す（監査が本処理を止めない）。
+export async function recordAudit(env: Env, actor: string, action: string, target: string | null, detail?: string | null): Promise<void> {
+  await env.DB.prepare("INSERT INTO host_audit (id,actor_email,action,target,detail,created_at) VALUES (?,?,?,?,?,?)")
+    .bind(randomId(8), actor || "unknown", action, target ?? null, detail ?? null, nowSec()).run().catch(() => {});
+}
+export type AuditRow = { actor_email: string | null; action: string; target: string | null; detail: string | null; created_at: number };
+export async function listAudit(env: Env, limit = 200): Promise<AuditRow[]> {
+  return (await env.DB.prepare("SELECT actor_email,action,target,detail,created_at FROM host_audit ORDER BY created_at DESC LIMIT ?").bind(limit).all<AuditRow>()).results;
 }
 
 export { randomId };
