@@ -115,7 +115,10 @@ export async function runAgent(ctx: Ctx, owner: string, text: string, image?: { 
   const capDecls = caps.map((c) => CAP_TOOLS[c.capability]).filter(Boolean);
   if (caps.some((c) => c.capability === "video_gen")) capDecls.push(VIDEO_STATUS_TOOL);
   // 道具宣言：団体が有効化したパーツの業務道具（§5）＋コア組み込み＋API依存（キーがある時だけ）。
-  const parts = enabledParts(await enabledPartIds(ctx));
+  // ホストが「除外」した標準同梱アプリ（disabledBuiltins）の道具は提示しない。
+  const { disabledBuiltins } = await import("./client.ts");
+  const off = new Set(await disabledBuiltins(env).catch(() => []));
+  const parts = enabledParts(await enabledPartIds(ctx)).filter((p) => !off.has(p.id));
   const activeTools = toolsOf(parts);
   const partDecls = activeTools.map((t) => ({ name: t.name, description: t.description, parameters: t.parameters }));
   // マルチエージェント（Pro 以上）：スーパーバイザー道具を提示。

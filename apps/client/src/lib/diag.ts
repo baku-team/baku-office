@@ -13,6 +13,18 @@ export async function logDiag(env: Env, level: "error" | "warn" | "info", catego
     await env.DB.prepare("INSERT INTO diagnostics (id,level,category,message,context,created_at) VALUES (?,?,?,?,?,?)")
       .bind(randomId(), level, category, message.slice(0, 500), context.slice(0, 500), nowSec()).run();
   } catch { /* 診断記録自体の失敗は握りつぶす */ }
+  // エラーは自動でホストへ報告（アウトボックスに積む。送信は cron/drain）。
+  // migration はブート時に多発し得るため除外（起動ループを避ける）。circular import 回避のため直接 INSERT。
+  if (level === "error" && category !== "migration") {
+    try {
+      const fp = `auto:${category}:${message.slice(0, 80)}`;
+      const dup = await env.DB.prepare("SELECT 1 FROM client_report_outbox WHERE fingerprint=? AND sent=0 LIMIT 1").bind(fp).first().catch(() => null);
+      if (!dup) {
+        await env.DB.prepare("INSERT INTO client_report_outbox (id,kind,severity,category,title,message,context,fingerprint,created_at) VALUES (?,?,?,?,?,?,?,?,?)")
+          .bind(randomId(), "error", level, category, message.slice(0, 120), message.slice(0, 2000), context.slice(0, 2000) || null, fp, nowSec()).run();
+      }
+    } catch { /* アウトボックス未整備（旧スキーマ）等は無視 */ }
+  }
 }
 
 export async function recentDiagnostics(env: Env, limit = 50): Promise<{ level: string; category: string; message: string; created_at: number }[]> {

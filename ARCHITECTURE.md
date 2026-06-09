@@ -9,8 +9,9 @@
 
 ```
 baku-team/baku-office (private・正本/モノレポ)
-  apps/host    … ホストポータル（当社アカウントでデプロイ）
-  apps/client  … クライアントアプリ（顧客の単一Worker・自己ホスト）
+  apps/host      … ホストポータル（当社アカウントでデプロイ）
+  apps/client    … クライアントアプリ（顧客の単一Worker・自己ホスト）
+  apps/scheduler … 定期巡回Worker（Cron Triggers・自己修復sweep/drain起動）
   packages/shared
         │  push main（apps/client 変更時）
         ▼  GitHub Actions: npm run release（難読化バンドル化・ホスト/TSは除外）
@@ -56,6 +57,17 @@ baku-team/baku-office-app (public・配布物のみ)
 
 - **基本システム**＝upstream のコア（全顧客共通・CIで配布）。コアは編集しない。
 - **より深いコードレベルのカスタム**が必要なら：①まずパーツ／能力レジストリ／スキルで実現できないか検討、②画面は第3層 override（追加ファイル）で差し替え。コア本体に手を入れないため共通更新と衝突しない（最終手段の顧客専用ブランチは原則不要）。
+
+## ホスト統制と自己修復（2026-06-09）
+
+- **アプリ統制（中枢キルスイッチ）**：ストア/未登録アプリの**公開停止（blocked）・削除（deleted・墓標`app_revocations`）**と、標準同梱アプリの**登録/除外（`builtin_policy`）**を統合チェック（`/api/check`）で全クライアントへ配信。クライアントは `revokedApps`（撤去）・`disabledBuiltins`（導入集合から除外）を受けて即時反映。削除は「墓標＋利用0で完全削除」（物理削除後も撤去指示は墓標で継続）。
+- **プラン vs エンタイトルメント**：データは2層維持（plan=契約/請求、entitlement=実効権限。nonprofit審査・Stripe入金が並行して entitlement を上書きするため統合不可）。クライアントへ配るのは entitlement のみ。
+- **自己修復ループ（client→host→GitHub→Claude）**：
+  1. クライアントのエラーは送信アウトボックスに積まれ、`cron/drain` がホスト `/api/report` へ集約送信（license token認証・fingerprint集約・PIIなし）。利用者の不具合/要望も `/diagnostics` から同経路で送信。
+  2. ホストは `client_reports` に集積し、`/api/cron/sweep` が未集積エラーを `baku-team/baku-office-logs` に **Issue 化**。
+  3. その Issue を **Claude（Web 等）が巡回・修復**＝クラウドで直せる問題は修正→PR→Issueリンク、不能なら原因と対策をレポート化しPRへ（**baku-office 側の責務は「集積・通知」まで／修復は人＋Claude**）。
+  4. 対応結果（resolved/wontfix＋メモ/PR）は `reportUpdates` でクライアントへ返信表示。
+- **定期巡回 `apps/scheduler`**：Cloudflare **Cron Triggers `*/5 * * * *`**。Astroビルド非依存の素のWorker。**Service Binding 経由**で host `sweep`／client `drain` を起動（同一 workers.dev 直fetchは error 1042 で遮断されるため）。外部スケジューラ非依存・CF内で完結。顧客（別アカウント）の client 自走drainは配布テンプレへの cron 同梱で対応（今後）。
 
 ## 不変条件
 

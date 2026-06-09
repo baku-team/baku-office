@@ -38,7 +38,7 @@ export const GET: APIRoute = async ({ url, locals }) => {
   const apps = parseAppsParam(url.searchParams.get("apps"));
   if (apps.length) await recordUsage(env, payload.licenseId, apps).catch(() => {});
 
-  return json(await buildCheck(env, entitlement));
+  return json(await buildCheck(env, entitlement, payload.licenseId));
 };
 
 const json = (o: unknown, status = 200) =>

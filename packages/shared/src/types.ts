@@ -23,8 +23,23 @@ export type CheckResponse = {
   entitlement: Entitlement;
   latestVersion: string;
   notices: Notice[];
-  // blocked にされたアプリ id。クライアントは取り込み済みでも無効化する（緊急停止）。
+  // blocked/deleted にされたアプリ id。クライアントは取り込み済みでも無効化・撤去する（緊急停止）。
   revokedApps?: string[];
+  // ホストが「除外」した標準同梱アプリ id。クライアントは導入集合から外す（標準同梱アプリの登録/除外）。
+  disabledBuiltins?: string[];
+  // この団体が送った報告のうち、ホスト側で対応済み（resolved/wontfix）になったもの。クライアントへ返信表示する。
+  reportUpdates?: ReportUpdate[];
+};
+
+// クライアント報告へのホスト側の対応返信（自己修復の結果通知）。
+export type ReportUpdate = {
+  id: string;
+  kind: string;       // error / request
+  title: string | null;
+  status: string;     // resolved / wontfix
+  resolution: string | null;
+  pr_url?: string | null;
+  updated_at: number;
 };
 
 export type Notice = {

@@ -19,6 +19,8 @@ interface Env {
   // 団体ごと公開リポの自動生成／削除（throwaway・§2.2-2.3）。
   GITHUB_OWNER?: string;         // 例 "baku-team"
   GITHUB_TEMPLATE_REPO?: string; // 例 "baku-office-app"
+  // クライアント報告の集積先リポ（Issue化＝自己修復の入口）。既定 "baku-office-logs"。
+  GITHUB_LOGS_REPO?: string;
   HOST_BASE_URL?: string;        // report.json に焼く当社ホストURL
   // オートパイロット：GitHub OAuth App の公開 client_id（device flow）。ここに一度だけ設定すれば全クライアントが自動取得。
   GITHUB_OAUTH_CLIENT_ID?: string;
@@ -28,6 +30,8 @@ interface Env {
   GOOGLE_CLIENT_ID?: string;
   GOOGLE_CLIENT_SECRET?: string;
   ADMIN_KEY?: string;
+  // 定期巡回（/api/cron/sweep）保護用。スケジューラWorkerと共有（secret）。
+  INTERNAL_KEY?: string;
   // スタッフ管理者のGoogleメール（カンマ区切り）。ここに含まれるアカウントのみ管理ポータルを操作可。
   HOST_ADMIN_EMAILS?: string;
   // Stripe（§2・P5）。未設定のdevでは dev-confirm で入金をシミュレート。

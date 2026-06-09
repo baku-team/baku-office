@@ -1,0 +1,16 @@
+{
+  "name": "@baku-office/scheduler",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "deploy": "wrangler deploy",
+    "dev": "wrangler dev",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "*",
+    "typescript": "*",
+    "wrangler": "*"
+  }
+}

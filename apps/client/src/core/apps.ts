@@ -4,6 +4,7 @@
 // 他テナントには到達不可。アプリ間呼び出しは宣言した permission の範囲だけ許可（破壊・認証回避は構造的に拒絶）。
 import type { Ctx } from "./ports.ts";
 import { registeredParts, enabledPartIds, setEnabledPartIds } from "./parts.ts";
+import { disabledBuiltins } from "../lib/client.ts";
 
 // アプリが要求できる能力（マニフェストで宣言→許可分のみ付与）。
 // 破壊的・特権操作（削除/課金/ライセンス/admin）は列挙しない＝アプリには渡さない。
@@ -34,12 +35,14 @@ export function appCatalog(): { id: string; name: string; version: string; descr
 export const MANDATORY_APPS = ["chat"];
 
 // 団体に導入済みのアプリ id（最小構成＝設定のみ＋必須アプリ。enabled_parts を導入集合として使う）。
+// ホストが「除外」した標準同梱アプリ（disabledBuiltins）は導入集合から外す（必須アプリは対象外）。
 export async function installedAppIds(ctx: Ctx): Promise<string[]> {
   const known = new Set(registeredParts().map((p) => p.id));
   const stored = await enabledPartIds(ctx); // null=全導入（既存挙動の既定）
   const ids = stored ?? [...known];
   for (const m of MANDATORY_APPS) if (known.has(m) && !ids.includes(m)) ids.push(m);
-  return ids.filter((id) => known.has(id));
+  const disabled = new Set((await disabledBuiltins(ctx.env)).filter((id) => !MANDATORY_APPS.includes(id)));
+  return ids.filter((id) => known.has(id) && !disabled.has(id));
 }
 export async function installApp(ctx: Ctx, id: string): Promise<string[]> {
   const base = (await enabledPartIds(ctx)) ?? registeredParts().map((p) => p.id);

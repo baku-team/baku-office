@@ -6,8 +6,10 @@ const { getSession } = await import("../lib/auth.ts");
 const ses = await getSession(env, Astro.request);
 if (!ses) return Astro.redirect("/login", 302);
 const { recentDiagnostics, hasRecentLimitError } = await import("../lib/diag.ts");
+const { listReplies } = await import("../lib/reports.ts");
 const diags = await recentDiagnostics(env);
 const limit = await hasRecentLimitError(env);
+const replies = await listReplies(env).catch(() => []);
 const t = (s: number) => new Date(s * 1000).toISOString().slice(0, 16).replace("T", " ");
 const { detectProfile } = await import("../core/profiles.ts");
 const prof = detectProfile(env);
@@ -24,5 +26,38 @@ const prof = detectProfile(env);
     {diags.map((d)=>(<tr><td>{t(d.created_at)}</td><td><span class="pill" style={d.category==="limit"?"background:#fee2e2;color:#b91c1c":""}>{d.category}</span></td><td>{d.level}</td><td>{d.message}</td></tr>))}
     {diags.length===0 && (<tr><td colspan="4" class="muted">記録はありません（正常）。</td></tr>)}
   </tbody></table></div>
-  <p class="muted" style="margin-top:1rem">エラーログはこの団体のCloudflare内にのみ保存（PIIなし・§13.3）。</p>
+  <p class="muted" style="margin-top:1rem">エラーは自動でサポート（ホスト）へ報告され、クラウドで対応可能なものは修正されます。本文に個人情報は含めません（PIIなし・§13.3）。</p>
+
+  <h2 style="margin-top:1.5rem">不具合・要望のリクエスト</h2>
+  <p class="muted">不具合や「こうしてほしい」をサポートへ送れます。クラウドで対応できるものは自動で修正され、対応状況は下に表示されます。</p>
+  <div class="card">
+    <div class="field"><label>件名（任意）<input id="fb-title" placeholder="例：会計のCSV取込でエラー" /></label></div>
+    <div class="field"><label>内容<textarea id="fb-msg" rows="4" placeholder="状況・再現手順・要望などをご記入ください（個人情報は書かないでください）"></textarea></label></div>
+    <button class="btn btn-primary" id="fb-send">送信する</button>
+  </div>
+
+  {replies.length > 0 && (
+    <>
+      <h2 style="margin-top:1.5rem">サポートからの対応</h2>
+      <div class="table-wrap"><table><thead><tr><th>日時</th><th>種別</th><th>件名</th><th>状況</th><th>対応メモ</th></tr></thead><tbody>
+        {replies.map((r) => (<tr>
+          <td>{t(r.received_at)}</td>
+          <td>{r.kind === "error" ? "エラー" : "要望"}</td>
+          <td>{r.title ?? "—"}</td>
+          <td><span class="pill" style={r.status === "resolved" ? "background:#dcfce7;color:#166534" : "background:#f3f4f6;color:#374151"}>{r.status === "resolved" ? "修正済み" : r.status === "wontfix" ? "見送り" : r.status}</span></td>
+          <td>{r.resolution ?? "—"}{r.pr_url && (<> <a href={r.pr_url} target="_blank" rel="noreferrer">変更内容</a></>)}</td>
+        </tr>))}
+      </tbody></table></div>
+    </>
+  )}
+
+  <script slot="scripts" is:inline>
+    document.getElementById("fb-send")?.addEventListener("click", async (e) => {
+      const title = document.getElementById("fb-title").value.trim();
+      const message = document.getElementById("fb-msg").value.trim();
+      if (!message) { window.bo.toast("内容を入力してください", "err"); return; }
+      const r = await window.bo.api("/api/report", { title, message }, { btn: e.currentTarget, successMsg: "送信しました。ありがとうございます。" });
+      if (r.ok) { document.getElementById("fb-title").value = ""; document.getElementById("fb-msg").value = ""; }
+    });
+  </script>
 </App>

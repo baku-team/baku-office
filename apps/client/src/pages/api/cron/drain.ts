@@ -7,6 +7,7 @@ import { pollVideoJobs } from "../../../lib/capabilities.ts";
 import { processAgentJobs } from "../../../lib/agent-jobs.ts";
 import { guardHeavy } from "../../../lib/diag.ts";
 import { getDriveBackup, backupToDrive } from "../../../lib/drive.ts";
+import { flushReports } from "../../../lib/reports.ts";
 
 export const prerender = false;
 const json = (o: unknown, s = 200) => new Response(JSON.stringify(o), { status: s, headers: { "content-type": "application/json" } });
@@ -43,5 +44,9 @@ export const POST: APIRoute = async ({ request, locals }) => {
     if (dr.ok) driveBackup = dr.value;
   }
 
-  return json({ ok: true, sent, summarized, video, agentJobs, driveBackup });
+  // 未送信の報告（自動エラー・要望）をホストへ集積（自己修復ログ）。
+  const fr = await guardHeavy(env, "flush reports", () => flushReports(env));
+  const reportsSent = fr.ok ? fr.value : 0;
+
+  return json({ ok: true, sent, summarized, video, agentJobs, driveBackup, reportsSent });
 };

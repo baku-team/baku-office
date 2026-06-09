@@ -1,0 +1,26 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  // 定期巡回スケジューラ（当社アカウント・単一Worker）。Cloudflare Cron Triggers で
+  // ホストの自己修復sweep（報告→GitHub集積）とクライアントのdrain（報告のホスト送信・要約/動画/リマインダ）を起動。
+  // 外部サービス（cron-job.org 等）に依存せず、CF内で完結する自動送信の仕組み。
+  "name": "baku-office-scheduler",
+  "account_id": "027ff037909969dea1fc303b4f4fe7fe",
+  "main": "./src/index.ts",
+  "compatibility_date": "2025-04-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true },
+
+  // 5分ごと。巡回間隔は運用に合わせて調整可（自己修復は分単位の即時性は不要）。
+  "triggers": { "crons": ["*/5 * * * *"] },
+
+  // 巡回先（同一アカウントのWorker）。同一 workers.dev 直fetchは遮断されるため Service Binding 経由。
+  "services": [
+    { "binding": "T_HOST", "service": "baku-office-portal" },
+    { "binding": "T_CLIENT", "service": "baku-office-app" }
+  ]
+
+  // secret（wrangler secret put）：
+  //   CRON_TARGETS … 巡回先のJSON配列（binding/path/key）。例:
+  //     [{"label":"host-sweep","binding":"T_HOST","path":"/api/cron/sweep","key":"<host INTERNAL_KEY>"},
+  //      {"label":"client-drain","binding":"T_CLIENT","path":"/api/cron/drain","key":"<client INTERNAL_KEY>"}]
+}

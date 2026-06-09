@@ -1,0 +1,81 @@
+---
+export const prerender = false;
+import Host from "../layouts/Host.astro";
+const env = Astro.locals.runtime.env;
+const { getHostSession } = await import("../lib/hostauth.ts");
+const ses = await getHostSession(env, Astro.request);
+if (!ses?.isAdmin) return Astro.redirect("/login", 302);
+
+const { listReports } = await import("../lib/reports.ts");
+const sp = Astro.url.searchParams;
+const fStatus = sp.get("status") ?? "";
+const fKind = sp.get("kind") ?? "";
+const reports = await listReports(env, { status: fStatus, kind: fKind, limit: 300 });
+const fmt = (s: number | null) => (s ? new Date(s * 1000).toISOString().slice(0, 16).replace("T", " ") : "—");
+const STATUSES = ["open", "triaged", "synced", "resolved", "wontfix"];
+const ghReady = !!(env.GITHUB_TOKEN && env.GITHUB_OWNER);
+---
+<Host title="報告・自己修復" active="/reports">
+  <h1>クライアント報告・自己修復</h1>
+  <p class="muted">クライアントから自動収集したエラーと、利用者からの不具合/要望リクエスト。<strong>GitHubへ集積</strong>すると Issue 化され、Claude が巡回・修復（修正→PR→このIssueにリンク／不能なら原因と対策をレポート化）します。<strong>対応済み</strong>にして対応メモを書くと、次回の統合チェックでクライアントへ返信表示されます。</p>
+  {!ghReady && (<div class="banner banner-warn">GITHUB_TOKEN / GITHUB_OWNER が未設定です。GitHub集積は使えません（CF上の集積のみ）。</div>)}
+
+  <form method="get" class="filters" style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:center;margin:.5rem 0 1rem">
+    <select name="kind">
+      <option value="" selected={fKind === ""}>種別：すべて</option>
+      <option value="error" selected={fKind === "error"}>error（自動）</option>
+      <option value="request" selected={fKind === "request"}>request（要望）</option>
+    </select>
+    <select name="status">
+      <option value="" selected={fStatus === ""}>状態：すべて</option>
+      {STATUSES.map((v) => (<option value={v} selected={fStatus === v}>{v}</option>))}
+    </select>
+    <button class="btn btn-sm btn-primary" type="submit">絞り込み</button>
+    <a class="btn btn-sm btn-ghost" href="/reports">クリア</a>
+    {ghReady && (<button class="btn btn-sm btn-ghost" id="sync-all" type="button" style="margin-left:auto">未集積エラーを一括でGitHubへ</button>)}
+  </form>
+
+  <div class="table-wrap"><table>
+    <thead><tr><th>種別/分類</th><th>内容</th><th>団体</th><th>再発</th><th>状態</th><th>受信</th><th>操作</th></tr></thead>
+    <tbody>
+      {reports.map((r) => (
+        <tr data-id={r.id}>
+          <td><span class="pill" style={r.kind === "error" ? "background:#fee2e2;color:#b91c1c" : "background:#dbeafe;color:#1e40af"}>{r.kind}</span><div class="muted" style="font-size:.75rem">{r.category ?? "—"}{r.severity ? `・${r.severity}` : ""}</div></td>
+          <td style="max-width:380px">
+            <strong>{r.title ?? "(無題)"}</strong>
+            <div class="muted" style="font-size:.8rem;white-space:pre-wrap;word-break:break-word">{r.message.slice(0, 240)}</div>
+            {r.context && (<details><summary class="muted" style="font-size:.75rem">コンテキスト</summary><pre style="white-space:pre-wrap;font-size:.7rem;max-height:160px;overflow:auto">{r.context}</pre></details>)}
+            {r.issue_url && (<div style="font-size:.75rem"><a href={r.issue_url} target="_blank" rel="noreferrer">Issue</a></div>)}
+            {r.pr_url && (<div style="font-size:.75rem"><a href={r.pr_url} target="_blank" rel="noreferrer">PR</a></div>)}
+          </td>
+          <td class="muted" style="font-size:.75rem"><code>{r.license_id ?? "—"}</code><div>{r.app_version ?? ""}</div></td>
+          <td>{r.count}</td>
+          <td><select class="c-status">{STATUSES.map((v) => (<option value={v} selected={r.status === v}>{v}</option>))}</select></td>
+          <td class="muted" style="font-size:.75rem">{fmt(r.created_at)}<div>更新 {fmt(r.updated_at)}</div></td>
+          <td style="white-space:nowrap;min-width:240px">
+            <input class="c-res" placeholder="対応メモ（クライアントへ返信）" value={r.resolution ?? ""} style="width:200px;font-size:.8rem" />
+            <input class="c-pr" placeholder="PR URL" value={r.pr_url ?? ""} style="width:200px;font-size:.8rem" />
+            <div style="margin-top:.25rem">
+              <button class="btn btn-sm btn-primary r-save">保存</button>
+              {ghReady && (<button class="btn btn-sm btn-ghost r-sync">GitHubへ集積</button>)}
+            </div>
+          </td>
+        </tr>
+      ))}
+      {reports.length === 0 && (<tr><td colspan="7" class="muted">該当する報告はありません。</td></tr>)}
+    </tbody>
+  </table></div>
+
+  <script slot="scripts" is:inline>
+    const api = (body, btn, successMsg) => window.bo.api("/api/reports", body, { btn, successMsg });
+    document.getElementById("sync-all")?.addEventListener("click", async (e) => { const r = await api({ _action: "sync_all" }, e.currentTarget, "集積しました"); if (r.ok) location.reload(); });
+    document.querySelectorAll("tr[data-id]").forEach((tr) => {
+      const id = tr.getAttribute("data-id");
+      tr.querySelector(".r-save")?.addEventListener("click", async (e) => {
+        const body = { _action: "update", id, status: tr.querySelector(".c-status").value, resolution: tr.querySelector(".c-res").value, prUrl: tr.querySelector(".c-pr").value };
+        await api(body, e.currentTarget, "更新しました");
+      });
+      tr.querySelector(".r-sync")?.addEventListener("click", async (e) => { const r = await api({ _action: "sync", id }, e.currentTarget, "GitHubへ集積しました"); if (r.ok) location.reload(); });
+    });
+  </script>
+</Host>
