@@ -1,0 +1,74 @@
+---
+export const prerender = false;
+import App from "../layouts/App.astro";
+const env = Astro.locals.runtime.env;
+const { getSession } = await import("../lib/auth.ts");
+const ses = await getSession(env, Astro.request);
+if (!ses) return Astro.redirect("/login", 302);
+const isAdmin = ses.role === "admin" && ses.ctx === "org";
+
+const { buildDisclosure } = await import("../lib/disclosure.ts");
+const d = await buildDisclosure(env);
+const retentionText = d.retentionDays > 0 ? `${d.retentionDays}日（経過後は自動で物理削除）` : "無期限（手動削除まで保持）";
+
+// プライバシーポリシーへ転記できるプレーンテキスト（コピー用）。
+const plain = [
+  "【外部送信・AI利用・保存期間・削除方法のお知らせ】",
+  "",
+  "■ 外部送信先（現在の連携設定に基づく）",
+  ...d.destinations.map((x) => `・${x.name}\n  目的：${x.purpose}\n  送信され得るデータ：${x.dataKinds}\n  主な所在地：${x.region}${x.note ? `\n  注意：${x.note}` : ""}`),
+  "",
+  "■ AI利用について",
+  "・入力された内容は上記のAI提供元へ送信され、応答生成に利用されます。個人情報の入力可否は各団体の利用目的・同意の範囲で判断してください。",
+  "",
+  "■ ファイルの保存と暗号化",
+  "・アップロードされたファイル本体は保存時に暗号化（AES-GCM）されます。",
+  `・保持期間：${retentionText}`,
+  "",
+  "■ 削除方法",
+  "・各画面から該当データを削除できます。ファイルは保持期間経過後に自動削除されます。削除のご依頼は管理者へご連絡ください。",
+  "",
+  d.generatedNote,
+].join("\n");
+---
+<App title="外部送信・AI利用の開示" active="/legal">
+  <h1>外部送信・AI利用・保存期間・削除方法</h1>
+  <div class="banner banner-warn">本ページは現在の連携設定から<strong>自動生成</strong>した開示素材です。法的有効性は専門家（弁護士等）のレビューを推奨します。</div>
+
+  <h2>外部送信先一覧</h2>
+  <div class="table-wrap"><table>
+    <thead><tr><th>送信先</th><th>目的</th><th>送信され得るデータ</th><th>主な所在地</th></tr></thead>
+    <tbody>
+      {d.destinations.map((x) => (
+        <tr><td><strong>{x.name}</strong>{x.note && (<div class="muted" style="font-size:.8rem">{x.note}</div>)}</td><td>{x.purpose}</td><td>{x.dataKinds}</td><td>{x.region}</td></tr>
+      ))}
+    </tbody>
+  </table></div>
+  <p class="muted">{d.generatedNote}</p>
+
+  <h2>AI利用・保存・削除</h2>
+  <div class="card">
+    <ul>
+      <li>入力内容は上記のAI提供元へ送信され、応答生成に利用されます。</li>
+      <li>ファイル本体は保存時暗号化（AES-GCM）。{d.encryptedAtRest ? "" : "（未適用）"}</li>
+      <li>ファイルの保持期間：<strong>{retentionText}</strong>（変更は使用量・上限画面）。</li>
+      <li>削除：各画面から削除できます。保持期間経過後は自動削除されます。</li>
+    </ul>
+  </div>
+
+  {isAdmin && (
+    <Fragment>
+      <h2>プライバシーポリシーへの転記用テキスト</h2>
+      <p class="muted">以下を自社のプライバシーポリシー・利用者向け説明にコピーしてご利用ください（要・専門家確認）。</p>
+      <textarea id="plain" readonly rows="16" style="width:100%;font-family:monospace;font-size:.8rem">{plain}</textarea>
+      <button class="btn btn-primary" id="copy" style="margin-top:.5rem">コピー</button>
+      <script slot="scripts" is:inline>
+        document.getElementById("copy")?.addEventListener("click", async () => {
+          const t = document.getElementById("plain");
+          try { await navigator.clipboard.writeText(t.value); window.bo?.toast?.("コピーしました"); }
+          catch { t.select(); document.execCommand("copy"); }
+        });
+      </script>
+    </Fragment>
+  )}
+</App>
