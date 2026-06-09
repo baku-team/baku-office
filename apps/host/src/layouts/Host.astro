@@ -38,6 +38,8 @@ const items = [
     <script>
       const wrap = document.getElementById("toasts");
       function toast(msg, kind = "ok") {
+        // エラーは assertive で即読み上げ（成功/情報は polite）。SRへ重要な失敗を遅延なく伝える。
+        if (wrap) wrap.setAttribute("aria-live", kind === "err" ? "assertive" : "polite");
         const el = document.createElement("div");
         el.className = "toast " + (kind === "err" ? "err" : kind === "info" ? "info" : "ok");
         el.textContent = msg; wrap?.appendChild(el);

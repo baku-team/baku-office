@@ -59,7 +59,7 @@ input:focus, select:focus, textarea:focus { outline: 2px solid rgba(37,99,235,.3
 .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
 table { border-collapse: collapse; width: 100%; font-size: .9rem; min-width: 480px; }
 th, td { padding: .55rem .7rem; border-bottom: 1px solid var(--line); text-align: left; }
-th { background: #f8fafc; font-weight: 600; position: sticky; top: 0; }
+th { background: #f8fafc; font-weight: 600; }
 td.r, th.r { text-align: right; }
 tr:last-child td { border-bottom: 0; }
 

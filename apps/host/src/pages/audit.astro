@@ -5,13 +5,47 @@ const env = Astro.locals.runtime.env;
 const { getHostSession } = await import("../lib/hostauth.ts");
 const ses = await getHostSession(env, Astro.request);
 if (!ses?.isAdmin) return Astro.redirect("/login", 302);
-const { listAudit } = await import("../lib/host.ts");
-const rows = await listAudit(env, 300);
+
+type Row = { actor_email: string | null; action: string; target: string | null; detail: string | null; created_at: number };
+const sp = Astro.url.searchParams;
+const q = (sp.get("q") ?? "").trim();        // 実行者/対象/詳細の部分一致
+const fAction = (sp.get("action") ?? "").trim();
+const PER = 50;
+const page = Math.max(1, parseInt(sp.get("page") ?? "1", 10) || 1);
+
+const where: string[] = [];
+const binds: unknown[] = [];
+if (q) { where.push("(actor_email LIKE ? OR target LIKE ? OR detail LIKE ?)"); binds.push(`%${q}%`, `%${q}%`, `%${q}%`); }
+if (fAction) { where.push("action = ?"); binds.push(fAction); }
+const wsql = where.length ? "WHERE " + where.join(" AND ") : "";
+const total = (await env.DB.prepare(`SELECT COUNT(*) AS n FROM host_audit ${wsql}`).bind(...binds).first<{ n: number }>())?.n ?? 0;
+const pages = Math.max(1, Math.ceil(total / PER));
+const cur = Math.min(page, pages);
+const offset = (cur - 1) * PER;
+const { results: rows } = await env.DB.prepare(
+  `SELECT actor_email, action, target, detail, created_at FROM host_audit ${wsql} ORDER BY created_at DESC LIMIT ? OFFSET ?`,
+).bind(...binds, PER, offset).all<Row>();
+// 操作種別の候補（フィルタ用）。
+const { results: acts } = await env.DB.prepare("SELECT DISTINCT action FROM host_audit ORDER BY action").all<{ action: string }>();
+
 const t = (s: number) => new Date(s * 1000).toISOString().slice(0, 19).replace("T", " ");
+const pageLink = (p: number) => { const u = new URLSearchParams(); if (q) u.set("q", q); if (fAction) u.set("action", fAction); u.set("page", String(p)); return "?" + u.toString(); };
 ---
 <Host title="監査ログ" active="/audit">
   <h1>監査ログ</h1>
-  <p class="muted">管理者によるプラン／エンタイトルメント変更・顧客削除・アプリ承認/掲載・NonProfit 審査の操作履歴（直近300件）。</p>
+  <p class="muted">管理者によるプラン／エンタイトルメント変更・顧客削除・アプリ承認/停止・NonProfit 審査・アプリ公開申請の操作履歴。</p>
+
+  <form method="get" class="filters" style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:center;margin:.5rem 0 1rem">
+    <input type="search" name="q" value={q} placeholder="実行者・対象・詳細で検索" style="flex:1;min-width:200px" />
+    <select name="action">
+      <option value="" selected={fAction === ""}>操作：すべて</option>
+      {acts.map((a) => (<option value={a.action} selected={fAction === a.action}>{a.action}</option>))}
+    </select>
+    <button class="btn btn-sm btn-primary" type="submit">検索</button>
+    <a class="btn btn-sm btn-ghost" href="/audit">クリア</a>
+  </form>
+  <p class="muted" style="font-size:.85rem">{total} 件中 {total === 0 ? 0 : offset + 1}–{Math.min(offset + PER, total)} 件を表示（{cur}/{pages} ページ）</p>
+
   <div class="table-wrap"><table>
     <thead><tr><th>日時</th><th>実行者</th><th>操作</th><th>対象</th><th>詳細</th></tr></thead>
     <tbody>
@@ -20,11 +54,19 @@ const t = (s: number) => new Date(s * 1000).toISOString().slice(0, 19).replace("
           <td style="white-space:nowrap">{t(r.created_at)}</td>
           <td class="muted" style="font-size:.85rem">{r.actor_email ?? "—"}</td>
           <td><code>{r.action}</code></td>
-          <td class="muted" style="font-size:.8rem"><code>{r.target ?? "—"}</code></td>
-          <td class="muted" style="font-size:.8rem">{r.detail ?? "—"}</td>
+          <td style="font-size:.85rem"><code>{r.target ?? "—"}</code></td>
+          <td style="font-size:.85rem">{r.detail ?? "—"}</td>
         </tr>
       ))}
-      {rows.length === 0 && (<tr><td colspan="5" class="muted">記録はまだありません。</td></tr>)}
+      {rows.length === 0 && (<tr><td colspan="5" class="muted">該当する記録がありません。</td></tr>)}
     </tbody>
   </table></div>
+
+  {pages > 1 && (
+    <nav class="pager" style="display:flex;gap:.5rem;justify-content:center;margin:1rem 0">
+      {cur > 1 && (<a class="btn btn-sm btn-ghost" href={pageLink(cur - 1)}>← 前へ</a>)}
+      <span class="muted" style="align-self:center">{cur} / {pages}</span>
+      {cur < pages && (<a class="btn btn-sm btn-ghost" href={pageLink(cur + 1)}>次へ →</a>)}
+    </nav>
+  )}
 </Host>

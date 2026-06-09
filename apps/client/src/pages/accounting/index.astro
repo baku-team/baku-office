@@ -71,6 +71,11 @@ const yen = (n: number) => "¥" + n.toLocaleString("ja-JP");
     kind.addEventListener("change",sync);sync();
     document.getElementById("reg").addEventListener("click",async(e)=>{
       const body={date:document.getElementById("date").value,kind:kind.value,wallet_id:document.getElementById("wallet").value,category_id:document.getElementById("cat").value,counter_wallet_id:document.getElementById("counter").value,amount:document.getElementById("amount").value,description:document.getElementById("desc").value};
+      // 送信前のクライアント検証（往復前に即フィードバック）。
+      if(!body.date){window.bo.toast("日付を入力してください","err");return;}
+      if(!(Number(body.amount)>0)){window.bo.toast("金額は1以上で入力してください","err");return;}
+      if(!body.wallet_id){window.bo.toast("口座を選択してください","err");return;}
+      if(body.kind==="transfer"&&body.wallet_id===body.counter_wallet_id){window.bo.toast("振替元と振替先が同じ口座です","err");return;}
       const r=await window.bo.api("/api/tx",body,{btn:e.currentTarget,successMsg:"登録しました"});
       if(r.ok)setTimeout(()=>location.reload(),600);
     });

@@ -12,21 +12,21 @@ const deployUrl = "https://deploy.workers.cloudflare.com/?url=https://github.com
       * { box-sizing: border-box; }
       body { font-family: system-ui, "Hiragino Sans", "Noto Sans JP", Meiryo, sans-serif; margin: 0; background: #f4f6f9; color: #1f2933; line-height: 1.7; }
       .wrap { max-width: 680px; margin: 0 auto; padding: 28px 16px 72px; }
-      h1 { color: #14365c; margin: .2rem 0 .4rem; }
-      h2 { color: #14365c; font-size: 1.1rem; margin: 1.4rem 0 .4rem; }
-      .brand { color: #14365c; font-weight: 800; letter-spacing: .02em; }
+      h1 { color: #2563eb; margin: .2rem 0 .4rem; }
+      h2 { color: #2563eb; font-size: 1.1rem; margin: 1.4rem 0 .4rem; }
+      .brand { color: #2563eb; font-weight: 800; letter-spacing: .02em; }
       .card { background: #fff; border: 1px solid #dde3ea; border-radius: 10px; padding: 16px; margin: 12px 0; }
       .field { margin: 10px 0; display: flex; flex-direction: column; gap: 4px; }
       .field label { font-size: .85rem; color: #5b6770; }
       .field input, .field select { padding: 9px; border: 1px solid #dde3ea; border-radius: 6px; font: inherit; background: #fff; }
-      .btn { background: #14365c; color: #fff; border: 0; border-radius: 8px; padding: 11px 20px; font-weight: 700; cursor: pointer; }
+      .btn { background: #2563eb; color: #fff; border: 0; border-radius: 8px; padding: 11px 20px; font-weight: 700; cursor: pointer; }
       .btn[disabled] { opacity: .6; }
       .muted { color: #6b7785; }
       .steps { counter-reset: s; list-style: none; padding: 0; margin: .4rem 0; }
       .steps li { position: relative; padding: 8px 0 8px 38px; border-bottom: 1px dashed #e3e8ee; }
       .steps li:last-child { border-bottom: 0; }
-      .steps li::before { counter-increment: s; content: counter(s); position: absolute; left: 0; top: 8px; width: 26px; height: 26px; background: #14365c; color: #fff; border-radius: 50%; text-align: center; line-height: 26px; font-weight: 800; font-size: .85rem; }
-      .steps a { color: #14365c; }
+      .steps li::before { counter-increment: s; content: counter(s); position: absolute; left: 0; top: 8px; width: 26px; height: 26px; background: #2563eb; color: #fff; border-radius: 50%; text-align: center; line-height: 26px; font-weight: 800; font-size: .85rem; }
+      .steps a { color: #2563eb; }
       .ok { color: #1f7a4d; font-weight: 700; }
       code { background: #eef1f5; padding: 1px 6px; border-radius: 4px; font-size: .88em; word-break: break-all; }
       #out { white-space: normal; }
@@ -81,6 +81,7 @@ const deployUrl = "https://deploy.workers.cloudflare.com/?url=https://github.com
     <script is:inline define:vars={{ deployUrl }}>
       const wrap = document.getElementById("toasts");
       function toast(msg, kind = "ok") {
+        if (wrap) wrap.setAttribute("aria-live", kind === "err" ? "assertive" : "polite"); // エラーは即読み上げ
         const el = document.createElement("div");
         el.className = "toast " + (kind === "err" ? "err" : "ok");
         el.textContent = msg; wrap.appendChild(el);
@@ -126,15 +127,28 @@ const deployUrl = "https://deploy.workers.cloudflare.com/?url=https://github.com
           '</ol>';
         out.scrollIntoView({ behavior: "smooth" });
         // 自動点灯：クライアントの初回デプロイが当社へURLを報告したら、開くボタンに差し替える（§2.6）。
+        // 一定時間で打ち切り、失敗/長時間時は手動導線（workers.dev リンク）と再確認ボタンを案内（無限スピナー回避）。
+        const licId = j.licenseId;
+        let tries = 0;
+        const MAX_TRIES = 60; // 約5分（5秒間隔）
         const tick = async () => {
           try {
-            const s = await (await fetch("/api/deploy-status?license=" + encodeURIComponent(j.licenseId))).json();
+            const s = await (await fetch("/api/deploy-status?license=" + encodeURIComponent(licId))).json();
             if (s.ready && s.url) {
               document.getElementById("appbox").innerHTML =
                 '<a class="btn" href="' + s.url + '/" target="_blank" rel="noreferrer">▶ あなたのアプリを開く</a>';
               return;
             }
           } catch {}
+          if (++tries >= MAX_TRIES) {
+            const box = document.getElementById("appbox");
+            if (box) box.innerHTML =
+              '<p class="muted">想定より時間がかかっています。Cloudflare のデプロイ完了画面に表示される <code>…workers.dev</code> のリンクからアプリを開いてください（開くと自動でアクティベートされます）。</p>' +
+              '<button class="btn" id="recheck" type="button">設置状況を再確認</button>';
+            const rc = document.getElementById("recheck");
+            if (rc) rc.addEventListener("click", () => { tries = 0; box.innerHTML = '<span class="spin"></span> 再確認中…'; setTimeout(tick, 1000); });
+            return;
+          }
           setTimeout(tick, 5000);
         };
         setTimeout(tick, 8000);
