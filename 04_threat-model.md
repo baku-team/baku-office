@@ -1,6 +1,8 @@
 > ℹ️ **背景設計**：脅威モデルは現行 baku-office にも有効です。正本は [integrated_design_package_v1.0.md](integrated_design_package_v1.0.md)。本番ゲート（KMS署名・FIDO2・admin JIT）は [PROGRESS.md](PROGRESS.md) で「課題保留」中。
 >
-> **実装済みのアプリ層対策（2026-06・第三者レビュー反映）**：アクティベートをホスト署名 relay 必須化（無認証発行を遮断）／エージェントを active 会員に限定＋名簿照会のロール認可／ローカルPASSの PBKDF2 化＋一時Cookie・セッションの HMAC 署名／Stripe Webhook のタイムスタンプ鮮度＋定数時間比較・会員Webhook署名検証／申込導線の IP レート制限／マイグレーション無視条件の限定＋失敗の診断記録。詳細は [baku-office_review_確認事項と改善点.md](baku-office_review_確認事項と改善点.md)。残るのは上記3ゲート（鍵・管理者奪取の最終堅牢化）。
+> **実装済みのアプリ層対策（2026-06・第三者レビュー反映）**：アクティベートをホスト署名 relay 必須化（無認証発行を遮断）／エージェントを active 会員に限定＋名簿照会のロール認可／ローカルPASSの PBKDF2 化＋一時Cookie・セッションの HMAC 署名／Stripe Webhook のタイムスタンプ鮮度＋定数時間比較・会員Webhook署名検証／申込導線の IP レート制限＋入力検証（長さ・メール形式）／マイグレーション無視条件の限定＋失敗の診断記録。
+>
+> **追加堅牢化（2026-06-09）**：ホストがサーバーサイド fetch する `deploy_url`（A2A 中継・統合チェック保存）に **SSRF 検査**（`isSafeDeployUrl`＝https必須・IP/内部ホスト名拒否＝⑥）／本番（`ENV≠development`）は管理者セッション署名鍵 `ADMIN_KEY` を**必須化し fail-closed**＋dev 管理者ログインを `ENV=development` 限定で封鎖（④の管理者奪取面を縮小）／配布アプリの**キルスイッチ**（blocked を統合チェックで配り導入済みからも無効化＝⑧の一斉ロールバック）／アプリ公開申請 `registry/submit` を生 licenseId から**署名ライセンストークン認証**へ（なりすまし pending 登録の遮断）／ホスト管理操作の**監査ログ**（`host_audit`・④/⑧の事後追跡）。詳細は [baku-office_review_確認事項と改善点.md](baku-office_review_確認事項と改善点.md)。残るのは上記3ゲート（鍵・管理者奪取の最終堅牢化）。
 
 # 04. 脅威モデル（レッドチーム分析）
 
@@ -61,7 +63,7 @@
 ### ⑥ ユーザー定義ツール/外部コネクタ（A/B）
 | 攻撃 | 成功 | 損害 | 防御 |
 |---|---|---|---|
-| 外部コネクタでSSRF（内部/メタデータ/当社CP） | 防げる | — | egress allowlist＋内部IP/メタデータ遮断（13-2） |
+| 外部コネクタでSSRF（内部/メタデータ/当社CP） | 防げる | — | egress allowlist＋内部IP/メタデータ遮断（13-2）。**ホスト側 fetch 宛先（A2A/統合チェックの `deploy_url`）は `isSafeDeployUrl` で検査済み（2026-06-09・https必須/IP・内部ホスト名拒否）** |
 | コネクタで自アクセス可データを外部送出 | 一部可能 | テナント内データ持出 | 権限内に限定＋監査＋レート（完全防止は困難） |
 
 ### ⑦ A2A（F）
