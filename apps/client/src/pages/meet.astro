@@ -9,14 +9,18 @@ if (!ses) return Astro.redirect("/login", 302);
 const isAdmin = ses.role === "admin" && ses.ctx === "org";
 const { cachedEntitlement } = await import("../lib/client.ts");
 const hasPro = atLeast(await cachedEntitlement(env), "pro");
-const { googleConfigured, googleConnected } = await import("../lib/google.ts");
+const { googleConfigured, googleStatus } = await import("../lib/google.ts");
 
 let configured = false, connected = false;
+let meetGranted = false, lastUsed: number | null = null;
 type Rec = { id: string; title: string | null; summary: string | null; actions: string | null; created_at: number };
 let recs: Rec[] = [];
 if (hasPro) {
   configured = googleConfigured(env);
-  connected = await googleConnected(env);
+  const st = await googleStatus(env);
+  connected = st.connected;
+  meetGranted = st.groups.includes("meet");
+  lastUsed = st.lastUsed;
   recs = (await env.DB.prepare("SELECT id,title,summary,actions,created_at FROM meet_records ORDER BY created_at DESC LIMIT 50").all<Rec>()).results;
 }
 const fmtDate = (s: number) => new Date(s * 1000).toISOString().slice(0, 16).replace("T", " ");
@@ -35,9 +39,14 @@ const parseActions = (s: string | null): { content: string; due?: string }[] => 
     <Fragment>
       {!configured && (<div class="banner banner-warn">Google OAuth（GOOGLE_CLIENT_ID/SECRET）が未設定のため連携できません。管理者にご確認ください。</div>)}
       <div class="card">
-        <p>Google 連携：<span class="pill">{connected ? "連携済み" : "未連携"}</span> <span class="muted" style="font-size:.8rem">（カレンダー・Gmail・Meet 共通）</span></p>
-        {isAdmin && configured && !connected && (<a class="btn btn-primary" href="/api/google/start">Google と連携</a>)}
-        {isAdmin && connected && (<div class="row"><a class="btn" href="/api/google/start">再連携</a><button class="btn" id="gdisc">連携を解除</button></div>)}
+        <p>Meet 連携：<span class="pill">{meetGranted ? "連携済み" : "未連携"}</span> {connected && lastUsed && <span class="muted" style="font-size:.8rem">最終利用：{fmtDate(lastUsed)} UTC</span>}</p>
+        <p class="muted" style="font-size:.85rem">Meet 会議の発行にはカレンダー権限も必要です（同時に要求します）。</p>
+        {isAdmin && configured && (
+          <div class="row">
+            <a class="btn btn-primary" href="/api/google/start?groups=meet,calendar">{meetGranted ? "再連携" : "Meet を連携"}</a>
+            {connected && (<button class="btn" id="gdisc">連携を全解除</button>)}
+          </div>
+        )}
         {!isAdmin && (<p class="muted">連携・解除の操作は管理者のみ可能です。</p>)}
       </div>
       {connected && (

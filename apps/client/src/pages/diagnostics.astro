@@ -18,7 +18,8 @@ const prof = detectProfile(env);
   <h1>診断・サポート</h1>
   <div class="card">
     <p class="muted">稼働中の構成（環境Profile・§6）</p>
-    <p>Profile <strong>{prof.label}</strong>／AI=<strong>{prof.ai === "local" ? "ローカルLLM" : "クラウド"}</strong>／ストレージ=<strong>{prof.storage.toUpperCase()}</strong>／鍵=<strong>{prof.keyStore === "secret" ? "Worker Secret" : "KV自動生成（要対応）"}</strong></p>
+    <p>Profile <strong>{prof.label}</strong>／AI=<strong>{prof.ai === "local" ? "ローカルLLM" : "クラウド"}</strong>／ストレージ=<strong>{prof.storage.toUpperCase()}</strong>／鍵=<strong>{prof.keyStore === "secret" ? "Worker Secret" : prof.keyStore === "missing-prod" ? "未設定（本番・暗号処理ブロック中）" : "KV自動生成（要対応）"}</strong></p>
+    {prof.keyStore === "missing-prod" && (<div class="banner banner-danger">⚠️ <strong>MASTER_KEY が本番で未設定です。</strong>暗号処理（APIキー/PII/ファイル）はブロック中で正常動作しません。<code>wrangler secret put MASTER_KEY --env production</code> で投入してください（§10.1）。</div>)}
     {prof.keyStore === "kv-autogen" && (<div class="banner banner-warn">MASTER_KEY が Worker Secret 未設定です。本番は <code>wrangler secret put MASTER_KEY</code> を推奨（鍵と暗号文の同居回避・§10.1）。</div>)}
   </div>
   {limit && (<div class="banner banner-danger">⚠️ 直近にCloudflareの<strong>無料枠の制限</strong>に達したエラーがあります。重い処理を安定させるには <a href="/settings/advanced">高度なオプション → Workers Paid</a> をご検討ください。</div>)}

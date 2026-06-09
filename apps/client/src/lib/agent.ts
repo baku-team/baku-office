@@ -5,7 +5,7 @@ import { getApiKey, entitlementForGate } from "./client.ts";
 import { type Role, atLeast } from "@baku-office/shared";
 import type { Ctx } from "../core/ports.ts";
 import { enabledParts, toolsOf, enabledPartIds, type AgentTool } from "../core/parts.ts";
-import { runToolLoop, type ToolDecl, type Turn, type ChatModel } from "../core/ai.ts";
+import { runToolLoop, type ToolDecl, type Turn, type ChatModel, type TokenUsage } from "../core/ai.ts";
 import { ROLES, toolsForRole, normalizeRole, ROLE_LIST } from "./multi-agent.ts";
 import { maxParallelAgents, agentMaxHops } from "./settings.ts";
 import { callPartner, groupRelayCall } from "./a2a.ts";
@@ -19,7 +19,8 @@ import { listSkills, runSkill, generateSkill } from "./skills.ts";
 import { createDraft } from "./external-apps.ts";
 import { listCapabilities, invokeCapability, capabilitySummary, videoStatusText } from "./capabilities.ts";
 import { getAiEngine, getCustomPrompt } from "./settings.ts";
-import { recordUsage, overBudget } from "./usage.ts";
+import { recordUsage, recordTokens, overBudget } from "./usage.ts";
+import { needsApproval, getApprovalMode, createApproval, previewFor, A2A_OUTWARD } from "./approvals.ts";
 
 const SYSTEM =
   "あなたは団体の会計・庶務を補助するLINEアシスタント『baku-office』です。日本語で簡潔に。" +
@@ -64,11 +65,17 @@ const CAP_TOOLS: Record<string, unknown> = {
 };
 const VIDEO_STATUS_TOOL = { name: "video_status", description: "依頼した動画生成の状況を確認（完成ならDLリンク）", parameters: { type: "object", properties: {} } };
 
-async function execTool(ctx: Ctx, owner: string, baseUrl: string, name: string, args: Record<string, unknown>, role: Role, activeTools: AgentTool[]): Promise<string> {
+async function execTool(ctx: Ctx, owner: string, baseUrl: string, name: string, args: Record<string, unknown>, role: Role, activeTools: AgentTool[], approved = false): Promise<string> {
   // 1) 有効パーツの業務道具のみ：認可（§14-1）を評価してから実行。
   const tool = activeTools.find((t) => t.name === name);
   if (tool) {
     if (tool.requiredRole && !tool.requiredRole.includes(role)) return `「${name}」を実行する権限がありません（${tool.requiredRole.join("・")}のみ）。`;
+    // 対外/破壊系（unattended:false）は人間承認ゲート（P0-4）。承認済み実行時のみ素通し。
+    if (!approved && tool.unattended === false && (await getApprovalMode(ctx.env))) {
+      const preview = previewFor(name, args);
+      const id = await createApproval(ctx.env, owner, name, args, preview);
+      return `⚠️ この操作は承認が必要です（対外/破壊系）。\n${preview}\n「承認待ち」一覧（/approvals）で管理者が承認すると実行されます。承認ID: ${id}`;
+    }
     return tool.run(ctx, owner, baseUrl, args);
   }
   // 2) コア組み込み道具（スキル・AI能力）。
@@ -166,6 +173,10 @@ export async function runAgent(ctx: Ctx, owner: string, text: string, image?: { 
   }
   const first = { text: text || "（依頼）", image: provider === "claude" ? undefined : image };
 
+  // 実費計測（P0-2）：本体＋子エージェントの全hopの消費tokenを合算し、ループ後にまとめて記録する。
+  const usageAcc: TokenUsage = { inputTokens: 0, outputTokens: 0 };
+  const onUsage = (u: TokenUsage) => { usageAcc.inputTokens += u.inputTokens; usageAcc.outputTokens += u.outputTokens; };
+
   // 子エージェント起動（同じモデルを使い回す）。役割の道具だけを見せ、ネスト委譲は不可。
   const subDeclsFor = (subTools: AgentTool[]) => [
     ...subTools.map((t) => ({ name: t.name, description: t.description, parameters: t.parameters })),
@@ -178,13 +189,19 @@ export async function runAgent(ctx: Ctx, owner: string, text: string, image?: { 
     const subTools = opts.unattended ? subToolsRaw.filter((t) => t.unattended !== false) : subToolsRaw;
     const subExec = (n: string, a: Record<string, unknown>) => execTool(ctx, owner, baseUrl, n, a, role, subTools);
     await recordUsage(env, provider); // 子エージェント分のコストも計上
-    return runToolLoop(model!, `${ROLES[roleKey].system}\n割り当てられたタスクのみを遂行し、結果を簡潔に返す。`, { text: task || "（タスク）" }, subDeclsFor(subTools), subExec, 3, []);
+    return runToolLoop(model!, `${ROLES[roleKey].system}\n割り当てられたタスクのみを遂行し、結果を簡潔に返す。`, { text: task || "（タスク）" }, subDeclsFor(subTools), subExec, 3, [], onUsage);
   }
 
   const cap = await maxParallelAgents(env);
   // スーパーバイザーの exec：マルチエージェント道具を捌き、それ以外は通常の execTool。
   const exec = async (n: string, a: Record<string, unknown>): Promise<string> => {
     if (opts.unattended && UNATTENDED_BLOCK_MULTI.has(n)) return "この操作（対外連携）は自動処理では実行できません。";
+    // A2A 対外連携は人間承認ゲート（P0-4）。承認後は /api/agent-actions が runApprovedTool で実行する。
+    if (A2A_OUTWARD.has(n) && !opts.unattended && (await getApprovalMode(env))) {
+      const preview = previewFor(n, a);
+      const id = await createApproval(env, owner, n, a, preview);
+      return `⚠️ この操作は承認が必要です（他団体連携）。\n${preview}\n「承認待ち」一覧（/approvals）で管理者が承認すると実行されます。承認ID: ${id}`;
+    }
     if (isPro && n === "run_subagent") return spawn(String(a.role ?? "general"), String(a.task ?? ""));
     if (isPro && n === "run_team") {
       const tasks = (Array.isArray(a.tasks) ? a.tasks : []) as { role?: string; task?: string }[];
@@ -209,7 +226,30 @@ export async function runAgent(ctx: Ctx, owner: string, text: string, image?: { 
   };
 
   const hops = await agentMaxHops(env);
-  return runToolLoop(model, sys, first, decls as ToolDecl[], exec, hops, history);
+  const out = await runToolLoop(model, sys, first, decls as ToolDecl[], exec, hops, history, onUsage);
+  await recordTokens(env, provider, usageAcc); // 実費（input/output token・推定USD）を記録（P0-2）
+  return out;
+}
+
+// 承認済みツールの実行（P0-4）。/api/agent-actions が承認時に呼ぶ。承認ゲートは通過済みとして実行する。
+// A2A 対外連携は専用ハンドラ、業務道具は execTool(approved=true) で実行。
+export async function runApprovedTool(ctx: Ctx, owner: string, baseUrl: string, role: Role, tool: string, args: Record<string, unknown>): Promise<string> {
+  const env = ctx.env;
+  if (tool === "call_partner") {
+    const r = await callPartner(env, String(args.partner ?? ""), String(args.action ?? ""), (args.args as Record<string, unknown>) ?? {});
+    return r.ok ? `連携先の応答：\n${typeof r.result === "string" ? r.result : JSON.stringify(r.result)}` : `連携に失敗：${r.error ?? ""}`;
+  }
+  if (tool === "broadcast_group" || tool === "call_group_member") {
+    const to = tool === "call_group_member" ? String(args.partner ?? "") : null;
+    const r = await groupRelayCall(env, String(args.group ?? ""), to, String(args.action ?? ""), (args.args as Record<string, unknown>) ?? {});
+    if (!r.ok) return `グループ連携に失敗：${r.error ?? ""}`;
+    const fmt = (x: { member: string; ok: boolean; result?: unknown; error?: string }) => `・${x.member}：${x.ok ? (typeof x.result === "string" ? x.result : JSON.stringify(x.result)) : "失敗（" + (x.error ?? "") + "）"}`;
+    return (r.results ?? []).map(fmt).join("\n") || "対象メンバーがいません。";
+  }
+  // 業務道具：現在の有効パーツから対象ツールを引いて承認済み実行。
+  const ent = await entitlementForGate(env).catch(() => "free" as const);
+  const parts = enabledParts(await enabledPartIds(ctx)).filter((p) => atLeast(ent, p.minPlan ?? "free"));
+  return execTool(ctx, owner, baseUrl, tool, args, role, toolsOf(parts), true);
 }
 
 // LINE署名検証（HMAC-SHA256・定数時間比較）。

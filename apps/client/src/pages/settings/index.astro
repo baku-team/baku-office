@@ -29,6 +29,8 @@ const groups: Group[] = [
     { href: "/settings/a2a", label: "A2A（団体間連携）", desc: "他団体エージェントと相互同意で連携（Pro以上）", show: isAdminOrg && atLeast(entitlement, "pro") },
   ] },
   { title: "運用・サポート", items: [
+    { href: "/approvals", label: "エージェント操作の承認", desc: "AIの対外/破壊系操作（メール送信・予定変更/削除・A2A）の承認待ち", show: isAdminOrg },
+    { href: "/legal", label: "外部送信・AI利用の開示", desc: "外部送信先一覧・保存期間・削除方法（規約転記用テキスト）", show: true },
     { href: "/review", label: "共有承認", desc: "個人→組織の承認", show: ses.role === "admin" || ses.role === "accounting" || ses.role === "clerical" },
     { href: "/diagnostics", label: "診断・サポート", desc: "稼働状況・エラー・Workers Paid 案内", show: true },
     { href: "/settings/update", label: "アプリの更新", desc: "最新版への更新", show: isAdminOrg },

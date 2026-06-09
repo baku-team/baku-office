@@ -10,6 +10,7 @@ import { getDriveBackup, backupToDrive } from "../../../lib/drive.ts";
 import { flushReports } from "../../../lib/reports.ts";
 import { addNotification, pushWebhook } from "../../../lib/notifications.ts";
 import { getNotifyWebhook } from "../../../lib/settings.ts";
+import { purgeFiles } from "../../../lib/storage.ts";
 
 export const prerender = false;
 const json = (o: unknown, s = 200) => new Response(JSON.stringify(o), { status: s, headers: { "content-type": "application/json" } });
@@ -59,5 +60,9 @@ export const POST: APIRoute = async ({ request, locals }) => {
   const fr = await guardHeavy(env, "flush reports", () => flushReports(env));
   const reportsSent = fr.ok ? fr.value : 0;
 
-  return json({ ok: true, sent, notified, summarized, video, agentJobs, driveBackup, reportsSent });
+  // 保持期限切れ・ソフトデリート猶予超過ファイルの物理削除（P0-5）。
+  const pf = await guardHeavy(env, "purge files", () => purgeFiles(env));
+  const purged = pf.ok ? pf.value : { expired: 0, purged: 0 };
+
+  return json({ ok: true, sent, notified, summarized, video, agentJobs, driveBackup, reportsSent, purged });
 };

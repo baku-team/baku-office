@@ -35,14 +35,15 @@ export function geminiModel(key: string): ChatModel {
         body: JSON.stringify({ systemInstruction: { parts: [{ text: system }] }, contents: toContents(history), tools: [{ functionDeclarations: tools as ToolDecl[] }], generationConfig: { temperature: 0.3, maxOutputTokens: 800 } }),
       });
       if (!r.ok) { console.log("[gemini]", r.status, (await r.text()).slice(0, 200)); return { text: "（AIの応答に失敗しました）" }; }
-      const data = (await r.json()) as { candidates?: { content?: GContent }[] };
+      const data = (await r.json()) as { candidates?: { content?: GContent }[]; usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number } };
+      const usage = { inputTokens: data.usageMetadata?.promptTokenCount ?? 0, outputTokens: data.usageMetadata?.candidatesTokenCount ?? 0 };
       const parts = data.candidates?.[0]?.content?.parts ?? [];
       const calls = parts.filter((p) => p.functionCall);
       if (calls.length) {
         const toolCalls: ToolCall[] = calls.map((p, i) => ({ id: `g${i}_${p.functionCall!.name}`, name: p.functionCall!.name, args: p.functionCall!.args ?? {} }));
-        return { toolCalls };
+        return { toolCalls, usage };
       }
-      return { text: parts.map((p) => p.text ?? "").join("") };
+      return { text: parts.map((p) => p.text ?? "").join(""), usage };
     },
   };
 }

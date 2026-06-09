@@ -36,7 +36,8 @@
         { "binding": "SESSION", "id": "ad1e0e280aef41fcaa4280158b141037" }
       ],
       "vars": {
-        "HOST_BASE_URL": "https://baku-office-portal.baku-027.workers.dev"
+        "HOST_BASE_URL": "https://baku-office-portal.baku-027.workers.dev",
+        "ENVIRONMENT": "production"
       },
       "services": [
         { "binding": "HOST", "service": "baku-office-portal" }

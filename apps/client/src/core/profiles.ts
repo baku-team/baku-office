@@ -6,13 +6,18 @@ export type ProfileInfo = {
   label: string;
   ai: "cloud" | "local";
   storage: "r2" | "kv";
-  keyStore: "secret" | "kv-autogen";
+  keyStore: "secret" | "kv-autogen" | "missing-prod";
 };
 
 export function detectProfile(env: Env): ProfileInfo {
   const ai: ProfileInfo["ai"] = env.LOCAL_AI_BASE_URL ? "local" : "cloud";
   const storage: ProfileInfo["storage"] = env.MEDIA_R2 ? "r2" : "kv";
-  const keyStore: ProfileInfo["keyStore"] = env.MASTER_KEY ? "secret" : "kv-autogen";
+  // 本番(ENVIRONMENT=production)でsecret未投入は暗号処理ブロック中＝"missing-prod"（§10.1）。
+  const keyStore: ProfileInfo["keyStore"] = env.MASTER_KEY
+    ? "secret"
+    : env.ENVIRONMENT === "production"
+      ? "missing-prod"
+      : "kv-autogen";
   const id: ProfileInfo["id"] = ai === "local" ? "C" : "A";
   const label = id === "C" ? "C: オフライン寄り（ローカルLLM）" : "A: フルクラウド";
   return { id, label, ai, storage, keyStore };

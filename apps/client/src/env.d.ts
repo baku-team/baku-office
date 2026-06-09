@@ -12,6 +12,9 @@ interface Env {
   // 同一アカウントでの host への配信路（workers.dev同士の直fetchはCFが遮断＝error1042）。
   // 別アカウント（本番の自己ホスト）では未設定＝HOST_BASE_URL(カスタムドメイン)へURL fetch。
   HOST?: Fetcher;
+  // デプロイ環境。env.production の vars で "production" を設定。未設定＝dev/test。
+  // 本番では MASTER_KEY 未投入時に KV 自動生成を禁止し暗号処理をブロックする（§10.1）。
+  ENVIRONMENT?: string;
   // secrets（wrangler secret put）
   MASTER_KEY?: string;
   VERIFY_PUBLIC_JWK?: string;
