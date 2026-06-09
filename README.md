@@ -103,7 +103,7 @@ baku-office は **クライアント自己ホスト型**。アプリは利用団
 コアは環境（CF／ローカル）も業務（会計ルール）も知らない＝**移植可能**。
 
 ```
-パーツ（団体ごとに可変）     会計 / 名簿 / メモ / リマインダー / 組織ナレッジ / AIチャット / 自作アプリ …
+パーツ（団体ごとに可変）     会計 / 名簿 / メモ / リマインダー / 組織ナレッジ / AIチャット / Gmail / カレンダー / Meet議事録 / 請求書 / 自作アプリ …
    ↓ ctx.db / ctx.storage / ctx.ai / ctx.agent / ctx.identity / ctx.apps にのみ依存
 ポータブルコア            DB ・ ストレージ ・ AI(ChatModel) ・ エージェント(道具ループ) ・ 認証 ・ アプリ管理
    ↓ Port（環境アダプタ）にのみ依存
@@ -178,6 +178,7 @@ export const inventoryPart: Part = {
 - **名簿（マルチユーザー）**：組織／個人コンテキスト、招待コード＋承認、ロール権限、会員PII暗号化、個人→組織の共有承認（領収書は会計ドラフト自動生成）。
 - **メモ／リマインダー／組織ナレッジ／ファイル・予定・議事録**：標準モード（KV・既定25MB・カード不要）／高度モード（R2）。
 - **AIチャット**：相棒の中心。セッション保存・モデル選択、集計・検索・書類作成、ここからアプリ開発。
+- **Google Workspace連携**：OAuth接続で **Gmail**（受信検索・本文/添付取得）・**カレンダー**（予定の作成/更新/削除・Meetリンク発行）・**Meet議事録**（録画トランスクリプト取得→AI要約→組織ナレッジ保存）・**請求書**（ファイルから登録・未払一覧・消込）。エージェント道具としても提供。
 - **エージェント（Pro）**：道具操作（記録・リマインド・検索）、画像OCR・大PDF要約・音声議事録・web検索（Gemini）、資料生成・スキル実行（Claude）、画像/音声/動画生成（任意API）。
 
 ---
@@ -191,7 +192,7 @@ baku-office/
   apps/scheduler/   定期巡回Worker（Cloudflare Cron Triggers・Service Binding経由でsweep/drain起動・自己修復）
   apps/client/      クライアントアプリ（顧客が自己ホスト・単一Worker＝Astro静的＋API同居）
     src/core/         能力Port・ctx・CFアダプタ／ChatModel(gemini/claude/local)／apps・theme・nav・overrides・profiles・identity
-    src/parts/        標準同梱パーツ（AIチャット/会計/メモ/リマインダー/ナレッジ/会員/サイト/インポート/ブランディング）＝道具＋menu＋widgets を登録（ホストが /apps から登録/除外可）
+    src/parts/        標準同梱パーツ（AIチャット/会計/メモ/リマインダー/ナレッジ/会員/サイト/インポート/ブランディング/Gmail/カレンダー/Meet議事録/請求書）＝道具＋menu＋widgets を登録（ホストが /apps から登録/除外可）
     src/pages/        4画面（index=ホーム / chat=AI / apps=アプリ / settings=設定）＋業務画面
     src/components/   Slot 等の共通UI部品
     src/overrides/    UI上書き（配布時・第3層）
@@ -270,7 +271,7 @@ npm -w apps/client run release   # apps/client/release/ に _worker.js+migration
 
 ## 状態（2026-06-09）
 
-実装済み：申込（プラン非選択）/ライセンス/自動アクティベート、4画面UI（ホーム/AI/アプリ/設定）、AIチャット（セッション保存・モデル選択）、AIアプリ開発（企画→4確認→公開）、会計コア、マルチユーザー、ファイル/予定/議事録、共有承認、Stripe接続（鍵投入で稼働）、認証OAuth（dev併用）、エージェント＋各AI機能、任意API、Agent Skills、診断/Workers Paid案内、ポータブルコア（Ports & Parts／契約テスト）、ローカルLLM＋ローカル認証（Profile C）、UI3層カスタマイズ、自動マイグレーション、配布CI、署名リリース。
+実装済み：申込（プラン非選択）/ライセンス/自動アクティベート、4画面UI（ホーム/AI/アプリ/設定）、AIチャット（セッション保存・モデル選択）、AIアプリ開発（企画→4確認→公開）、会計コア、マルチユーザー、ファイル/予定/議事録、共有承認、Stripe接続（鍵投入で稼働）、認証OAuth（dev併用）、エージェント＋各AI機能、任意API、Agent Skills、診断/Workers Paid案内、ポータブルコア（Ports & Parts／契約テスト）、ローカルLLM＋ローカル認証（Profile C）、UI3層カスタマイズ、自動マイグレーション、配布CI、署名リリース、Google Workspace連携（Gmail/カレンダー/Meet議事録/請求書）。
 **2026-06-08〜09 追加**：マルチエージェント（社内・Pro）、A2A（他団体連携・1:1/グループ/公開アクション・Pro）、ホスト主体マーケット（DL/5段階評価/ランキング・ユニーク導入数）、NonProfit プラン（非営利・全機能無料・ホスト審査）、オートパイロット（AIサーバー自治・GitHub OAuth デバイスフロー・CI 成功時のみ squash マージ＋コア領域はマージ拒否）、ホスト監査ログ（`/audit`）、運用堅牢化（顧客削除の安全化＋カスケード、一覧の検索/フィルタ/ページング、申込入力検証）、セキュリティ追加（SSRF 検査／`ADMIN_KEY` fail-closed＋dev login 封鎖／アプリ キルスイッチ／submit 署名トークン認証）。本番3 Worker 反映済み。
 **2026-06-09 第三者レビュー全改善（Phase1〜6）**：無認証活性化の取り残しを ENV ゲート／nonprofit 却下の戻し先バグ修正／公開リポ deploy_code の即削除／SSRF 強化（FQDN・redirect:manual）／A2A nonce・権限・レート是正／セッション鍵 HKDF 分離／キルスイッチのドラフト無効化／Stripe past_due 降格・nonprofit 保護／自口座振替ガード／autopilot 鮮度ゲート／gh_merge_pr ページング／UI/UX 統一・a11y・/audit 検索。本番反映済み（詳細は [baku-office_review_確認事項と改善点.md](baku-office_review_確認事項と改善点.md)）。
 **2026-06-09 ホスト統制＋自己修復**：ストア/未登録アプリの**公開停止・削除**を全クライアントへ反映（墓標 `app_revocations`＋利用0で完全削除）／**標準同梱アプリの登録・除外**（`builtin_policy`→`disabledBuiltins`）／`/clients` を **entitlement 主・plan 従** に整理（2層は統合不可）／**自己修復ログ**（client エラー自動報告＋利用者の不具合/要望→ホスト `client_reports` 集積→`baku-team/baku-office-logs` へ Issue 化→Claude巡回・修復→`reportUpdates` で返信）／**定期巡回 `apps/scheduler`**（Cron Triggers `*/5`・Service Binding で sweep/drain 起動）。host D1 `0012`／client `0018` 適用。本番（host/client/scheduler）反映・sweep/drain 各200。
