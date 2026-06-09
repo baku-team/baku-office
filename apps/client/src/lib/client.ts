@@ -6,6 +6,7 @@ import type { Ctx, KvPort } from "../core/ports.ts";
 const KV_TOKEN = "license_token";
 const KV_ENTITLEMENT = "entitlement";
 const KV_ENTITLEMENT_AT = "entitlement_at"; // 直近の統合チェック時刻（鮮度ゲート用）
+const KV_DISABLED_BUILTINS = "host_disabled_builtins"; // ホストが除外した標準同梱アプリ id（JSON配列）
 const KEY_PREFIX = "apikey:"; // KV: apikey:gemini / apikey:line_secret / apikey:line_token / apikey:claude
 
 export const nowSec = (): number => Math.floor(Date.now() / 1000);
@@ -41,12 +42,21 @@ export async function pollHost(env: Env, deployUrl?: string, apps?: { id: string
     const data = (await r.json()) as CheckResponse;
     await env.LICENSE.put(KV_ENTITLEMENT, data.entitlement);
     await env.LICENSE.put(KV_ENTITLEMENT_AT, String(nowSec())); // 鮮度（重要ゲートのダウングレード窓を縮小）
-    // 緊急停止：ホストが blocked にしたアプリを取り込み済みでも削除する（キルスイッチ）。
+    // 緊急停止：ホストが blocked/deleted にしたアプリを取り込み済みでも削除する（キルスイッチ）。
     if (Array.isArray(data.revokedApps) && data.revokedApps.length) {
       const ph = data.revokedApps.map(() => "?").join(",");
       await env.DB.prepare(`DELETE FROM external_apps WHERE id IN (${ph})`).bind(...data.revokedApps).run().catch(() => {});
       // ローカル生成ドラフト（再申請・有効化の余地）も無効化（external_apps だけでは止まらないため）。
       await env.DB.prepare(`UPDATE app_drafts SET gate_status='blocked' WHERE id IN (${ph})`).bind(...data.revokedApps).run().catch(() => {});
+    }
+    // 標準同梱アプリの除外：ホストが除外した同梱アプリ id を KV に保存（導入集合の絞り込みに使う）。
+    if (Array.isArray(data.disabledBuiltins)) {
+      await env.LICENSE.put(KV_DISABLED_BUILTINS, JSON.stringify(data.disabledBuiltins)).catch(() => {});
+    }
+    // ホストからの対応返信（resolved/wontfix）を保存（利用者へ「対応済み」を表示）。
+    if (Array.isArray(data.reportUpdates) && data.reportUpdates.length) {
+      const { applyReportUpdates } = await import("./reports.ts");
+      await applyReportUpdates(env, data.reportUpdates).catch(() => {});
     }
     return data;
   } catch {
@@ -70,6 +80,16 @@ export async function getLicenseId(env: Env): Promise<string | null> {
 // 直近に保存したエンタイトルメント（オフライン時のフォールバック表示用）。
 export async function cachedEntitlement(env: Env): Promise<Entitlement> {
   return ((await env.LICENSE.get(KV_ENTITLEMENT)) as Entitlement) ?? "free";
+}
+
+// ホストが「除外」した標準同梱アプリ id（統合チェックで受領・KVキャッシュ）。導入集合の絞り込みに使う。
+export async function disabledBuiltins(env: Env): Promise<string[]> {
+  try {
+    const raw = await env.LICENSE?.get(KV_DISABLED_BUILTINS);
+    if (!raw) return [];
+    const v = JSON.parse(raw);
+    return Array.isArray(v) ? v.map(String) : [];
+  } catch { return []; }
 }
 
 // 重要ゲート（autopilot/agent）用：キャッシュが maxAgeSec を超えて古ければ一度だけ再ポーリングして最新化を試みる。

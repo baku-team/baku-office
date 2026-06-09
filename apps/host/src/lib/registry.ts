@@ -23,7 +23,15 @@ export type RegistryApp = {
 
 // 標準同梱アプリ（クライアントに常にバンドルされるコアパーツ）。レジストリ配布対象ではないため
 // 「未登録で稼働中」の警告には出さない（要確認＝本当に未知のアプリだけに絞る）。
-export const BUILTIN_APP_IDS = ["chat", "accounting", "memo", "reminders", "knowledge", "members"];
+// クライアント parts/index.ts の registerBuiltinParts と一致させる（site/import/branding も同梱）。
+export const BUILTIN_APP_IDS = ["chat", "accounting", "memo", "reminders", "knowledge", "members", "site", "import", "branding"];
+// 同梱アプリの表示名（標準同梱アプリ管理UI用）。
+export const BUILTIN_LABELS: Record<string, string> = {
+  chat: "AIチャット", accounting: "会計", memo: "メモ", reminders: "リマインダー",
+  knowledge: "ナレッジ", members: "会員", site: "サイト", import: "インポート", branding: "ブランディング",
+};
+// 除外不可の必須アプリ（クライアント MANDATORY_APPS と一致）。
+export const MANDATORY_BUILTINS = ["chat"];
 
 export async function listApps(env: Env): Promise<RegistryApp[]> {
   return (await env.DB.prepare("SELECT * FROM registry_apps ORDER BY updated_at DESC").all<RegistryApp>()).results;
@@ -67,6 +75,64 @@ export async function approvedCatalog(env: Env): Promise<{ id: string; name: str
 
 export async function setAppStatus(env: Env, id: string, status: "pending" | "approved" | "blocked"): Promise<void> {
   await env.DB.prepare("UPDATE registry_apps SET status=?, updated_at=? WHERE id=?").bind(status, nowSec(), id).run();
+}
+
+// アプリの撤去指示（墓標）。registry に行が無い未登録アプリの停止/削除にも使える。
+// kind=blocked（公開停止・復帰可）/ deleted（削除）。/api/check の revokedApps に載り全クライアントへ配信。
+export async function revokeApp(env: Env, id: string, kind: "blocked" | "deleted", reason?: string): Promise<void> {
+  await env.DB.prepare(
+    "INSERT INTO app_revocations (app_id,kind,reason,created_at) VALUES (?,?,?,?) ON CONFLICT(app_id) DO UPDATE SET kind=excluded.kind, reason=excluded.reason, created_at=excluded.created_at",
+  ).bind(id, kind, reason ?? null, nowSec()).run();
+}
+// 撤去の取り消し（公開停止からの復帰・誤操作の戻し）。
+export async function unrevokeApp(env: Env, id: string): Promise<void> {
+  await env.DB.prepare("DELETE FROM app_revocations WHERE app_id=?").bind(id).run();
+}
+
+// ストアアプリの削除（決定: 墓標＋利用0で完全削除）。
+// 常に墓標へ撤去指示を残し、全クライアントから撤去させる。利用申告(app_usage)が0なら registry 行も物理削除、
+// 残っていれば status='deleted' にして履歴を保持（後で利用0になった時に物理削除できる）。
+export async function deleteApp(env: Env, id: string, reason?: string): Promise<void> {
+  await revokeApp(env, id, "deleted", reason);
+  const used = await env.DB.prepare("SELECT COUNT(*) AS n FROM app_usage WHERE app_id=?").bind(id).first<{ n: number }>();
+  if ((used?.n ?? 0) === 0) {
+    await env.DB.prepare("DELETE FROM registry_apps WHERE id=?").bind(id).run();
+  } else {
+    await env.DB.prepare("UPDATE registry_apps SET status='deleted', listed=0, updated_at=? WHERE id=?").bind(nowSec(), id).run();
+  }
+}
+
+// 全クライアントへ配る撤去アプリ id（公開停止＝blocked＋削除＝deleted、レジストリと墓標を統合）。
+export async function revokedAppIds(env: Env): Promise<string[]> {
+  const a = await env.DB.prepare("SELECT id FROM registry_apps WHERE status IN ('blocked','deleted')").all<{ id: string }>();
+  const b = await env.DB.prepare("SELECT app_id AS id FROM app_revocations").all<{ id: string }>();
+  return [...new Set([...a.results.map((r) => r.id), ...b.results.map((r) => r.id)])];
+}
+
+// ===== 標準同梱アプリ（コアパーツ）のホスト側ポリシー（登録/除外） =====
+
+// 同梱アプリ別の有効/無効ポリシー（既定=有効）。UI表示用に全 BUILTIN_APP_IDS を網羅して返す。
+export async function builtinPolicy(env: Env): Promise<{ id: string; label: string; enabled: boolean; mandatory: boolean }[]> {
+  const { results } = await env.DB.prepare("SELECT app_id,enabled FROM builtin_policy").all<{ app_id: string; enabled: number }>();
+  const map = new Map(results.map((r) => [r.app_id, r.enabled !== 0]));
+  return BUILTIN_APP_IDS.map((id) => ({
+    id, label: BUILTIN_LABELS[id] ?? id,
+    enabled: map.get(id) ?? true, mandatory: MANDATORY_BUILTINS.includes(id),
+  }));
+}
+// 同梱アプリの登録（enabled=true）/除外（enabled=false）。必須アプリは除外不可。
+export async function setBuiltinEnabled(env: Env, id: string, enabled: boolean): Promise<{ ok: boolean; error?: string }> {
+  if (!BUILTIN_APP_IDS.includes(id)) return { ok: false, error: "未知の同梱アプリです" };
+  if (!enabled && MANDATORY_BUILTINS.includes(id)) return { ok: false, error: "必須アプリは除外できません" };
+  await env.DB.prepare(
+    "INSERT INTO builtin_policy (app_id,enabled,updated_at) VALUES (?,?,?) ON CONFLICT(app_id) DO UPDATE SET enabled=excluded.enabled, updated_at=excluded.updated_at",
+  ).bind(id, enabled ? 1 : 0, nowSec()).run();
+  return { ok: true };
+}
+// 除外中（enabled=0）の同梱アプリ id（/api/check で配信）。
+export async function disabledBuiltinIds(env: Env): Promise<string[]> {
+  const { results } = await env.DB.prepare("SELECT app_id FROM builtin_policy WHERE enabled=0").all<{ app_id: string }>();
+  return results.map((r) => r.app_id).filter((id) => !MANDATORY_BUILTINS.includes(id));
 }
 
 // クライアントからの導入アプリ申告を記録（id:version の配列。PIIなし）。

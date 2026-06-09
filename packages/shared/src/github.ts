@@ -56,3 +56,21 @@ export async function provisionRepo(opts: GithubOpts, licenseId: string, code: s
 export async function deleteRepo(opts: Pick<GithubOpts, "token" | "owner">, licenseId: string): Promise<void> {
   await fetch(`${GH}/repos/${opts.owner}/app-${licenseId}`, { method: "DELETE", headers: headers(opts.token) });
 }
+
+// クライアント報告（エラー/要望）を GitHub Issue として集積する（自己修復の入口）。
+// 人間/外部サービスに依存せず、ここに集積された Issue を Claude が巡回・修復する運用。
+// 戻り値: 作成された Issue の html_url。失敗時は例外（呼び出し側で握り潰し可）。
+export async function createIssue(
+  opts: { token: string; owner: string; repo: string },
+  issue: { title: string; body: string; labels?: string[] },
+): Promise<string> {
+  const r = await fetch(`${GH}/repos/${opts.owner}/${opts.repo}/issues`, {
+    method: "POST",
+    headers: headers(opts.token),
+    body: JSON.stringify({ title: issue.title.slice(0, 240), body: issue.body, labels: issue.labels ?? [] }),
+  });
+  if (!r.ok) throw new Error("createIssue " + r.status + " " + (await r.text().catch(() => "")).slice(0, 200));
+  const j = (await r.json()) as { html_url?: string };
+  if (!j.html_url) throw new Error("createIssue: no html_url");
+  return j.html_url;
+}

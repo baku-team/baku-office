@@ -29,6 +29,8 @@
     // 団体ごと公開リポの自動生成（throwaway・§2.2-2.3）。
     "GITHUB_OWNER": "baku-team",
     "GITHUB_TEMPLATE_REPO": "baku-office-app",
+    // クライアント報告（エラー/要望）の集積先リポ（Issue化＝自己修復の入口）。
+    "GITHUB_LOGS_REPO": "baku-office-logs",
     "HOST_BASE_URL": "https://baku-office-portal.baku-027.workers.dev",
     // オートパイロット：GitHub OAuth App の公開 client_id（device flow）。全クライアントへ /api/gh-client-id で配布。
     "GITHUB_OAUTH_CLIENT_ID": "Ov23liTd6t2FizUjhedk"

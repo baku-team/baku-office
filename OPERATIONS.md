@@ -94,8 +94,10 @@
    - 🟢 `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`（スタッフGoogleログイン）
    - 🟢 `HOST_ADMIN_EMAILS`（管理者のGoogleメール・カンマ区切り）
    - 🟢 課金：`STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` / `STRIPE_PRICE_Y`（Plus用）/ `STRIPE_PRICE_Z`（Pro用）。Stripe接続部は実装済みで、**アカウント未準備なら鍵未投入のまま起動**し、鍵投入で課金が有効化される。
-3. D1 作成＋スキーマ適用：`wrangler d1 execute baku-office-portal-db --remote --file apps/host/migrations/0001_host.sql`。
+   - 🟢 自己修復：`INTERNAL_KEY`（`/api/cron/sweep` 保護・スケジューラと共有）、`GITHUB_TOKEN`（リポ作成＋**baku-office-logs への Issues:write**）。`GITHUB_OWNER`/`GITHUB_LOGS_REPO` は `wrangler.jsonc` の vars（既定 `baku-team`/`baku-office-logs`）。
+3. D1 作成＋スキーマ適用：`apps/host/migrations/` を **0001 から最新（0012_governance.sql）まで順に適用**（`wrangler d1 execute baku-office-portal-db --remote --file apps/host/migrations/<f>.sql --config apps/host/wrangler.jsonc`）。スキーマ変更を伴う更新時は新規ファイルを忘れず remote へ適用（未適用だと該当機能が無言で失敗）。
 4. クライアント配布鍵：ホストの署名鍵に対応する**公開検証鍵**を取得し、クライアント側に渡す（`GET /admin/pubkey`）。
+5. 自己修復の定期巡回（任意・自社運用）：集積先リポ `baku-team/baku-office-logs` を作成 → スケジューラを配備 `npm -w apps/scheduler run deploy` → `CRON_TARGETS`（host `/api/cron/sweep`・client `/api/cron/drain` の `{binding,path,key}` JSON・key は各 `INTERNAL_KEY` と同値）を secret 投入。Cron `*/5` で自動巡回。Service Binding（`T_HOST`/`T_CLIENT`）経由＝同一 workers.dev 直fetch遮断(1042)を回避。
 
 ### A-1. スタッフログイン
 - `/login` → 🟢「Googleでログイン」（`HOST_ADMIN_EMAILS` の管理者のみ操作可）／🧪「管理者としてログイン（dev）」は **`ENV=development` かつ Google 未設定時のみ**有効（本番は無効）。
@@ -108,19 +110,28 @@
    - ※ クライアントの**個別Deployリンク**もあわせて案内（§C-1）。
 
 ### A-3. クライアント管理（監視）
-- `/clients`：団体一覧（団体名・プラン・エンタイトルメント・稼働バージョン・最終受信）。**検索（団体名/メール）・状態/プランフィルタ・50件ページング・件数表示**で多数団体を運用。
-- 各クライアントは統合チェック（`/api/check`）で自動的に最終受信/バージョンを更新。
-- **エンタイトルメント設定**：`/clients` から対象団体のプランを変更でき、**評価・社内検証用に `test`（全機能解放）** を付与できる（ランク最上位＝全ゲート通過）。検証後は元プランに戻す。
+- `/clients`：団体一覧（団体名・**現在の権限＝エンタイトルメント**・契約プラン・稼働バージョン・最終受信）。**状態は「現在の権限」を主表示**（権限を緑バッジで表示・契約プランは請求用に従属表示）。**検索（団体名/メール）・状態/権限フィルタ・50件ページング・件数表示**で多数団体を運用。
+- 各クライアントは統合チェック（`/api/check`）で自動的に最終受信/バージョンを更新。クライアントへ配られるのは **entitlement のみ**（plan は内部）。
+- **権限/プランは2層で別管理**：plan＝契約/請求、entitlement＝実効権限（Stripe入金・NonProfit審査で上書き）。統合できない（NonProfit 審査と Stripe 入金が並行して権限を上書きするため。§A-3c 参照）。`/clients` から両方を手動変更可、**評価・社内検証用に `test`（全機能解放）** を付与できる（ランク最上位＝全ゲート通過）。検証後は元の権限に戻す。
 - **顧客削除（安全化）**：削除は**確認モーダルで団体名のタイプ確認**を必須化し、削除対象（ライセンス/配布リポ/利用状況/DL/レビュー/NonProfit申請/A2A接続）を明示（誤操作防止）。実行時はライセンス／アクティベーションコードに加え、それら**関連レコードを明示削除**（D1 に FK/CASCADE が無いため孤児化を防止）。GitHub 連携時は団体リポも best-effort 削除。
 - 上記のプラン変更・削除は**監査ログ**（§A-7）へ記録される。
 
 ### A-3b. アプリ管理（中枢レジストリ）— `/apps`
-- **存在の管理**：各リポで作られたアプリを登録（id/名称/版/リポURL/権限）→ 承認（approved）/停止（blocked）。
+- **存在の管理**：各リポで作られたアプリを登録（id/名称/版/リポURL/権限）→ 承認（approved）/公開停止（blocked）/削除（deleted）。
 - **公開申請の認証**：クライアントからの公開申請（`/api/registry/submit`）は**署名ライセンストークン認証**（生 licenseId は受理しない＝なりすまし pending 登録を遮断）。
-- **停止＝キルスイッチ**：`blocked` にしたアプリ id は統合チェック（`/api/check`）の `revokedApps` でクライアントへ配布され、**取り込み済みでも自動で無効化（削除）** される（緊急停止）。
+- **公開停止＝キルスイッチ**：`blocked` にしたアプリ id は統合チェック（`/api/check`）の `revokedApps` でクライアントへ配布され、**取り込み済みでも自動で無効化（削除）** される（緊急停止・復帰可）。
+- **削除＝墓標＋利用0で完全削除**：削除すると `app_revocations` に撤去指示（墓標）を残し全クライアントから撤去。利用申告が0なら registry 行も物理削除、残っていれば `status=deleted` で履歴保持（後で利用0になれば完全削除可）。墓標があるため物理削除後も撤去指示はクライアントへ届き続ける。
+- **未登録で稼働中**のアプリ（レジストリ未登録だが利用申告あり）も**登録／公開停止／復帰／削除**を `/apps` から実行可（registry 行が無くても `app_revocations` で全クライアントへ反映）。
+- **標準同梱アプリの登録／除外**：全クライアントに同梱されるコアパーツ（chat/会計/メモ/リマインダー/ナレッジ/会員/サイト/インポート/ブランディング）を `/apps` の「標準同梱アプリ」表で**除外**（`builtin_policy` enabled=0）すると、`disabledBuiltins` を統合チェックで配布し全クライアントの導入集合・エージェント道具から外す。**登録**で再有効化。必須＝AIチャットは除外不可。
 - **利用状況**：クライアントが申告した導入アプリ（id:version・PIIなし）を集計し、アプリ別の**ユニーク導入数**（同一ライセンスの再DLは二重計上しない）・版分布・アクティブ数を表示。
-- **未登録で稼働中**のアプリ（レジストリ未登録だが利用申告あり）を警告表示。
-- 前提：ホスト D1 に `0004_app_registry.sql`／`0011_app_downloads_unique.sql` を適用（`wrangler d1 execute baku-office-portal-db --remote --file apps/host/migrations/<f>.sql`）。
+- 前提：ホスト D1 に `0004_app_registry.sql`／`0011_app_downloads_unique.sql`／`0012_governance.sql` を適用（`wrangler d1 execute baku-office-portal-db --remote --file apps/host/migrations/<f>.sql --config apps/host/wrangler.jsonc`）。
+
+### A-3d. 報告・自己修復 — `/reports`
+- **集積**：クライアントから自動収集したエラーと、利用者の不具合/要望リクエストを `client_reports` に集約表示（同種エラーは fingerprint で再発回数を集約）。種別（error/request）・状態（open/triaged/synced/resolved/wontfix）でフィルタ。
+- **GitHubへ集積**：行ごとの「GitHubへ集積」または「未集積エラーを一括で」で `baku-team/baku-office-logs` に **Issue 化**（`syncReportToGithub`）。集積された Issue を **Claude（Web 等）が巡回・修復**＝クラウドで直せる問題は修正→PR→Issueにリンク、不能なら原因と対策をレポート化しPRへ、という分担（baku-office 側の責務は「集積・通知」まで）。
+- **クライアントへ返信**：状態を `resolved`/`wontfix` にして対応メモ・PR URL を書くと、次回の統合チェックで `reportUpdates` としてクライアントへ届き、`/diagnostics` の「サポートからの対応」に表示される。
+- **定期巡回**：`baku-office-scheduler`（Cron Triggers `*/5`）が Service Binding 経由で `/api/cron/sweep`（未集積エラーの自動 Issue 化）を叩く。手動でも `/reports` の一括集積で実行可。
+- 前提：host D1 に `0012_governance.sql` 適用、host secret `INTERNAL_KEY`、host var `GITHUB_LOGS_REPO`、`GITHUB_TOKEN` に対象リポの **Issues:write**（リポアクセスに baku-office-logs を含める）。
 
 ### A-3c. NonProfit 審査 — `/nonprofit`
 - 申込時に NonProfit（非営利・全機能無料）を選んだ団体は審査待ち（通過まで Free 相当）。一覧から**承認**（`entitlement=nonprofit`＝全機能解放）／**却下**（理由付き）。
@@ -142,7 +153,7 @@
 - 顧客はフォーク同期で受領（§C-7）。DBスキーマは顧客側で自動適用（§C補足）。
 
 ### A-7. 監査ログ — `/audit`
-- 管理者による**プラン／エンタイトルメント変更・顧客削除・アプリ承認/停止・NonProfit 審査・アプリ公開申請**の操作履歴（日時・実行者・操作・対象・詳細）。**検索（実行者/対象/詳細）・操作種別フィルタ・50件ページング・件数表示**で追跡。
+- 管理者による**プラン／エンタイトルメント変更・顧客削除・アプリ承認/公開停止/削除・標準同梱の登録/除外・NonProfit 審査・アプリ公開申請・報告対応**の操作履歴（日時・実行者・操作・対象・詳細）。**検索（実行者/対象/詳細）・操作種別フィルタ・50件ページング・件数表示**で追跡。
 - 記録は `recordAudit`（`host_audit` テーブル）で各操作 API から自動付与。記録失敗は本処理を止めない（best-effort）。
 - 前提：ホスト D1 に `0010_audit.sql` を適用。
 
@@ -226,6 +237,8 @@
 
 ### C-10. 診断・サポート — `/diagnostics`
 - エラーログ閲覧。CF無料枠の制限を検知すると**ホームにバナー＋Workers Paid 案内**。
+- **自動報告**：エラーはサポート（ホスト）へ自動報告（送信アウトボックス→`cron/drain` の `flushReports` でバッチ送信・PIIなし）。クラウドで対応可能なものは自動修正される。
+- **不具合・要望リクエスト**：フォームから件名＋内容を送信（`/api/report`）。サポートの対応状況（修正済み/見送り＋メモ・変更内容リンク）は同画面の「サポートからの対応」に表示。
 
 ### C補足. 更新の受け取り
 - 当社が新バージョンを公開 → **自分の複製を upstream 同期**（Workers Builds が自動再デプロイ）。
@@ -238,10 +251,13 @@
 
 | 役割 | URL（例） | 主な操作 |
 | --- | --- | --- |
-| ホスト | `/login` `/apply` `/clients` `/apps` `/nonprofit` `/notices` `/audit` | スタッフログイン・申込・監視・アプリ承認・NonProfit審査・配信・監査ログ |
-| ホストAPI | `/api/apply` `/api/activate` `/api/token` `/api/check` `/api/billing/*` `/api/notices` `/api/registry/submit` | 発行・アクティベート・統合チェック（`revokedApps` 配布）・課金・通知・アプリ公開申請（署名トークン認証） |
+| ホスト | `/login` `/apply` `/clients` `/apps` `/nonprofit` `/notices` `/reports` `/audit` | スタッフログイン・申込・監視・アプリ承認/停止/削除/同梱登録除外・NonProfit審査・配信・報告/自己修復・監査ログ |
+| ホストAPI | `/api/apply` `/api/activate` `/api/token` `/api/check` `/api/billing/*` `/api/notices` `/api/registry`（delete/revoke/builtin_set） `/api/registry/submit` `/api/report` `/api/reports` `/api/cron/sweep` | 発行・アクティベート・統合チェック（`revokedApps`/`disabledBuiltins`/`reportUpdates` 配布）・課金・通知・アプリ統制・報告受信/統制・自己修復巡回 |
 | クライアント（4ナビ） | `/`（ホーム） `/chat`（AI） `/apps`（アプリ） `/settings`（設定） | 相棒・アプリ導入/開発・設定集約 |
-| クライアント（業務画面） | `/accounting` `/membership` `/files` `/schedule` `/minutes` `/review` `/personal` `/billing` `/settings/keys` `/settings/advanced` `/diagnostics` | 「アプリ」「設定」から起動する各機能 |
-| クライアントAPI | `/api/line/webhook` `/api/cron/drain` `/provision` | エージェント・リマインダー/ジョブ処理・配信受信 |
+| クライアント（業務画面） | `/accounting` `/membership` `/files` `/schedule` `/minutes` `/review` `/personal` `/billing` `/settings/keys` `/settings/advanced` `/diagnostics`（報告/サポート対応） | 「アプリ」「設定」から起動する各機能 |
+| クライアントAPI | `/api/line/webhook` `/api/cron/drain` `/api/report` `/provision` | エージェント・リマインダー/ジョブ処理＋報告送信・不具合/要望受付・配信受信 |
+| スケジューラ | `baku-office-scheduler`（Cron `*/5`） | Service Binding 経由で host `/api/cron/sweep`・client `/api/cron/drain` を定期起動（CF内完結） |
 
-- 外部スケジューラ（cron-job.org等）→ `POST /api/cron/drain`（`x-internal-key: INTERNAL_KEY`・`content-type: application/json`）でリマインダー配信・要約/動画ジョブを進行。
+- **自動巡回**：`baku-office-scheduler`（Cloudflare Cron Triggers）が 5 分ごとに Service Binding 経由で `/api/cron/sweep`（報告→GitHub集積）・`/api/cron/drain`（reports flush・リマインダー・要約/動画ジョブ）を起動。鍵は `CRON_TARGETS` に集約（host/client の `INTERNAL_KEY` と同値）。
+- 外部スケジューラ（cron-job.org等）で叩く場合も従来通り `POST /api/cron/drain`（`x-internal-key: INTERNAL_KEY`・`content-type: application/json`）。
+- ※顧客（別アカウント）の client は各自のCFアカウントで cron が必要（配布テンプレへの同梱は今後）。同一アカウントの自社運用は scheduler が host＋client をまとめて巡回。

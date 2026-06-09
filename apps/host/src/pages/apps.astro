@@ -6,17 +6,18 @@ const { getHostSession } = await import("../lib/hostauth.ts");
 const ses = await getHostSession(env, Astro.request);
 if (!ses?.isAdmin) return Astro.redirect("/login", 302);
 
-const { listApps, usageByApp, appStoreMeta, BUILTIN_APP_IDS } = await import("../lib/registry.ts");
+const { listApps, usageByApp, appStoreMeta, builtinPolicy, BUILTIN_APP_IDS } = await import("../lib/registry.ts");
 const apps = await listApps(env);
 const usage = await usageByApp(env);
 const storeMeta = await appStoreMeta(env);
+const policy = await builtinPolicy(env);
+// 撤去墓標（未登録アプリの停止/削除状態の表示・復帰用）。
+const revRows = (await env.DB.prepare("SELECT app_id,kind FROM app_revocations").all<{ app_id: string; kind: string }>()).results;
+const revMap = new Map(revRows.map((r) => [r.app_id, r.kind]));
 const usageMap = new Map(usage.map((u) => [u.app_id, u]));
 const builtin = new Set(BUILTIN_APP_IDS);
-// 標準同梱アプリ（コア・配布対象外）。利用状況のみ表示。
-const builtinUsage = usage.filter((u) => builtin.has(u.app_id));
 // 本当に未知＝レジストリ未登録かつ標準同梱でもないアプリ（要確認）。
 const unregistered = usage.filter((u) => !builtin.has(u.app_id) && !apps.some((a) => a.id === u.app_id));
-const fmt = (s: number | null) => (s ? new Date(s * 1000).toISOString().slice(0, 16).replace("T", " ") : "—");
 ---
 <Host title="アプリ管理" active="/apps">
   <h1>アプリ管理（中枢レジストリ）</h1>
@@ -33,31 +34,47 @@ const fmt = (s: number | null) => (s ? new Date(s * 1000).toISOString().slice(0,
         <td>{m?.downloads ?? 0}</td>
         <td>{m?.reviews ? `${m.avg}(${m.reviews})` : "—"}</td>
         <td>{u ? `${u.installs}(${u.active})` : 0}</td>
-        <td>
+        <td style="white-space:nowrap">
           <button class="btn btn-ghost st" data-st="approved">承認</button>
-          <button class="btn btn-ghost st" data-st="blocked">停止</button>
+          <button class="btn btn-ghost st" data-st="blocked">公開停止</button>
           <button class="btn btn-ghost lst" data-lst={m?.listed ? "0" : "1"}>{m?.listed ? "掲載OFF" : "掲載ON"}</button>
+          <button class="btn btn-danger del">削除</button>
         </td>
       </tr>); })}
     {apps.length === 0 && (<tr><td colspan="10" class="muted">レジストリは空です。下のフォームから登録してください。</td></tr>)}
   </tbody></table></div>
 
-  {builtinUsage.length > 0 && (
-    <>
-      <h2>標準同梱アプリ（コア・利用状況）</h2>
-      <p class="muted">全クライアントに同梱される標準アプリ。レジストリ配布対象ではないため登録不要・正常です。</p>
-      <div class="table-wrap"><table><thead><tr><th>ID</th><th>導入数(有効)</th><th>版</th></tr></thead><tbody>
-        {builtinUsage.map((u) => (<tr><td><code>{u.app_id}</code></td><td>{u.installs}({u.active})</td><td class="muted">{u.versions}</td></tr>))}
-      </tbody></table></div>
-    </>
-  )}
+  <h2>標準同梱アプリ（登録／除外）</h2>
+  <p class="muted">全クライアントに同梱される標準アプリ。<strong>除外</strong>すると次回の統合チェックで全クライアントの導入集合から外れます。<strong>登録</strong>で再び有効化。必須アプリ（AIチャット）は除外できません。</p>
+  <div class="table-wrap"><table><thead><tr><th>ID</th><th>名称</th><th>状態</th><th>導入数(有効)</th><th>操作</th></tr></thead><tbody>
+    {policy.map((p) => { const u = usageMap.get(p.id); return (
+      <tr data-bid={p.id}>
+        <td><code>{p.id}</code></td><td>{p.label}{p.mandatory && <span class="muted">（必須）</span>}</td>
+        <td><span class="pill" style={p.enabled ? "background:#dcfce7;color:#166534" : "background:#fee2e2;color:#b91c1c"}>{p.enabled ? "登録（有効）" : "除外"}</span></td>
+        <td>{u ? `${u.installs}(${u.active})` : 0}</td>
+        <td>{p.mandatory ? <span class="muted">—</span> : (
+          p.enabled
+            ? <button class="btn btn-ghost b-set" data-en="0">除外する</button>
+            : <button class="btn btn-primary b-set" data-en="1">登録する</button>
+        )}</td>
+      </tr>); })}
+  </tbody></table></div>
 
   {unregistered.length > 0 && (
     <>
       <h2>未登録で稼働中のアプリ（要確認）</h2>
-      <div class="banner banner-warn">レジストリ未登録だが利用申告のあるアプリ。各リポを確認し、登録/承認または停止対象か判断してください。</div>
-      <div class="table-wrap"><table><thead><tr><th>ID</th><th>導入数(有効)</th><th>版</th></tr></thead><tbody>
-        {unregistered.map((u) => (<tr><td><code>{u.app_id}</code></td><td>{u.installs}({u.active})</td><td class="muted">{u.versions}</td></tr>))}
+      <div class="banner banner-warn">レジストリ未登録だが利用申告のあるアプリ。各リポを確認し、登録／公開停止／削除を判断してください。停止・削除は全クライアントに反映されます。</div>
+      <div class="table-wrap"><table><thead><tr><th>ID</th><th>導入数(有効)</th><th>版</th><th>状態</th><th>操作</th></tr></thead><tbody>
+        {unregistered.map((u) => { const rk = revMap.get(u.app_id); return (
+          <tr data-uid={u.app_id} data-ver={u.versions?.split(",")[0] ?? ""}>
+            <td><code>{u.app_id}</code></td><td>{u.installs}({u.active})</td><td class="muted">{u.versions}</td>
+            <td>{rk ? <span class="pill" style="background:#fee2e2;color:#b91c1c">{rk === "deleted" ? "削除済" : "停止中"}</span> : <span class="muted">稼働中</span>}</td>
+            <td style="white-space:nowrap">
+              <button class="btn btn-ghost u-reg">登録</button>
+              {rk ? <button class="btn btn-ghost u-unrev">復帰</button> : <button class="btn btn-ghost u-rev" data-kind="blocked">公開停止</button>}
+              <button class="btn btn-danger u-del">削除</button>
+            </td>
+          </tr>); })}
       </tbody></table></div>
     </>
   )}
@@ -76,8 +93,23 @@ const fmt = (s: number | null) => (s ? new Date(s * 1000).toISOString().slice(0,
     const api = (body, btn, successMsg) => window.bo.api("/api/registry", body, { btn, successMsg });
     document.querySelectorAll("tr[data-id]").forEach((tr) => {
       const id = tr.getAttribute("data-id");
-      tr.querySelectorAll(".st").forEach((b) => b.addEventListener("click", async (e) => { const st = e.currentTarget.dataset.st; if (st === "blocked" && !confirm("このアプリを停止し、導入済みクライアントからも無効化（キルスイッチ）しますか？")) return; const r = await api({ _action: "status", id, status: st }, e.currentTarget, st === "approved" ? "承認しました" : "停止しました"); if (r.ok) location.reload(); }));
+      tr.querySelectorAll(".st").forEach((b) => b.addEventListener("click", async (e) => { const st = e.currentTarget.dataset.st; if (st === "blocked" && !confirm("このアプリを公開停止し、導入済みクライアントからも無効化（キルスイッチ）しますか？")) return; const r = await api({ _action: "status", id, status: st }, e.currentTarget, st === "approved" ? "承認しました" : "公開停止しました"); if (r.ok) location.reload(); }));
       tr.querySelector(".lst")?.addEventListener("click", async (e) => { const r = await api({ _action: "set_listed", id, listed: e.currentTarget.dataset.lst === "1" }, e.currentTarget, "更新しました"); if (r.ok) location.reload(); });
+      tr.querySelector(".del")?.addEventListener("click", async (e) => { if (!confirm("このアプリを削除し、全クライアントから撤去します。利用が0なら登録自体も完全削除されます。よろしいですか？")) return; const r = await api({ _action: "delete", id }, e.currentTarget, "削除しました"); if (r.ok) location.reload(); });
+    });
+    // 標準同梱アプリ（登録／除外）。
+    document.querySelectorAll("tr[data-bid]").forEach((tr) => {
+      const id = tr.getAttribute("data-bid");
+      tr.querySelector(".b-set")?.addEventListener("click", async (e) => { const en = e.currentTarget.dataset.en === "1"; if (!en && !confirm("この標準同梱アプリを全クライアントの導入集合から除外します。よろしいですか？")) return; const r = await api({ _action: "builtin_set", id, enabled: en }, e.currentTarget, en ? "登録しました" : "除外しました"); if (r.ok) location.reload(); });
+    });
+    // 未登録で稼働中のアプリ（登録／公開停止／復帰／削除）。
+    document.querySelectorAll("tr[data-uid]").forEach((tr) => {
+      const id = tr.getAttribute("data-uid");
+      const ver = tr.getAttribute("data-ver") || "0.0.0";
+      tr.querySelector(".u-reg")?.addEventListener("click", async (e) => { const name = prompt("レジストリに登録します。アプリ名称を入力してください。", id) || id; const r = await api({ _action: "register", id, name, version: ver }, e.currentTarget, "登録しました（pending）"); if (r.ok) location.reload(); });
+      tr.querySelector(".u-rev")?.addEventListener("click", async (e) => { if (!confirm("このアプリを公開停止し、全クライアントから無効化します。よろしいですか？")) return; const r = await api({ _action: "revoke", id, kind: "blocked" }, e.currentTarget, "公開停止しました"); if (r.ok) location.reload(); });
+      tr.querySelector(".u-unrev")?.addEventListener("click", async (e) => { const r = await api({ _action: "unrevoke", id }, e.currentTarget, "復帰しました"); if (r.ok) location.reload(); });
+      tr.querySelector(".u-del")?.addEventListener("click", async (e) => { if (!confirm("このアプリを削除し、全クライアントから撤去します。よろしいですか？")) return; const r = await api({ _action: "revoke", id, kind: "deleted" }, e.currentTarget, "削除しました"); if (r.ok) location.reload(); });
     });
     document.getElementById("reg").addEventListener("click", async (e) => {
       const perms = (document.getElementById("r-perms").value || "").split(",").map((s) => s.trim()).filter(Boolean);

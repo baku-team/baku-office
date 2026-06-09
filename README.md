@@ -170,7 +170,7 @@ export const inventoryPart: Part = {
 | Pro | エージェント利用 | 同上 | LINE（標準）＋ローカルLLM（任意・オフライン） |
 | test | **全機能解放**（評価・社内検証用） | すべて | すべて |
 
-> `test` はホスト管理画面から対象アカウントに付与する評価用エンタイトルメント。内部キーは `free / plus / pro / test`。
+> `test` はホスト管理画面から対象アカウントに付与する評価用エンタイトルメント。エンタイトルメント内部キーは `free / plus / pro / nonprofit / enterprise / test`（plan は契約/請求用に別途 `free/plus/pro/nonprofit` を保持。`/clients` では entitlement＝現在の権限を主表示）。標準同梱パーツはホストが `/apps` から**登録/除外**でき、除外は全クライアントへ反映される。
 
 **標準同梱パーツ（現在コアに載せている一例。別用途なら差し替え可）**：
 
@@ -186,11 +186,12 @@ export const inventoryPart: Part = {
 
 ```
 baku-office/
-  apps/host/        ホストポータル（当社アカウントへデプロイ：申込/署名ライセンス/課金/通知/アプリ承認）
+  apps/host/        ホストポータル（当社アカウントへデプロイ：申込/署名ライセンス/課金/通知/アプリ承認/統制/報告集積）
   apps/apply/       申込専用Worker（無認証導線・IPレート制限・プラン非選択）
+  apps/scheduler/   定期巡回Worker（Cloudflare Cron Triggers・Service Binding経由でsweep/drain起動・自己修復）
   apps/client/      クライアントアプリ（顧客が自己ホスト・単一Worker＝Astro静的＋API同居）
     src/core/         能力Port・ctx・CFアダプタ／ChatModel(gemini/claude/local)／apps・theme・nav・overrides・profiles・identity
-    src/parts/        業務パーツ（会計/名簿/メモ/リマインダー/ナレッジ/AIチャット）＝道具＋menu＋widgets を登録
+    src/parts/        標準同梱パーツ（AIチャット/会計/メモ/リマインダー/ナレッジ/会員/サイト/インポート/ブランディング）＝道具＋menu＋widgets を登録（ホストが /apps から登録/除外可）
     src/pages/        4画面（index=ホーム / chat=AI / apps=アプリ / settings=設定）＋業務画面
     src/components/   Slot 等の共通UI部品
     src/overrides/    UI上書き（配布時・第3層）
@@ -198,7 +199,7 @@ baku-office/
     test/             適合性テスト（Node + node:sqlite・node:test）
     migrations/       D1スキーマ（初回リクエストで自動適用）
     deploy/           配布テンプレ（wrangler.release.jsonc・DeployボタンREADME）
-  packages/shared/  暗号(AES-GCM/Ed25519)・ライセンストークン・型（Entitlement: free/plus/pro/test）
+  packages/shared/  暗号(AES-GCM/Ed25519)・ライセンストークン・型（Entitlement: free/plus/pro/nonprofit/enterprise/test）・GitHub(provisionRepo/createIssue)
   worker/           旧LINEエージェント（温存・参考。エージェントは apps/client に統合）
   .github/workflows/   公開配布バンドル／署名リリースのCI
 ```
@@ -224,6 +225,7 @@ npm -w apps/client run build     # ビルド
 # デプロイ
 npm -w apps/client run deploy    # astro build && wrangler deploy（自己ホスト）
 npm -w apps/host run deploy      # ホストポータル（当社アカウント）
+npm -w apps/scheduler run deploy # 定期巡回（Cron Triggers・自己修復 sweep/drain）
 
 # 公開配布バンドル（難読化）の生成
 npm -w apps/client run release   # apps/client/release/ に _worker.js+migrations+wrangler.jsonc
@@ -258,8 +260,9 @@ npm -w apps/client run release   # apps/client/release/ に _worker.js+migration
 - **認証**：パスワードは PBKDF2（塩・ストレッチ・定数時間比較）、一時Cookie/セッションは HMAC 署名（**鍵は MASTER_KEY から HKDF サブ鍵で分離**し暗号化鍵と用途分離）。管理者セッション鍵 `ADMIN_KEY` は**本番（`ENV≠development`）で必須＝fail-closed**、dev 管理者ログインは `ENV=development` 限定。
 - **SSRF 対策**：ホストがサーバーサイド fetch する `deploy_url`（A2A 中継・統合チェック保存）は `isSafeDeployUrl` で検査（https 必須・FQDN 必須・IP/内部ホスト名・credentials 拒否）。A2A の fetch は `redirect:"manual"`（内部URL追従を遮断）。
 - **A2A**：相互同意＋ホスト署名に加え、署名エンベロープに **nonce** を載せクライアント側で使い捨て化（リプレイ防止）。公開アクションは権限検査を必ず通す。中継レートは実中継のみ計上。
-- **アプリ配布**：公開申請（`/api/registry/submit`）は署名ライセンストークン認証＋**所有権検査**（予約id拒否・別提供者のidは拒否）。停止（blocked）は統合チェックの `revokedApps` で**導入済みクライアント＋ドラフトからも即時無効化（キルスイッチ）**。
-- **監査**：ホスト管理操作（プラン変更・顧客削除・アプリ承認/停止・NonProfit 審査・公開申請）は `host_audit` に記録（`/audit`・検索/フィルタ/ページング）。
+- **アプリ配布／統制**：公開申請（`/api/registry/submit`）は署名ライセンストークン認証＋**所有権検査**（予約id拒否・別提供者のidは拒否）。公開停止（blocked）／削除（deleted・墓標 `app_revocations`）は統合チェックの `revokedApps` で**導入済みクライアント＋ドラフトからも即時無効化/撤去（キルスイッチ）**。標準同梱アプリの**除外**は `disabledBuiltins` で全クライアントの導入集合から外す（必須=chat 除外不可）。
+- **自己修復ログ**：クライアントのエラーは送信アウトボックス→ホスト `/api/report`（license token認証・fingerprint集約・PIIなし）へ集約。ホストは `/reports` で統制し `baku-team/baku-office-logs` へ Issue 化（→Claude巡回・修復）。対応は `reportUpdates` でクライアントへ返信。**修復実行はホスト側コードではなく人＋Claudeが担う**（baku-office の責務は集積・通知まで）。定期巡回は `apps/scheduler`（Cron Triggers・Service Binding）。
+- **監査**：ホスト管理操作（プラン/エンタイトルメント変更・顧客削除・アプリ承認/公開停止/削除・標準同梱の登録/除外・NonProfit 審査・公開申請・報告対応）は `host_audit` に記録（`/audit`・検索/フィルタ/ページング）。
 - **課金/Webhook**：Stripe 署名はタイムスタンプ鮮度＋定数時間比較。未入金（past_due 等）は Free へ降格。申込導線は IP レート制限＋入力検証（長さ・メール形式）。
 - 署名鍵は当社（**本番ゲート：KMS化／FIDO2／admin JIT は課題として保留中**）。クライアントは公開鍵で検証のみ。
 - バックアップは各団体の責任（当社はデータを預からない）。退避補助ツールは将来提供。
@@ -270,4 +273,5 @@ npm -w apps/client run release   # apps/client/release/ に _worker.js+migration
 実装済み：申込（プラン非選択）/ライセンス/自動アクティベート、4画面UI（ホーム/AI/アプリ/設定）、AIチャット（セッション保存・モデル選択）、AIアプリ開発（企画→4確認→公開）、会計コア、マルチユーザー、ファイル/予定/議事録、共有承認、Stripe接続（鍵投入で稼働）、認証OAuth（dev併用）、エージェント＋各AI機能、任意API、Agent Skills、診断/Workers Paid案内、ポータブルコア（Ports & Parts／契約テスト）、ローカルLLM＋ローカル認証（Profile C）、UI3層カスタマイズ、自動マイグレーション、配布CI、署名リリース。
 **2026-06-08〜09 追加**：マルチエージェント（社内・Pro）、A2A（他団体連携・1:1/グループ/公開アクション・Pro）、ホスト主体マーケット（DL/5段階評価/ランキング・ユニーク導入数）、NonProfit プラン（非営利・全機能無料・ホスト審査）、オートパイロット（AIサーバー自治・GitHub OAuth デバイスフロー・CI 成功時のみ squash マージ＋コア領域はマージ拒否）、ホスト監査ログ（`/audit`）、運用堅牢化（顧客削除の安全化＋カスケード、一覧の検索/フィルタ/ページング、申込入力検証）、セキュリティ追加（SSRF 検査／`ADMIN_KEY` fail-closed＋dev login 封鎖／アプリ キルスイッチ／submit 署名トークン認証）。本番3 Worker 反映済み。
 **2026-06-09 第三者レビュー全改善（Phase1〜6）**：無認証活性化の取り残しを ENV ゲート／nonprofit 却下の戻し先バグ修正／公開リポ deploy_code の即削除／SSRF 強化（FQDN・redirect:manual）／A2A nonce・権限・レート是正／セッション鍵 HKDF 分離／キルスイッチのドラフト無効化／Stripe past_due 降格・nonprofit 保護／自口座振替ガード／autopilot 鮮度ゲート／gh_merge_pr ページング／UI/UX 統一・a11y・/audit 検索。本番反映済み（詳細は [baku-office_review_確認事項と改善点.md](baku-office_review_確認事項と改善点.md)）。
+**2026-06-09 ホスト統制＋自己修復**：ストア/未登録アプリの**公開停止・削除**を全クライアントへ反映（墓標 `app_revocations`＋利用0で完全削除）／**標準同梱アプリの登録・除外**（`builtin_policy`→`disabledBuiltins`）／`/clients` を **entitlement 主・plan 従** に整理（2層は統合不可）／**自己修復ログ**（client エラー自動報告＋利用者の不具合/要望→ホスト `client_reports` 集積→`baku-team/baku-office-logs` へ Issue 化→Claude巡回・修復→`reportUpdates` で返信）／**定期巡回 `apps/scheduler`**（Cron Triggers `*/5`・Service Binding で sweep/drain 起動）。host D1 `0012`／client `0018` 適用。本番（host/client/scheduler）反映・sweep/drain 各200。
 本番化に必要：各APIクレデンシャル（Google/LINE/Discord/Stripe/Gemini/Claude）、`PUBLISH_TOKEN`、セキュリティ3ゲート（KMS署名／FIDO2／admin JIT）。

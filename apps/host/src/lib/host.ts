@@ -16,18 +16,31 @@ export async function issueLicenseToken(env: Env, licenseId: string, entitlement
   return btoa(JSON.stringify(env2)); // {body,sig} を base64 で1トークン化
 }
 
-// 統合チェック（§13.1）：エンタイトルメント＋最新版＋通知＋失効アプリ（キルスイッチ）。
-export async function buildCheck(env: Env, entitlement: Entitlement): Promise<CheckResponse> {
+// 統合チェック（§13.1）：エンタイトルメント＋最新版＋通知＋失効アプリ（キルスイッチ）
+// ＋除外された標準同梱アプリ＋この団体への対応返信。
+export async function buildCheck(env: Env, entitlement: Entitlement, licenseId?: string): Promise<CheckResponse> {
+  const { revokedAppIds, disabledBuiltinIds } = await import("./registry.ts");
   const { results } = await env.DB.prepare(
     "SELECT id, severity, body FROM notices WHERE active = 1 ORDER BY created_at DESC LIMIT 20",
   ).all<{ id: string; severity: string; body: string }>();
-  // blocked にしたアプリ id をクライアントへ配り、取り込み済みでも無効化させる（緊急停止）。
-  const { results: blocked } = await env.DB.prepare("SELECT id FROM registry_apps WHERE status='blocked'").all<{ id: string }>();
+  // blocked/deleted のアプリ id をクライアントへ配り、取り込み済みでも無効化・撤去させる（緊急停止）。
+  const revokedApps = await revokedAppIds(env);
+  // ホストが「除外」した標準同梱アプリ（登録/除外）。
+  const disabledBuiltins = await disabledBuiltinIds(env);
+  // この団体が送った報告への対応返信（resolved/wontfix）。
+  let reportUpdates: CheckResponse["reportUpdates"] = undefined;
+  if (licenseId) {
+    const { reportUpdatesFor } = await import("./reports.ts");
+    const ups = await reportUpdatesFor(env, licenseId).catch(() => []);
+    if (ups.length) reportUpdates = ups;
+  }
   return {
     entitlement,
     latestVersion: env.LATEST_VERSION ?? "0.0.0",
     notices: results.map((n) => ({ id: n.id, severity: n.severity as "info" | "important" | "critical", body: n.body })),
-    revokedApps: blocked.map((b) => b.id),
+    revokedApps,
+    disabledBuiltins,
+    reportUpdates,
   };
 }
 
