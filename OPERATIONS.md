@@ -6,6 +6,8 @@
 - **クライアント（利用団体）**：自分のCloudflareでアプリを自己ホストし、会計・庶務に利用。`baku-office-app`。
 - 表記：🟢=通常運用 ／ 🧪=dev（API未設定時の代替動作）。
 
+> **現在の環境（2026-06-09 時点）**：開発・運用は **baku-llc の Cloudflare アカウント（`*.baku-027.workers.dev`）のみ**。稼働 Worker は host=`baku-office-portal`／client=`baku-office-app`（env.production）／apply=`baku-office-apply`／scheduler=`baku-office-scheduler`。client wrangler の top-level（コメント上「amber-links 動作確認」）は現在不使用＝実ターゲットは **env.production**。本書で「当社アカウントへ deploy」とあるのは baku-llc env.production（`wrangler deploy --env production`）を指す。**外部顧客向けの本番提供はまだ開始しておらず（開発段階）**、本書のオンボーディング/解約フローは設計・検証段階の手順。
+
 ---
 
 ## 全体の流れ（俯瞰）
@@ -177,7 +179,7 @@
 1. 団体専用Googleアカウントを用意（引継ぎ容易）。
 2. 当社の**個別Deployリンク**（公開配布リポ `baku-office-app` 対象）を開く → Cloudflareに Google でサインイン。
 3. Cloudflareが**自分のGitHubへ複製**し、**D1/KVを自動作成**してデプロイ（単一Worker）。
-   - 🧪 開発検証は `npm -w apps/client run deploy`（当社アカウントへ）でも可。
+   - 🧪 開発検証は当社アカウント（baku-llc env.production）へ直接 deploy も可：`cd apps/client && npx wrangler deploy --env production`（`npm run deploy` は `--env` 無し＝top-level 構成に出るため、env.production へは `--env production` を明示）。
 
 ### C-2. 初回アクティベーション（認証キー入力なし）
 - デプロイ後に初めてアプリを開くと、ライセンス未保持を検知し**自動でアクティベーション**へ。

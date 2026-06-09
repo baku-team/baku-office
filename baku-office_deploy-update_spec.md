@@ -3,6 +3,9 @@
 > 対象リポジトリ：`baku-team/baku-office`（モノレポ）／ `baku-team/baku-office-app`（配布バンドル）
 > 本書は、申込からデプロイ・有効化・更新までを一本化した設計／実装ハンドオフ。
 > 正本仕様は [integrated_design_package_v1.0.md]、脅威モデルは [04_threat-model.md]、運用は [OPERATIONS.md]。
+>
+> **実装状況（2026-06-09）**：本書の多くは実装済み（host=`baku-office-portal`／apply=`baku-office-apply`／client=`baku-office-app`／scheduler=`baku-office-scheduler` が稼働、配布CI `publish-client.yml`＋署名リリース `release.yml` あり）。§6 のチェックリストは**設計時点のもの**で、進捗の正本は [PROGRESS.md] を参照。**外部顧客向けの本番提供はまだ開始していない（開発段階）**。
+> なお本書の deploy スクリプト（`npx wrangler deploy`）は**配布バンドル＝顧客が自分のアカウントへ展開する単一env構成**を指す。**当社の開発リポ `apps/client` を当社アカウント（baku-llc env.production）へ反映する場合は `npx wrangler deploy --env production` が必要**（`apps/client/wrangler.jsonc` が top-level＋env.production の二層のため）。
 
 ---
 
@@ -287,7 +290,7 @@ if (アプリKVに deployHook が保存済み) {   // 案①
 
 - フェーズA（アプリ内）：設定→自動更新→【自動更新を有効にする】→ ウィザード（スクショ＋
   【Cloudflareの設定を開く】ボタン）。
-- フェーズB（CF・誘導）：深いリンク `https://dash.cloudflare.com/?to=/:account/workers/services/view/baku-office/production/settings`
+- フェーズB（CF・誘導）：深いリンク `https://dash.cloudflare.com/?to=/:account/workers/services/view/baku-office-app/production/settings`（Worker 名は配布バンドルの `wrangler.jsonc` どおり `baku-office-app`）
   で自分の Worker 設定に着地（複数アカウント時のみ最初に選択）→ スクショどおり
   「設定→ビルド(Builds)→Deploy Hooks」→「作成」→ 名前任意・ブランチ=本番(main) → 生成URLをコピー。
 - フェーズC（アプリ内）：URLを1回貼付 → 形式検証 → アプリKVに**暗号化保存**（MASTER_KEY）→
