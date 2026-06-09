@@ -91,9 +91,9 @@ async function isActiveMember(env: Env, groupId: string, license: string): Promi
 // グループ中継：to 指定で個別、未指定で他の全 active メンバーへ同報。各宛先の結果を集約。
 export async function groupRelay(env: Env, fromLicense: string, groupId: string, to: string | null, action: string, args: Record<string, unknown>): Promise<{ ok: boolean; results?: { member: string; ok: boolean; result?: unknown; error?: string }[]; error?: string }> {
   if (!(await isActiveMember(env, groupId, fromLicense))) { await audit(env, groupId, fromLicense, "", action, "denied"); return { ok: false, error: "グループのメンバーではありません" }; }
-  // レート（グループ×分）。
+  // レート（グループ×分）。実中継（status='ok'）のみ計上＝denied/error の再試行で自己ロックしない。
   const since = nowSec() - 60;
-  const cnt = await env.DB.prepare("SELECT COUNT(*) AS n FROM a2a_audit WHERE conn_id=? AND created_at>=?").bind(groupId, since).first<{ n: number }>();
+  const cnt = await env.DB.prepare("SELECT COUNT(*) AS n FROM a2a_audit WHERE conn_id=? AND status='ok' AND created_at>=?").bind(groupId, since).first<{ n: number }>();
   if ((cnt?.n ?? 0) >= RATE_PER_MIN) return { ok: false, error: "レート上限に達しました。しばらく待って再試行してください" };
   let targets: string[];
   if (to) {
@@ -108,8 +108,8 @@ export async function groupRelay(env: Env, fromLicense: string, groupId: string,
     const to2 = await env.DB.prepare("SELECT deploy_url FROM licenses WHERE license_id=? AND status='active'").bind(m).first<{ deploy_url: string | null }>();
     if (!to2?.deploy_url || !isSafeDeployUrl(to2.deploy_url)) { results.push({ member: m, ok: false, error: "デプロイURL未登録または不正" }); await audit(env, groupId, fromLicense, m, action, "error"); continue; }
     try {
-      const envlp = await signEnvelope(await importSignKey(signingJwk(env)), { from: fromLicense, groupId, action, args, exp: nowSec() + 60 });
-      const r = await fetch(to2.deploy_url.replace(/\/$/, "") + "/api/a2a/inbound", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(envlp) });
+      const envlp = await signEnvelope(await importSignKey(signingJwk(env)), { from: fromLicense, groupId, action, args, exp: nowSec() + 60, nonce: randomId(12) });
+      const r = await fetch(to2.deploy_url.replace(/\/$/, "") + "/api/a2a/inbound", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(envlp), redirect: "manual" });
       const data = (await r.json().catch(() => ({}))) as { ok?: boolean; result?: unknown; error?: string };
       results.push({ member: m, ok: !!(r.ok && data.ok), result: data.result, error: r.ok && data.ok ? undefined : (data.error ?? `応答なし(${r.status})`) });
       await audit(env, groupId, fromLicense, m, action, r.ok && data.ok ? "ok" : "error");
@@ -134,14 +134,15 @@ export async function relay(env: Env, fromLicense: string, toLicense: string, ac
   if (!c) { await audit(env, null, fromLicense, toLicense, action, "denied"); return { ok: false, error: "有効な接続がありません（相互同意が必要です）" }; }
   // レート制限（接続×分）。
   const since = nowSec() - 60;
-  const cnt = await env.DB.prepare("SELECT COUNT(*) AS n FROM a2a_audit WHERE conn_id=? AND created_at>=?").bind(c.id, since).first<{ n: number }>();
+  // 実中継（status='ok'）のみ計上＝denied/error の再試行で自己ロックしない。
+  const cnt = await env.DB.prepare("SELECT COUNT(*) AS n FROM a2a_audit WHERE conn_id=? AND status='ok' AND created_at>=?").bind(c.id, since).first<{ n: number }>();
   if ((cnt?.n ?? 0) >= RATE_PER_MIN) { await audit(env, c.id, fromLicense, toLicense, action, "denied"); return { ok: false, error: "レート上限に達しました。しばらく待って再試行してください" }; }
   // 宛先 client の URL。
   const to = await env.DB.prepare("SELECT deploy_url FROM licenses WHERE license_id=? AND status='active'").bind(toLicense).first<{ deploy_url: string | null }>();
   if (!to?.deploy_url || !isSafeDeployUrl(to.deploy_url)) { await audit(env, c.id, fromLicense, toLicense, action, "error"); return { ok: false, error: "相手のデプロイURLが未登録または不正です" }; }
-  const envlp = await signEnvelope(await importSignKey(signingJwk(env)), { from: fromLicense, action, args, exp: nowSec() + 60 });
+  const envlp = await signEnvelope(await importSignKey(signingJwk(env)), { from: fromLicense, action, args, exp: nowSec() + 60, nonce: randomId(12) });
   try {
-    const r = await fetch(to.deploy_url.replace(/\/$/, "") + "/api/a2a/inbound", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(envlp) });
+    const r = await fetch(to.deploy_url.replace(/\/$/, "") + "/api/a2a/inbound", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(envlp), redirect: "manual" });
     const data = (await r.json().catch(() => ({}))) as { ok?: boolean; result?: unknown; error?: string };
     await audit(env, c.id, fromLicense, toLicense, action, r.ok && data.ok ? "ok" : "error");
     if (!r.ok || !data.ok) return { ok: false, error: data.error ?? `相手が応答しませんでした（${r.status}）` };

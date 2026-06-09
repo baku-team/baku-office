@@ -90,11 +90,36 @@ const pageLink = (p: number) => { const u = new URLSearchParams(); if (q) u.set(
     </nav>
   )}
 
+  <div class="modal" id="del-modal" role="dialog" aria-modal="true" aria-labelledby="del-title">
+    <div class="box">
+      <h3 id="del-title">団体の削除</h3>
+      <p class="muted">この操作は<strong>取り消せません</strong>。<strong id="del-org"></strong> の<strong>ライセンス・配布リポ・利用状況/DL/レビュー/NonProfit申請/A2A接続</strong>まで削除されます。</p>
+      <p style="margin:.5rem 0 .25rem">確認のため団体名を入力してください：</p>
+      <input id="del-input" placeholder="団体名" style="width:100%" autocomplete="off" />
+      <div class="row" style="justify-content:flex-end;gap:.5rem;margin-top:1rem">
+        <button class="btn btn-ghost" id="del-cancel" type="button">キャンセル</button>
+        <button class="btn btn-danger" id="del-confirm" type="button">削除する</button>
+      </div>
+    </div>
+  </div>
+
   <script slot="scripts" is:inline>
+    const modal = document.getElementById("del-modal");
+    const delOrg = document.getElementById("del-org");
+    const delInput = document.getElementById("del-input");
+    let delLic = "", delName = "";
+    const closeModal = () => { modal.classList.remove("open"); delInput.value = ""; };
+    document.getElementById("del-cancel").addEventListener("click", closeModal);
+    modal.addEventListener("click", (e) => { if (e.target === modal) closeModal(); });
+    document.getElementById("del-confirm").addEventListener("click", async (e) => {
+      if (delInput.value.trim() !== delName) { window.bo.toast("団体名が一致しません。削除を中止しました。", "err"); return; }
+      const r = await window.bo.api("/api/clients", { _action: "delete", license_id: delLic }, { btn: e.currentTarget, successMsg: "削除しました" });
+      if (r.ok) { closeModal(); setTimeout(() => location.reload(), 500); }
+    });
+
     document.querySelectorAll("tr[data-lic]").forEach((tr) => {
       const btn = tr.querySelector(".c-save");
-      if (!btn) return;
-      btn.addEventListener("click", async (e) => {
+      btn?.addEventListener("click", async (e) => {
         const body = {
           license_id: tr.dataset.lic,
           plan: tr.querySelector(".c-plan").value,
@@ -103,13 +128,10 @@ const pageLink = (p: number) => { const u = new URLSearchParams(); if (q) u.set(
         };
         await window.bo.api("/api/clients", body, { btn: e.currentTarget, successMsg: "更新しました" });
       });
-      tr.querySelector(".c-del")?.addEventListener("click", async (e) => {
-        const org = tr.dataset.org || "";
-        const input = prompt("削除すると顧客レコード・配布リポまで削除され、取り消せません。\n削除するには団体名「" + org + "」を入力してください：");
-        if (input === null) return;
-        if (input.trim() !== org) { window.bo.toast("団体名が一致しません。削除を中止しました。", "err"); return; }
-        const r = await window.bo.api("/api/clients", { _action: "delete", license_id: tr.dataset.lic }, { btn: e.currentTarget, successMsg: "削除しました" });
-        if (r.ok) setTimeout(() => location.reload(), 500);
+      tr.querySelector(".c-del")?.addEventListener("click", () => {
+        delLic = tr.dataset.lic; delName = tr.dataset.org || "";
+        delOrg.textContent = delName; delInput.value = "";
+        modal.classList.add("open"); delInput.focus();
       });
     });
   </script>

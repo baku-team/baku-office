@@ -43,6 +43,13 @@ export function initialEntitlement(_plan: Plan): Entitlement {
   return "free"; // plus/pro も入金前は free 相当（プロビジョナル）
 }
 
+// プラン→そのプランに見合う実体エンタイトルメント（課金確定後／資格喪失からの復帰先）。
+// initialEntitlement（申込直後＝常に free のプロビジョナル）とは別物。billing.ts の昇格と同一規律。
+// nonprofit は審査通過で初めて nonprofit 資格＝ここでは free（却下・剥奪時の戻し先）。
+export function entitlementForPlan(plan: Plan): Entitlement {
+  return plan === "plus" ? "plus" : plan === "pro" ? "pro" : "free";
+}
+
 // エンタイトルメントの序列（free < plus < pro < enterprise < test=全機能）。enterprise/test は全ゲート通過。
 export const ENTITLEMENT_RANK: Record<Entitlement, number> = { free: 0, plus: 1, pro: 2, nonprofit: 40, enterprise: 50, test: 99 };
 

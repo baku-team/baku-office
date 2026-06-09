@@ -41,7 +41,7 @@ const ENT_OPTS = ["free", "plus", "pro", "nonprofit", "enterprise"];
         <strong>{l.label}</strong><div class="muted" style="font-size:.8rem">{l.app}</div>
       </a>
     ))}
-    {launch.length === 0 && (<p class="muted">起動できるアプリがありません。下の「アプリ管理」や「ストア」から追加してください。</p>)}
+    {launch.length === 0 && (<p class="muted">{isAdminOrg ? "起動できるアプリがありません。下の「アプリ管理」や「ストア」から追加してください。" : "起動できるアプリがありません。管理者にアプリの追加を依頼してください。"}</p>)}
   </div>
 
   <h2>ストア</h2>

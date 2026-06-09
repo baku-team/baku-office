@@ -14,6 +14,44 @@
 
 ---
 
+## 対応状況（2026-06-09 時点・本書はレビュー当時のスナップショット）
+
+本書はレビュー時点のコードに基づく。以降の改修で下表の項目は対応済み。未対応はセキュリティ3ゲート（L10）と製品法務判断の保留分のみ。
+
+| 区分 | 項目 | 状態 |
+|---|---|---|
+| L1 | `/api/activate-by-email` の認証（署名 relay トークン必須化） | ✅ 対応済（生メール直叩きを遮断）。さらに `deploy_url` は `isSafeDeployUrl` で SSRF 検査して保存 |
+| L2 | LINEエージェントを active 会員限定＋組織横断ツールのロール認可 | ✅ 対応済（※LINE `sub`＝userId 前提は要確認） |
+| L3 | `MASTER_KEY` の Worker Secret 必須化 | 🟡 KvPort 分離・診断表示化（本番 Secret 必須運用へ）。フォールバック完全廃止は運用判断で継続検討 |
+| L4 | `/api/apply` の保護 | ✅ IP レート制限＋入力検証（orgName≤200・contactName≤100・email RFC簡易＋≤254）。Google ログイン必須化/CAPTCHA は運用判断 |
+| L5 | PII 用途 AI の学習不使用デフォルト化 | ⏸ 製品法務判断で保留（機微モードで cheap/secure 選択は実装済み） |
+| L6 | ローカルパスワードの PBKDF2 化＋一時 Cookie/セッション HMAC 署名 | ✅ 対応済 |
+| L7 | 保存リージョン固定・越境同意テンプレ | ⏸ 製品法務判断で保留 |
+| L8 | マイグレーション無視の限定列挙＋会計コアのテスト | ✅ 無視条件の限定＋失敗診断。契約テスト（Node+SQLite・client 35本）整備 |
+| L9 | Stripe `t` 鮮度検証＋署名比較の定数時間化 | ✅ 対応済 |
+| L10 | KMS署名・FIDO2・admin JIT（3ゲート） | ⏸ 本番ゲートとして保留（[PROGRESS.md](PROGRESS.md)） |
+
+**本書になかった追加発見への対応（2026-06-09）**：①ホスト側 fetch（A2A/統合チェック）の `deploy_url` SSRF を `isSafeDeployUrl` で検査 ②本番（`ENV≠development`）は `ADMIN_KEY` を必須化し fail-closed、dev 管理者ログインを ENV で封鎖 ③配布アプリのキルスイッチ（blocked を導入済みクライアントからも無効化）④アプリ公開申請 `registry/submit` を署名ライセンストークン認証へ（なりすまし pending 登録の遮断）⑤ホスト管理操作の監査ログ（`host_audit`・`/audit`）。詳細は [PROGRESS.md](PROGRESS.md) の 2026-06-08/09 セクション。
+
+### 第2次レビュー対応（2026-06-09・別途レビューで検出した残穴を改修）
+
+| 区分 | 指摘 | 対応 |
+|---|---|---|
+| 🔴 | `/api/activate`(GET)・`/api/token` が無認証（L1 の兄弟経路の取り残し） | dev 経路として `ENV=development` 限定にゲート。本番は Google relay のみ。`callback` を https/localhost に限定（オープンリダイレクト封鎖） |
+| 🔴 | nonprofit 却下が課金 Pro/Plus を free に転落（`initialEntitlement` スタブ誤用） | `entitlementForPlan(plan)` を新設し却下/剥奪の戻し先を実プランへ |
+| 🔴 | 公開 throwaway リポに deploy_code 平文 | deploy_url 受領時に当該リポを即削除（private 化は Deploy ボタンを壊すため不可） |
+| 🟠 | SSRF（FQDN なし内部名・credentials・リダイレクト追従） | FQDN 必須・credentials 拒否＋A2A fetch を `redirect:"manual"`。DNS rebinding は残存リスク明記 |
+| 🟠 | submit の id 乗っ取り（既存 submitted_by 上書き） | 予約 id 拒否＋所有者不一致は 409＋submit 監査 |
+| 🟠 | A2A リプレイ（nonce 不在）／app-action 権限バイパス／レート自己ロック | nonce 使い捨て・固定 caller で権限検査・レートは status='ok' のみ計上 |
+| 🟠 | セッション鍵＝暗号化鍵の同居 | HKDF サブ鍵で用途分離（根本は L3 の Secret 必須化） |
+| 🟠 | キルスイッチが drafts/builtin に無力／nonprofit×Stripe 競合／自口座振替で残高破壊 | drafts も無効化・webhook 昇格で nonprofit 保護・自口座振替を 400 拒否 |
+| 🟡 | gh_merge_pr のページング未対応／CSV 振替符号／課金 past_due 未処理 | files/check-runs を全ページ取得・符号付金額列・past_due で Free 降格 |
+| UI/UX | host alert/prompt 非統一・apply 無限スピナー・sticky ヘッダ・会計検証・a11y（toast/label）・/audit 検索 | window.bo.api 統一・タイムアウト導線・sticky 解除・入力検証・assertive/label・検索/フィルタ/ページング |
+
+詳細な変更点は [PROGRESS.md](PROGRESS.md) の 2026-06-09（第三者レビュー全改善）を参照。
+
+---
+
 ## 0. まず確認したいこと（仕様意図の突合）
 
 ドキュメントが古い可能性があるため、以下は「コードがこう見えるが、意図はどうか」を確認したい項目。回答次第で改善点の優先度が変わる。

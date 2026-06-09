@@ -13,9 +13,19 @@ const b64url = (b: ArrayBuffer | Uint8Array) =>
 const b64urlToBytes = (s: string) =>
   Uint8Array.from(atob(s.replace(/-/g, "+").replace(/_/g, "/")), (c) => c.charCodeAt(0));
 
+// セッション/一時Cookie 署名用 HMAC 鍵。MASTER_KEY を生のまま使わず HKDF で用途別サブ鍵に分離する。
+// WHY: 暗号化（AES）とセッション署名で同一鍵材を直接共用しない（用途分離＝クロスプロトコル耐性）。
+// 注：MASTER_KEY 自体が漏れれば派生鍵も再現可能＝根本対策は MASTER_KEY の Worker Secret 必須化（L3）。
 async function hmacKey(env: Env): Promise<CryptoKey> {
   const raw = Uint8Array.from(atob(await masterKey(env)), (c) => c.charCodeAt(0)); // MASTER_KEYは標準base64
-  return crypto.subtle.importKey("raw", raw, { name: "HMAC", hash: "SHA-256" }, false, ["sign", "verify"]);
+  const ikm = await crypto.subtle.importKey("raw", raw, "HKDF", false, ["deriveKey"]);
+  return crypto.subtle.deriveKey(
+    { name: "HKDF", hash: "SHA-256", salt: ENC.encode("bo-session-v1"), info: ENC.encode("session-hmac") },
+    ikm,
+    { name: "HMAC", hash: "SHA-256", length: 256 },
+    false,
+    ["sign", "verify"],
+  );
 }
 
 export async function makeSessionCookie(env: Env, s: Session): Promise<string> {

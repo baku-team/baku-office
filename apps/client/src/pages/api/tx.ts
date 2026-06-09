@@ -25,6 +25,8 @@ export const POST: APIRoute = async ({ request, locals }) => {
   }
   if (!b.date || !b.wallet_id) return json({ error: "date と wallet_id が必要" }, 400);
   if (kind === "transfer" && !b.counter_wallet_id) return json({ error: "振替は counter_wallet_id が必要" }, 400);
+  // 自口座振替は残高計算が壊れる（出納帳の排他分岐で入金側が消える）ため拒否。
+  if (kind === "transfer" && b.wallet_id === b.counter_wallet_id) return json({ error: "振替元と振替先が同じ口座です" }, 400);
   if (kind !== "transfer" && !b.category_id) return json({ error: "科目(category_id)が必要" }, 400);
 
   const id = await createTx(env, {

@@ -29,7 +29,7 @@
 
 | # | 主体 | 操作 |
 | --- | --- | --- |
-| 1 | クライアント | `/apply`（申込専用Worker）で団体名・連絡先を入力→送信（**プラン選択はなし＝全員 Free で開始**・IPレート制限あり）。 |
+| 1 | クライアント | `/apply`（申込専用Worker）で団体名・連絡先を入力→送信（**プラン選択はなし＝全員 Free で開始**・IPレート制限＋入力検証＝団体名≤200／担当者名≤100／メール形式・≤254）。 |
 | 2 | ホスト（自動） | customers/licenses を作成（**`plan=free`・`status=active`**・`deploy_code`=nonce）。GitHub連携時は**団体ごとの throwaway 公開リポ**を生成し `report.json`（licenseId/deployCode/host URL）を焼き込み。失敗時は共有リポにフォールバック。 |
 | 3 | ホスト（自動） | **Deploy to Cloudflare リンク**（`deploy.workers.cloudflare.com/?url=<repo>`）を返す。 |
 | 4 | クライアント | Deployボタンで**自分のCFアカウント**へ展開（D1/KV/Worker は顧客保有）。以後 push で自動再ビルド。 |
@@ -89,7 +89,8 @@
    - `npm -w apps/host run deploy`（`astro build && wrangler deploy`）。
 2. シークレット登録（`wrangler secret put -c apps/host/wrangler.jsonc`）：
    - `SIGNING_JWK`（ライセンス署名鍵・Ed25519。将来KMS）
-   - `ADMIN_KEY`（API保護・任意）
+   - `ADMIN_KEY`（管理者セッション署名鍵）。**本番（`ENV≠development`）は必須＝未設定なら fail-closed で管理者ログイン不可**。`ENV=development` のときのみ dev フォールバック鍵を許可。
+   - `ENV`（任意）：`development` を設定した環境でのみ dev 管理者ログインと鍵フォールバックが有効。本番は未設定＝厳格側（設定漏れでも安全）。
    - 🟢 `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`（スタッフGoogleログイン）
    - 🟢 `HOST_ADMIN_EMAILS`（管理者のGoogleメール・カンマ区切り）
    - 🟢 課金：`STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` / `STRIPE_PRICE_Y`（Plus用）/ `STRIPE_PRICE_Z`（Pro用）。Stripe接続部は実装済みで、**アカウント未準備なら鍵未投入のまま起動**し、鍵投入で課金が有効化される。
@@ -97,8 +98,8 @@
 4. クライアント配布鍵：ホストの署名鍵に対応する**公開検証鍵**を取得し、クライアント側に渡す（`GET /admin/pubkey`）。
 
 ### A-1. スタッフログイン
-- `/login` → 🟢「Googleでログイン」（`HOST_ADMIN_EMAILS` の管理者のみ操作可）／🧪「管理者としてログイン（dev）」。
-- 以降 `/clients`・`/notices` は管理者のみ。
+- `/login` → 🟢「Googleでログイン」（`HOST_ADMIN_EMAILS` の管理者のみ操作可）／🧪「管理者としてログイン（dev）」は **`ENV=development` かつ Google 未設定時のみ**有効（本番は無効）。
+- 以降 `/clients`・`/notices`・`/apps`・`/nonprofit`・`/audit` は管理者のみ。
 
 ### A-2. 団体の申込受付 → ライセンス発行
 1. `/apply` で団体情報（団体名・代表者・連絡先）を入力 →「申し込む」。**プラン選択はなし＝全員 Free で開始**（アップグレードは導入後にクライアント `/billing` から）。
@@ -107,15 +108,24 @@
    - ※ クライアントの**個別Deployリンク**もあわせて案内（§C-1）。
 
 ### A-3. クライアント管理（監視）
-- `/clients`：団体一覧（団体名・プラン・エンタイトルメント・稼働バージョン・最終受信）。
+- `/clients`：団体一覧（団体名・プラン・エンタイトルメント・稼働バージョン・最終受信）。**検索（団体名/メール）・状態/プランフィルタ・50件ページング・件数表示**で多数団体を運用。
 - 各クライアントは統合チェック（`/api/check`）で自動的に最終受信/バージョンを更新。
 - **エンタイトルメント設定**：`/clients` から対象団体のプランを変更でき、**評価・社内検証用に `test`（全機能解放）** を付与できる（ランク最上位＝全ゲート通過）。検証後は元プランに戻す。
+- **顧客削除（安全化）**：削除は**団体名のタイプ確認**を必須化（誤操作防止）。実行時はライセンス／アクティベーションコードに加え、利用状況・DL・レビュー・NonProfit 申請・A2A 接続/グループ等の**関連レコードを明示削除**（D1 に FK/CASCADE が無いため孤児化を防止）。GitHub 連携時は団体リポも best-effort 削除。
+- 上記のプラン変更・削除は**監査ログ**（§A-7）へ記録される。
 
 ### A-3b. アプリ管理（中枢レジストリ）— `/apps`
 - **存在の管理**：各リポで作られたアプリを登録（id/名称/版/リポURL/権限）→ 承認（approved）/停止（blocked）。
-- **利用状況**：クライアントが申告した導入アプリ（id:version・PIIなし）を集計し、アプリ別の導入数・版分布・アクティブ数を表示。
+- **公開申請の認証**：クライアントからの公開申請（`/api/registry/submit`）は**署名ライセンストークン認証**（生 licenseId は受理しない＝なりすまし pending 登録を遮断）。
+- **停止＝キルスイッチ**：`blocked` にしたアプリ id は統合チェック（`/api/check`）の `revokedApps` でクライアントへ配布され、**取り込み済みでも自動で無効化（削除）** される（緊急停止）。
+- **利用状況**：クライアントが申告した導入アプリ（id:version・PIIなし）を集計し、アプリ別の**ユニーク導入数**（同一ライセンスの再DLは二重計上しない）・版分布・アクティブ数を表示。
 - **未登録で稼働中**のアプリ（レジストリ未登録だが利用申告あり）を警告表示。
-- 前提：ホスト D1 に `0004_app_registry.sql` を適用（`wrangler d1 execute baku-office-portal-db --remote --file apps/host/migrations/0004_app_registry.sql`）。
+- 前提：ホスト D1 に `0004_app_registry.sql`／`0011_app_downloads_unique.sql` を適用（`wrangler d1 execute baku-office-portal-db --remote --file apps/host/migrations/<f>.sql`）。
+
+### A-3c. NonProfit 審査 — `/nonprofit`
+- 申込時に NonProfit（非営利・全機能無料）を選んだ団体は審査待ち（通過まで Free 相当）。一覧から**承認**（`entitlement=nonprofit`＝全機能解放）／**却下**（理由付き）。
+- **却下＝降格**：承認後に資格を失った団体を却下すると、`entitlement` を**プランベースへ戻す**（nonprofit のまま貼り付かない）。承認済み一覧からの**剥奪**導線もここから。
+- 承認/却下は**監査ログ**（§A-7）へ記録される。
 
 ### A-4. お知らせ配信
 - `/notices` で info／important／critical を発行・停止。
@@ -130,6 +140,11 @@
 - `apps/client` を更新して main へ push → **CI（`publish-client.yml`）が公開配布リポ `baku-office-app` を自動更新**。
   - 事前に private リポへ `PUBLISH_TOKEN`（配布リポ書込PAT）を登録。
 - 顧客はフォーク同期で受領（§C-7）。DBスキーマは顧客側で自動適用（§C補足）。
+
+### A-7. 監査ログ — `/audit`
+- 管理者による**プラン／エンタイトルメント変更・顧客削除・アプリ承認/停止・NonProfit 審査**の操作履歴（日時・実行者・操作・対象・詳細／直近300件）。
+- 記録は `recordAudit`（`host_audit` テーブル）で各操作 API から自動付与。記録失敗は本処理を止めない（best-effort）。
+- 前提：ホスト D1 に `0010_audit.sql` を適用。
 
 ---
 
@@ -223,8 +238,8 @@
 
 | 役割 | URL（例） | 主な操作 |
 | --- | --- | --- |
-| ホスト | `/login` `/apply` `/clients` `/notices` | スタッフログイン・申込・監視・配信 |
-| ホストAPI | `/api/apply` `/api/activate` `/api/token` `/api/check` `/api/billing/*` `/api/notices` | 発行・アクティベート・統合チェック・課金・通知 |
+| ホスト | `/login` `/apply` `/clients` `/apps` `/nonprofit` `/notices` `/audit` | スタッフログイン・申込・監視・アプリ承認・NonProfit審査・配信・監査ログ |
+| ホストAPI | `/api/apply` `/api/activate` `/api/token` `/api/check` `/api/billing/*` `/api/notices` `/api/registry/submit` | 発行・アクティベート・統合チェック（`revokedApps` 配布）・課金・通知・アプリ公開申請（署名トークン認証） |
 | クライアント（4ナビ） | `/`（ホーム） `/chat`（AI） `/apps`（アプリ） `/settings`（設定） | 相棒・アプリ導入/開発・設定集約 |
 | クライアント（業務画面） | `/accounting` `/membership` `/files` `/schedule` `/minutes` `/review` `/personal` `/billing` `/settings/keys` `/settings/advanced` `/diagnostics` | 「アプリ」「設定」から起動する各機能 |
 | クライアントAPI | `/api/line/webhook` `/api/cron/drain` `/provision` | エージェント・リマインダー/ジョブ処理・配信受信 |

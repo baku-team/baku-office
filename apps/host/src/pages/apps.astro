@@ -72,17 +72,18 @@ const fmt = (s: number | null) => (s ? new Date(s * 1000).toISOString().slice(0,
   </div>
 
   <script slot="scripts" is:inline>
-    const api = async (b, btn) => { if (btn) btn.disabled = true; try { const r = await fetch("/api/registry", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(b) }); const j = await r.json().catch(() => ({})); if (!r.ok || j.error) { alert("エラー：" + (j.error || r.status)); return null; } return j; } finally { if (btn) btn.disabled = false; } };
+    // 共通基盤（window.bo.api）に統一：エラー/成功トースト・処理中表示を他のホスト画面と揃える。
+    const api = (body, btn, successMsg) => window.bo.api("/api/registry", body, { btn, successMsg });
     document.querySelectorAll("tr[data-id]").forEach((tr) => {
       const id = tr.getAttribute("data-id");
-      tr.querySelectorAll(".st").forEach((b) => b.addEventListener("click", async (e) => { const r = await api({ _action: "status", id, status: e.currentTarget.dataset.st }, e.currentTarget); if (r) location.reload(); }));
-      tr.querySelector(".lst")?.addEventListener("click", async (e) => { const r = await api({ _action: "set_listed", id, listed: e.currentTarget.dataset.lst === "1" }, e.currentTarget); if (r) location.reload(); });
+      tr.querySelectorAll(".st").forEach((b) => b.addEventListener("click", async (e) => { const st = e.currentTarget.dataset.st; if (st === "blocked" && !confirm("このアプリを停止し、導入済みクライアントからも無効化（キルスイッチ）しますか？")) return; const r = await api({ _action: "status", id, status: st }, e.currentTarget, st === "approved" ? "承認しました" : "停止しました"); if (r.ok) location.reload(); }));
+      tr.querySelector(".lst")?.addEventListener("click", async (e) => { const r = await api({ _action: "set_listed", id, listed: e.currentTarget.dataset.lst === "1" }, e.currentTarget, "更新しました"); if (r.ok) location.reload(); });
     });
     document.getElementById("reg").addEventListener("click", async (e) => {
       const perms = (document.getElementById("r-perms").value || "").split(",").map((s) => s.trim()).filter(Boolean);
       const body = { _action: "register", id: document.getElementById("r-id").value, name: document.getElementById("r-name").value, version: document.getElementById("r-version").value, repoUrl: document.getElementById("r-repo").value, publisher: document.getElementById("r-pub").value, category: document.getElementById("r-cat").value, permissions: perms, description: document.getElementById("r-desc").value };
-      if (!body.id || !body.name || !body.version) { alert("ID・名称・版は必須です"); return; }
-      const r = await api(body, e.currentTarget); if (r) location.reload();
+      if (!body.id || !body.name || !body.version) { window.bo.toast("ID・名称・版は必須です", "err"); return; }
+      const r = await api(body, e.currentTarget, "登録しました"); if (r.ok) location.reload();
     });
   </script>
 </Host>

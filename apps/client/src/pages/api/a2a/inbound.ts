@@ -20,8 +20,14 @@ export const POST: APIRoute = async ({ request, locals }) => {
   if (!jwk) return json({ ok: false, error: "検証鍵が未設定" }, 503);
   if (!(await verifyEnvelope(await importVerifyKey(jwk), envlp))) return json({ ok: false, error: "署名検証に失敗" }, 401);
 
-  const p = payloadOf(envlp) as { from?: string; groupId?: string; action?: string; args?: Record<string, unknown>; exp?: number };
+  const p = payloadOf(envlp) as { from?: string; groupId?: string; action?: string; args?: Record<string, unknown>; exp?: number; nonce?: string };
   if (!p || typeof p.exp !== "number" || p.exp < nowSec()) return json({ ok: false, error: "期限切れ" }, 401);
+  // リプレイ防止：署名は exp(60秒) 窓内なら再送可だったため nonce を使い捨て化（脅威モデル⑦＝署名＋nonce）。
+  const nonce = typeof p.nonce === "string" ? p.nonce : "";
+  if (!nonce) return json({ ok: false, error: "nonce が必要" }, 401);
+  const nk = "a2anonce:" + nonce;
+  if (await env.LICENSE.get(nk)) return json({ ok: false, error: "リプレイ検出（使用済み nonce）" }, 409);
+  await env.LICENSE.put(nk, "1", { expirationTtl: 120 });
   const name = String(p.action ?? "");
   if (!name) return json({ ok: false, error: "action が必要" }, 400);
   const groupId = p.groupId ? String(p.groupId) : "";

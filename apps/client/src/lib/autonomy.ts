@@ -202,13 +202,33 @@ export async function ghMergePr(env: Env, number: number): Promise<string> {
   }
   if (mergeable !== true) return "コンフリクトがあるか可否を確認できないため自動マージしません。解消後に再依頼してください。";
   // コア領域を含むPRはマージ禁止（gh_commit_file の denylist を PR 経由で回避させない）。
-  const fl = await gh(env, "GET", `/pulls/${number}/files?per_page=100`);
-  const files = (fl.ok ? fl.data : []) as { filename: string }[];
-  const core = (files ?? []).find((f) => isCorePath(f.filename));
+  // 全ページ取得＝101件目以降のコア領域ファイルを見逃さない。多すぎる場合は安全側で拒否。
+  const files: { filename: string }[] = [];
+  for (let page = 1; page <= 10; page++) {
+    const fl = await gh(env, "GET", `/pulls/${number}/files?per_page=100&page=${page}`);
+    if (!fl.ok) return `PRファイル取得失敗：${fl.error}`;
+    const batch = (fl.data ?? []) as { filename: string }[];
+    files.push(...batch);
+    if (batch.length < 100) break;
+    if (page === 10) return "変更ファイルが多すぎて安全確認できないため自動マージしません（手動レビューしてください）。";
+  }
+  const core = files.find((f) => isCorePath(f.filename));
   if (core) return `コア領域（${core.filename}）を含むPRは自動マージできません。手動レビューが必要です。`;
   const sha = pr.data.head?.sha as string;
-  const cr = await gh(env, "GET", `/commits/${sha}/check-runs`);
-  const runs = (cr.ok ? cr.data.check_runs : []) as { name: string; status: string; conclusion: string | null }[];
+  // check-runs も全ページ取得（31件目以降の失敗チェックを見逃さない）。
+  const runs: { name: string; status: string; conclusion: string | null }[] = [];
+  {
+    const cr = await gh(env, "GET", `/commits/${sha}/check-runs?per_page=100`);
+    if (cr.ok) {
+      runs.push(...((cr.data.check_runs ?? []) as { name: string; status: string; conclusion: string | null }[]));
+      const total = (cr.data.total_count ?? runs.length) as number;
+      for (let page = 2; runs.length < total && page <= 10; page++) {
+        const more = await gh(env, "GET", `/commits/${sha}/check-runs?per_page=100&page=${page}`);
+        if (!more.ok) break;
+        runs.push(...((more.data.check_runs ?? []) as { name: string; status: string; conclusion: string | null }[]));
+      }
+    }
+  }
   const st = await gh(env, "GET", `/commits/${sha}/status`);
   const statuses = (st.ok ? st.data.statuses : []) as { context: string; state: string }[];
   if ((runs?.length ?? 0) + (statuses?.length ?? 0) === 0) return "CI/チェックが見つからないため自動マージしません（安全のため手動マージしてください）。";

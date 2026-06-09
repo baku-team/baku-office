@@ -70,6 +70,8 @@ const navItems = buildNav(items, [], navOv);
       // 共通フィードバック：トースト＋fetchラッパ。全操作で必ず成否を可視化する。
       const wrap = document.getElementById("toasts");
       function toast(msg, kind = "ok") {
+        // エラーは assertive で即読み上げ（成功/情報は polite）。
+        if (wrap) wrap.setAttribute("aria-live", kind === "err" ? "assertive" : "polite");
         const el = document.createElement("div");
         el.className = "toast " + (kind === "err" ? "err" : kind === "info" ? "info" : "ok");
         el.textContent = msg;

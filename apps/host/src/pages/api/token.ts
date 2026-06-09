@@ -1,12 +1,16 @@
 import type { APIRoute } from "astro";
 import { nowSec, issueLicenseToken, isSafeDeployUrl } from "../../lib/host.ts";
+import { isDevEnv } from "../../lib/hostauth.ts";
+import { deleteRepo } from "@baku-office/shared";
 import type { Entitlement } from "@baku-office/shared";
 
 export const prerender = false;
 
 // コード交換（§4手順4）：アクティベーションコード → 署名済みライセンストークン。
+// dev 経路（/api/activate のコードを交換）。本番は Google relay（activate-by-email）のみ＝ENV で塞ぐ。
 export const POST: APIRoute = async ({ request, locals }) => {
   const env = locals.runtime.env;
+  if (!isDevEnv(env)) return json({ error: "本番は Google ログインで活性化してください" }, 403);
   const b = (await request.json().catch(() => ({}))) as { code?: string; deployUrl?: string };
   if (!b.code) return json({ error: "code が必要" }, 400);
 
@@ -28,6 +32,11 @@ export const POST: APIRoute = async ({ request, locals }) => {
     await env.DB.prepare("UPDATE licenses SET deploy_url = ?, last_seen = ? WHERE license_id = ?")
       .bind(b.deployUrl, now, row.license_id)
       .run();
+    // deploy 完了＝公開 throwaway リポ（app-<licenseId>・report.json に deploy_code 平文）は役目終了。
+    // 即削除して公開露出を最小化（リポ private 化は Deploy ボタン＝他者CFが clone 不可になるため採らない）。
+    if (env.GITHUB_TOKEN && env.GITHUB_OWNER) {
+      try { await deleteRepo({ token: env.GITHUB_TOKEN, owner: env.GITHUB_OWNER }, row.license_id); } catch { /* best-effort */ }
+    }
   }
 
   const token = await issueLicenseToken(env, row.license_id, lic.entitlement);

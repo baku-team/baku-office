@@ -18,10 +18,12 @@ export const GET: APIRoute = async ({ locals }) => {
   ).bind(period.id).all<{ date: string; wallet: string; kind: string; category: string | null; amount: number; description: string | null; counter: string | null }>();
 
   const esc = (v: unknown) => `"${String(v ?? "").replace(/"/g, '""')}"`;
-  const header = ["日付", "口座", "種別", "科目", "金額", "摘要", "振替先"];
+  // 符号付金額（口座＝振替元 基準）：収入=+／支出・振替出=−。表計算での口座別集計で振替を二重計上させないため。
+  const signed = (kind: string, amount: number) => (kind === "income" ? amount : -amount);
+  const header = ["日付", "口座", "種別", "科目", "金額", "符号付金額", "摘要", "振替先"];
   const lines = [header.map(esc).join(",")];
   for (const r of results) {
-    lines.push([r.date, r.wallet, r.kind, r.category ?? "", r.amount, r.description ?? "", r.counter ?? ""].map(esc).join(","));
+    lines.push([r.date, r.wallet, r.kind, r.category ?? "", r.amount, signed(r.kind, r.amount), r.description ?? "", r.counter ?? ""].map(esc).join(","));
   }
   const csv = "﻿" + lines.join("\r\n");
   return new Response(csv, {

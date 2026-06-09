@@ -25,7 +25,7 @@ const emsg: Record<string, string> = { state: "セッションが切れました
     <h2 style="margin-top:0;border:0">個人（メンバー）</h2>
     {(line || discord)
       ? <p>{line && <a class="btn" style="background:#06c755;color:#fff" href="/api/auth/line/start">LINEでログイン</a>} {discord && <a class="btn" style="background:#5865f2;color:#fff" href="/api/auth/discord/start">Discordでログイン</a>}</p>
-      : <><p class="muted">本番はLINEログイン等（§6.2）。dev：ID/パスワード。</p><div class="field"><input id="lid" placeholder="ログインID" /></div><div class="field"><input id="lpw" type="password" placeholder="パスワード" /></div><button class="btn btn-primary" id="local">個人ログイン</button></>}
+      : <><p class="muted">本番はLINEログイン等（§6.2）。dev：ID/パスワード。</p><div class="field"><label for="lid">ログインID</label><input id="lid" name="lid" autocomplete="username" placeholder="ログインID" /></div><div class="field"><label for="lpw">パスワード</label><input id="lpw" name="lpw" type="password" autocomplete="current-password" placeholder="パスワード" /></div><button class="btn btn-primary" id="local">個人ログイン</button></>}
     <p class="muted">招待コードをお持ちの方は <a href="/join">こちらから参加</a></p>
   </div>
   <script slot="scripts" is:inline>

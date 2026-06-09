@@ -5,6 +5,7 @@ import type { Ctx, KvPort } from "../core/ports.ts";
 
 const KV_TOKEN = "license_token";
 const KV_ENTITLEMENT = "entitlement";
+const KV_ENTITLEMENT_AT = "entitlement_at"; // 直近の統合チェック時刻（鮮度ゲート用）
 const KEY_PREFIX = "apikey:"; // KV: apikey:gemini / apikey:line_secret / apikey:line_token / apikey:claude
 
 export const nowSec = (): number => Math.floor(Date.now() / 1000);
@@ -39,10 +40,13 @@ export async function pollHost(env: Env, deployUrl?: string, apps?: { id: string
     if (!r.ok) return null;
     const data = (await r.json()) as CheckResponse;
     await env.LICENSE.put(KV_ENTITLEMENT, data.entitlement);
+    await env.LICENSE.put(KV_ENTITLEMENT_AT, String(nowSec())); // 鮮度（重要ゲートのダウングレード窓を縮小）
     // 緊急停止：ホストが blocked にしたアプリを取り込み済みでも削除する（キルスイッチ）。
     if (Array.isArray(data.revokedApps) && data.revokedApps.length) {
       const ph = data.revokedApps.map(() => "?").join(",");
       await env.DB.prepare(`DELETE FROM external_apps WHERE id IN (${ph})`).bind(...data.revokedApps).run().catch(() => {});
+      // ローカル生成ドラフト（再申請・有効化の余地）も無効化（external_apps だけでは止まらないため）。
+      await env.DB.prepare(`UPDATE app_drafts SET gate_status='blocked' WHERE id IN (${ph})`).bind(...data.revokedApps).run().catch(() => {});
     }
     return data;
   } catch {
@@ -66,6 +70,16 @@ export async function getLicenseId(env: Env): Promise<string | null> {
 // 直近に保存したエンタイトルメント（オフライン時のフォールバック表示用）。
 export async function cachedEntitlement(env: Env): Promise<Entitlement> {
   return ((await env.LICENSE.get(KV_ENTITLEMENT)) as Entitlement) ?? "free";
+}
+
+// 重要ゲート（autopilot/agent）用：キャッシュが maxAgeSec を超えて古ければ一度だけ再ポーリングして最新化を試みる。
+// オンライン＝最新へ／オフライン（Profile C）＝pollHost 失敗でキャッシュ据え置き＝継続。解約後の Pro 残存窓を縮小する。
+export async function entitlementForGate(env: Env, maxAgeSec = 6 * 3600): Promise<Entitlement> {
+  const at = Number(await env.LICENSE.get(KV_ENTITLEMENT_AT));
+  if (!Number.isFinite(at) || nowSec() - at > maxAgeSec) {
+    await pollHost(env).catch(() => null); // 失敗（オフライン）はキャッシュ継続
+  }
+  return cachedEntitlement(env);
 }
 
 // MASTER_KEY：secret があれば優先、無ければ生成して LICENSE KV に保存（セルフ導入＝secret投入不要）。
