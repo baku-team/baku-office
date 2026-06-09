@@ -1,5 +1,5 @@
 import type { APIRoute } from "astro";
-import { nowSec, buildCheck, signingJwk } from "../../lib/host.ts";
+import { nowSec, buildCheck, signingJwk, isSafeDeployUrl } from "../../lib/host.ts";
 import { recordUsage, parseAppsParam } from "../../lib/registry.ts";
 import { openLicense, type Envelope } from "@baku-office/shared";
 
@@ -28,8 +28,10 @@ export const GET: APIRoute = async ({ url, locals }) => {
     .bind(payload.licenseId)
     .first<{ entitlement: "free" | "plus" | "pro" | "test" }>();
   const entitlement = lic?.entitlement ?? payload.entitlement;
+  // deploy_url は後でホストがサーバーサイド fetch する宛先（A2A）になるため、不正URLは保存しない（SSRF対策）。
+  const safeDeployUrl = deployUrl && isSafeDeployUrl(deployUrl) ? deployUrl : null;
   await env.DB.prepare("UPDATE licenses SET last_seen = ?, deploy_url = COALESCE(?, deploy_url), version = COALESCE(?, version) WHERE license_id = ?")
-    .bind(nowSec(), deployUrl, version, payload.licenseId)
+    .bind(nowSec(), safeDeployUrl, version, payload.licenseId)
     .run();
 
   // 導入アプリ申告（id:version・PIIなし）を中枢の利用状況へ記録。

@@ -1,5 +1,5 @@
 import type { APIRoute } from "astro";
-import { issueLicenseToken, nowSec, signingJwk } from "../../lib/host.ts";
+import { issueLicenseToken, nowSec, signingJwk, isSafeDeployUrl } from "../../lib/host.ts";
 import { importVerifyKey, verifyEnvelope, payloadOf } from "@baku-office/shared";
 import type { Entitlement } from "@baku-office/shared";
 
@@ -33,7 +33,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
   ).bind(email).first<{ id: string; ent: string }>();
   if (!lic) return json({ error: "このGoogleアカウント（メール）に対応する申込が見つかりません" }, 404);
 
-  if (b.deployUrl) {
+  if (b.deployUrl && isSafeDeployUrl(b.deployUrl)) {
     await env.DB.prepare("UPDATE licenses SET deploy_url = ?, last_seen = ? WHERE license_id = ?").bind(b.deployUrl, nowSec(), lic.id).run();
   }
   const token = await issueLicenseToken(env, lic.id, lic.ent as Entitlement);

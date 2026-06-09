@@ -7,9 +7,14 @@ const ENC = new TextEncoder();
 const b64url = (b: ArrayBuffer | Uint8Array) => btoa(String.fromCharCode(...new Uint8Array(b))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 const fromB64url = (s: string) => Uint8Array.from(atob(s.replace(/-/g, "+").replace(/_/g, "/")), (c) => c.charCodeAt(0));
 
+// セッション署名用 HMAC 鍵。本番（ENV!="development"）は ADMIN_KEY 必須＝未設定なら fail-closed。
+// WHY: フォールバック固定鍵を本番で使うと、誰でも公開定数で管理者 Cookie を偽造できてしまう。
 async function key(env: Env): Promise<CryptoKey> {
-  return crypto.subtle.importKey("raw", ENC.encode(env.ADMIN_KEY || "dev-host-secret"), { name: "HMAC", hash: "SHA-256" }, false, ["sign", "verify"]);
+  const secret = env.ADMIN_KEY || (env.ENV === "development" ? "dev-host-secret" : "");
+  if (!secret) throw new Error("ADMIN_KEY 未設定（本番では必須）");
+  return crypto.subtle.importKey("raw", ENC.encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign", "verify"]);
 }
+export const isDevEnv = (env: Env): boolean => env.ENV === "development";
 export async function makeCookie(env: Env, s: HostSession): Promise<string> {
   const p = b64url(ENC.encode(JSON.stringify(s)));
   const sig = b64url(await crypto.subtle.sign("HMAC", await key(env), ENC.encode(p)));

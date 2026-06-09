@@ -1,7 +1,7 @@
 // A2A ブローカー（ホスト）：団体間接続の作成・同意・一覧と、署名つき中継。
 // 認証＝相手ライセンスの実在/有効＋接続の active。実行面は相手 client の /api/a2a/inbound（ctx.apps.call 経由・権限検査つき）。
 import { randomId, signEnvelope, importSignKey, openLicense, type Envelope } from "@baku-office/shared";
-import { nowSec, signingJwk } from "./host.ts";
+import { nowSec, signingJwk, isSafeDeployUrl } from "./host.ts";
 
 // ライセンストークン（client が保持）→ licenseId を検証して取り出す。なりすまし防止。
 export async function licenseFromToken(env: Env, token: string | undefined): Promise<string | null> {
@@ -106,7 +106,7 @@ export async function groupRelay(env: Env, fromLicense: string, groupId: string,
   const results = [];
   for (const m of targets) {
     const to2 = await env.DB.prepare("SELECT deploy_url FROM licenses WHERE license_id=? AND status='active'").bind(m).first<{ deploy_url: string | null }>();
-    if (!to2?.deploy_url) { results.push({ member: m, ok: false, error: "デプロイURL未登録" }); await audit(env, groupId, fromLicense, m, action, "error"); continue; }
+    if (!to2?.deploy_url || !isSafeDeployUrl(to2.deploy_url)) { results.push({ member: m, ok: false, error: "デプロイURL未登録または不正" }); await audit(env, groupId, fromLicense, m, action, "error"); continue; }
     try {
       const envlp = await signEnvelope(await importSignKey(signingJwk(env)), { from: fromLicense, groupId, action, args, exp: nowSec() + 60 });
       const r = await fetch(to2.deploy_url.replace(/\/$/, "") + "/api/a2a/inbound", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(envlp) });
@@ -138,7 +138,7 @@ export async function relay(env: Env, fromLicense: string, toLicense: string, ac
   if ((cnt?.n ?? 0) >= RATE_PER_MIN) { await audit(env, c.id, fromLicense, toLicense, action, "denied"); return { ok: false, error: "レート上限に達しました。しばらく待って再試行してください" }; }
   // 宛先 client の URL。
   const to = await env.DB.prepare("SELECT deploy_url FROM licenses WHERE license_id=? AND status='active'").bind(toLicense).first<{ deploy_url: string | null }>();
-  if (!to?.deploy_url) { await audit(env, c.id, fromLicense, toLicense, action, "error"); return { ok: false, error: "相手のデプロイURLが未登録です" }; }
+  if (!to?.deploy_url || !isSafeDeployUrl(to.deploy_url)) { await audit(env, c.id, fromLicense, toLicense, action, "error"); return { ok: false, error: "相手のデプロイURLが未登録または不正です" }; }
   const envlp = await signEnvelope(await importSignKey(signingJwk(env)), { from: fromLicense, action, args, exp: nowSec() + 60 });
   try {
     const r = await fetch(to.deploy_url.replace(/\/$/, "") + "/api/a2a/inbound", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(envlp) });

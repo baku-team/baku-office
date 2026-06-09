@@ -39,6 +39,11 @@ export async function pollHost(env: Env, deployUrl?: string, apps?: { id: string
     if (!r.ok) return null;
     const data = (await r.json()) as CheckResponse;
     await env.LICENSE.put(KV_ENTITLEMENT, data.entitlement);
+    // 緊急停止：ホストが blocked にしたアプリを取り込み済みでも削除する（キルスイッチ）。
+    if (Array.isArray(data.revokedApps) && data.revokedApps.length) {
+      const ph = data.revokedApps.map(() => "?").join(",");
+      await env.DB.prepare(`DELETE FROM external_apps WHERE id IN (${ph})`).bind(...data.revokedApps).run().catch(() => {});
+    }
     return data;
   } catch {
     return null;
