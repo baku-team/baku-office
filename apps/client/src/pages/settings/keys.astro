@@ -30,6 +30,7 @@ const mark = (b: boolean) => (b ? "✓ 設定済み" : "未設定");
 
   <h2>Google 連携（Calendar / Gmail / Meet）</h2>
   <p class="muted">Google Cloud Console で作成した OAuth クライアント（ウェブアプリ）の <strong>クライアントID／シークレット</strong>を登録します。暗号化して保存され、登録後すぐ各画面で連携できます（再デプロイ不要）。</p>
+  <div class="banner banner-info">はじめての方は <a href="/settings/google-setup">Google 連携セットアップ（手順ガイド）</a> から進めると、Console の各ページへのリンク・リダイレクトURI・登録までを順に案内します。</div>
   <div class="banner banner-info">Google Cloud Console の OAuth クライアントに、承認済みリダイレクト URI として <code>{Astro.url.origin}/api/google/callback</code> を登録してください。</div>
   <div class="card">
     <div class="field"><label>Google クライアントID <span class="muted">（{mark(status.google_client_id)}{bySecret.id ? "・Worker Secret" : ""}）</span></label><input name="google_client_id" type="text" placeholder="xxxxx.apps.googleusercontent.com" autocomplete="off" disabled={bySecret.id} /></div>

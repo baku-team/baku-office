@@ -34,7 +34,7 @@ const fmtTs = (s: number | null) => (s ? new Date(s * 1000).toISOString().slice(
   )}
   {hasPro && (
     <Fragment>
-      {!configured && (<div class="banner banner-warn">Google OAuth（GOOGLE_CLIENT_ID/SECRET）が未設定のため連携できません。管理者にご確認ください。</div>)}
+      {!configured && (<div class="banner banner-warn">Google OAuth が未設定のため連携できません。{isAdmin ? <Fragment>管理者は <a href="/settings/google-setup">Google 連携セットアップ</a> から設定できます。</Fragment> : "管理者にご確認ください。"}</div>)}
       <div class="card">
         <p>Gmail 連携：<span class="pill">{granted.includes("gmail_read") || granted.includes("gmail_send") ? "連携済み" : "未連携"}</span></p>
         <p class="muted" style="font-size:.85rem">Gmail の <strong>閲覧/整理（modify）</strong>と<strong>送信</strong>は Google の Restricted scope（審査対象）です。必要な権限だけを有効化してください。{connected && <span>　最終利用：{fmtTs(lastUsed)}</span>}</p>

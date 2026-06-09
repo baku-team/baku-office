@@ -38,7 +38,7 @@ const fmtTs = (s: number | null) => (s ? new Date(s * 1000).toISOString().slice(
   )}
   {hasPro && (
     <Fragment>
-      {!configured && (<div class="banner banner-warn">Google OAuth（GOOGLE_CLIENT_ID/SECRET）が未設定のため連携できません。管理者にご確認ください。</div>)}
+      {!configured && (<div class="banner banner-warn">Google OAuth が未設定のため連携できません。{isAdmin ? <Fragment>管理者は <a href="/settings/google-setup">Google 連携セットアップ</a> から設定できます。</Fragment> : "管理者にご確認ください。"}</div>)}
       <div class="card">
         <p>カレンダー連携：<span class="pill">{calGranted ? "連携済み" : "未連携"}</span> {connected && <span class="muted" style="font-size:.8rem">最終利用：{fmtTs(lastUsed)}</span>}</p>
         {isAdmin && configured && (
