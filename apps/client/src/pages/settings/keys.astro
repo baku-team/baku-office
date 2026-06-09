@@ -8,7 +8,11 @@ const status = {
   line_secret: await hasApiKey(env, "line_secret"),
   line_token: await hasApiKey(env, "line_token"),
   claude: await hasApiKey(env, "claude"),
+  // Worker Secret(env)があればそれを優先表示、無ければ暗号化KVの有無。
+  google_client_id: !!env.GOOGLE_CLIENT_ID || (await hasApiKey(env, "google_client_id")),
+  google_client_secret: !!env.GOOGLE_CLIENT_SECRET || (await hasApiKey(env, "google_client_secret")),
 };
+const bySecret = { id: !!env.GOOGLE_CLIENT_ID, secret: !!env.GOOGLE_CLIENT_SECRET };
 const mark = (b: boolean) => (b ? "✓ 設定済み" : "未設定");
 ---
 <App title="連携設定" active="/settings/keys">
@@ -24,18 +28,30 @@ const mark = (b: boolean) => (b ? "✓ 設定済み" : "未設定");
     <button class="btn btn-primary" id="save">検証して保存</button>
   </div>
 
+  <h2>Google 連携（Calendar / Gmail / Meet）</h2>
+  <p class="muted">Google Cloud Console で作成した OAuth クライアント（ウェブアプリ）の <strong>クライアントID／シークレット</strong>を登録します。暗号化して保存され、登録後すぐ各画面で連携できます（再デプロイ不要）。</p>
+  <div class="banner banner-info">Google Cloud Console の OAuth クライアントに、承認済みリダイレクト URI として <code>{Astro.url.origin}/api/google/callback</code> を登録してください。</div>
+  <div class="card">
+    <div class="field"><label>Google クライアントID <span class="muted">（{mark(status.google_client_id)}{bySecret.id ? "・Worker Secret" : ""}）</span></label><input name="google_client_id" type="text" placeholder="xxxxx.apps.googleusercontent.com" autocomplete="off" disabled={bySecret.id} /></div>
+    <div class="field"><label>Google クライアントシークレット <span class="muted">（{mark(status.google_client_secret)}{bySecret.secret ? "・Worker Secret" : ""}）</span></label><input name="google_client_secret" type="password" placeholder="GOCSPX-..." autocomplete="off" disabled={bySecret.secret} /></div>
+    {(bySecret.id || bySecret.secret) && (<p class="muted">Worker Secret で投入済みの項目は画面から変更できません（Secret が優先されます）。</p>)}
+    <button class="btn btn-primary" id="saveGoogle">保存</button>
+  </div>
+
   <script slot="scripts" is:inline>
-    document.getElementById("save").addEventListener("click", async (e) => {
+    const submitKeys = async (sel, btn) => {
       const data = {};
-      document.querySelectorAll("input[name]").forEach((i) => { if (i.value) data[i.name] = i.value; });
+      document.querySelectorAll(sel).forEach((i) => { if (i.value && !i.disabled) data[i.name] = i.value; });
       if (!Object.keys(data).length) { window.bo.toast("変更はありません", "info"); return; }
-      const { ok, data: j } = await window.bo.api("/api/keys", data, { btn: e.currentTarget, successMsg: null });
+      const { ok, data: j } = await window.bo.api("/api/keys", data, { btn, successMsg: null });
       if (!ok) return;
       const res = j.result || {};
       const lines = Object.entries(res).map(([k, v]) => `${k}: ${v.ok ? "✓有効" : "✗無効"}`);
       const anyFail = Object.values(res).some((v) => !v.ok);
       window.bo.toast(lines.join(" / ") || "保存しました", anyFail ? "err" : "ok");
       if (!anyFail) setTimeout(() => location.reload(), 900);
-    });
+    };
+    document.getElementById("save").addEventListener("click", (e) => submitKeys("input[name]:not([name^='google_'])", e.currentTarget));
+    document.getElementById("saveGoogle")?.addEventListener("click", (e) => submitKeys("input[name^='google_']", e.currentTarget));
   </script>
 </App>

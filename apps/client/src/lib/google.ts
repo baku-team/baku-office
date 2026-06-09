@@ -35,6 +35,15 @@ export const SCOPE_GROUPS: Record<ScopeGroupId, { label: string; risk: string; r
 };
 const ALL_GROUPS = Object.keys(SCOPE_GROUPS) as ScopeGroupId[];
 const REFRESH_KEY = "google_refresh";
+
+// OAuth クライアント資格情報の解決：Worker Secret(env)優先、無ければ暗号化KV（管理画面で登録）。
+// CFダッシュボード/wrangler を使わず、連携設定UIから client_id/secret を投入できるようにする。
+async function clientId(env: Env): Promise<string | null> {
+  return env.GOOGLE_CLIENT_ID ?? (await getApiKey(env, "google_client_id"));
+}
+async function clientSecret(env: Env): Promise<string | null> {
+  return env.GOOGLE_CLIENT_SECRET ?? (await getApiKey(env, "google_client_secret"));
+}
 const SCOPES_KEY = "google_scopes";       // 付与済みグループ（JSON配列）
 const LAST_USED_KEY = "google_last_used";  // 最終利用(UTC秒)
 const CONNECTED_KEY = "google_connected_at"; // 連携日時(UTC秒)
@@ -48,17 +57,18 @@ function scopesFor(groups: ScopeGroupId[]): string {
   return Array.from(new Set(groups.flatMap((g) => SCOPE_GROUPS[g].scopes))).join(" ");
 }
 
-export function googleConfigured(env: Env): boolean {
-  return !!(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET);
+export async function googleConfigured(env: Env): Promise<boolean> {
+  return !!(await clientId(env)) && !!(await clientSecret(env));
 }
 function redirectUri(origin: string): string {
   return `${origin}/api/google/callback`;
 }
 // 選択グループのみを要求（incremental auth）。include_granted_scopes で既存付与に積み増し。
-export function googleAuthUrl(env: Env, origin: string, state: string, groups?: ScopeGroupId[]): string | null {
-  if (!env.GOOGLE_CLIENT_ID) return null;
+export async function googleAuthUrl(env: Env, origin: string, state: string, groups?: ScopeGroupId[]): Promise<string | null> {
+  const cid = await clientId(env);
+  if (!cid) return null;
   const u = new URL("https://accounts.google.com/o/oauth2/v2/auth");
-  u.searchParams.set("client_id", env.GOOGLE_CLIENT_ID);
+  u.searchParams.set("client_id", cid);
   u.searchParams.set("redirect_uri", redirectUri(origin));
   u.searchParams.set("response_type", "code");
   u.searchParams.set("scope", scopesFor(normalizeGroups(groups)));
@@ -73,10 +83,11 @@ async function grantedGroups(env: Env): Promise<ScopeGroupId[]> {
   try { return normalizeGroups(JSON.parse((await env.LICENSE.get(SCOPES_KEY)) ?? "[]")); } catch { return []; }
 }
 export async function exchangeGoogleCode(env: Env, origin: string, code: string, groups?: ScopeGroupId[]): Promise<boolean> {
-  if (!env.GOOGLE_CLIENT_ID || !env.GOOGLE_CLIENT_SECRET) return false;
+  const cid = await clientId(env); const cs = await clientSecret(env);
+  if (!cid || !cs) return false;
   const r = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST", headers: { "content-type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({ grant_type: "authorization_code", code, redirect_uri: redirectUri(origin), client_id: env.GOOGLE_CLIENT_ID, client_secret: env.GOOGLE_CLIENT_SECRET }),
+    body: new URLSearchParams({ grant_type: "authorization_code", code, redirect_uri: redirectUri(origin), client_id: cid, client_secret: cs }),
   });
   if (!r.ok) { console.log("[google-token]", r.status, (await r.text()).slice(0, 200)); return false; }
   const t = (await r.json()) as { refresh_token?: string };
@@ -113,10 +124,11 @@ export async function disconnectGoogle(env: Env): Promise<void> {
 }
 export async function googleAccessToken(env: Env): Promise<string | null> {
   const refresh = await getApiKey(env, REFRESH_KEY);
-  if (!refresh || !env.GOOGLE_CLIENT_ID || !env.GOOGLE_CLIENT_SECRET) return null;
+  const cid = await clientId(env); const cs = await clientSecret(env);
+  if (!refresh || !cid || !cs) return null;
   const r = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST", headers: { "content-type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({ grant_type: "refresh_token", refresh_token: refresh, client_id: env.GOOGLE_CLIENT_ID, client_secret: env.GOOGLE_CLIENT_SECRET }),
+    body: new URLSearchParams({ grant_type: "refresh_token", refresh_token: refresh, client_id: cid, client_secret: cs }),
   });
   if (!r.ok) return null;
   await env.LICENSE.put(LAST_USED_KEY, String(nowSec())); // 最終利用を記録（クラウンジュエル監視）

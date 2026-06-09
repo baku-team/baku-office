@@ -15,7 +15,7 @@ const { googleConfigured, googleStatus } = await import("../lib/google.ts");
 let configured = false, connected = false, eventsText = "";
 let calGranted = false, lastUsed: number | null = null;
 if (hasPro) {
-  configured = googleConfigured(env);
+  configured = await googleConfigured(env);
   const st = await googleStatus(env);
   connected = st.connected;
   calGranted = st.groups.includes("calendar");

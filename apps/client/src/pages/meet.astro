@@ -16,7 +16,7 @@ let meetGranted = false, lastUsed: number | null = null;
 type Rec = { id: string; title: string | null; summary: string | null; actions: string | null; created_at: number };
 let recs: Rec[] = [];
 if (hasPro) {
-  configured = googleConfigured(env);
+  configured = await googleConfigured(env);
   const st = await googleStatus(env);
   connected = st.connected;
   meetGranted = st.groups.includes("meet");

@@ -16,7 +16,7 @@ export const GET: APIRoute = async ({ request, locals, url, cookies, redirect })
   const s = newState();
   cookies.set("google_state", s, { httpOnly: true, secure: true, path: "/", maxAge: 600, sameSite: "lax" });
   cookies.set("google_groups", groups.join(","), { httpOnly: true, secure: true, path: "/", maxAge: 600, sameSite: "lax" });
-  const authUrl = googleAuthUrl(env, url.origin, s, groups);
+  const authUrl = await googleAuthUrl(env, url.origin, s, groups);
   if (!authUrl) return new Response("Google OAuth が未設定です（GOOGLE_CLIENT_ID/SECRET）。", { status: 400 });
   return redirect(authUrl, 302);
 };
