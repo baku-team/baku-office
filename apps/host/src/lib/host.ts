@@ -32,15 +32,20 @@ export async function buildCheck(env: Env, entitlement: Entitlement): Promise<Ch
 }
 
 // A2A 等でホストがサーバーサイド fetch する宛先 URL の安全性検査（SSRF対策）。
-// https 必須＋IPリテラル・内部ホスト名を拒否。カスタムドメイン運用を壊さないため allowlist は採らない。
+// https 必須＋IPリテラル・内部ホスト名・credentials付き・ドットなし内部名を拒否。
+// カスタムドメイン運用を壊さないため allowlist は採らない。
+// 残存リスク：DNS rebinding（例 127.0.0.1.nip.io＝FQDNだが内部IPに解決）は名前解決後IP検査が必要で
+//   Workers fetch では解決後IPを取れないため完全には防げない。呼び出し側は redirect:"manual" を併用すること。
 export function isSafeDeployUrl(raw: string | null | undefined): boolean {
   if (!raw) return false;
   let u: URL;
   try { u = new URL(raw); } catch { return false; }
   if (u.protocol !== "https:") return false;
+  if (u.username || u.password) return false; // credentials 付きURL（user:pass@host）は拒否
   const h = u.hostname.toLowerCase();
   if (h === "localhost" || h.endsWith(".localhost") || h.endsWith(".local") || h.endsWith(".internal")) return false;
   if (/^\d{1,3}(\.\d{1,3}){3}$/.test(h) || h.includes(":")) return false; // IPv4/IPv6 リテラル拒否
+  if (!h.includes(".") || h.endsWith(".")) return false; // FQDN 必須（ドットなし内部名・末尾ドット拒否）
   return true;
 }
 

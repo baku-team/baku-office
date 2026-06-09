@@ -107,6 +107,7 @@ export async function resolveAction(ctx: Ctx, name: string, opts: { groupId?: st
 // 解決済みアクションの実行（app→ctx.apps.call / decl→runDeclAction）。
 export async function runResolvedAction(ctx: Ctx, row: ActionRow, args: Record<string, unknown>): Promise<unknown> {
   const spec = JSON.parse(row.spec || "{}");
-  if (row.kind === "app") return ctx.apps.call(String(spec.appId ?? ""), String(spec.action ?? ""), args);
+  // caller="a2a" を明示し ctx.apps.call の requiredPermission 検査を必ず通す（A2A は無権限＝権限要のactionは拒否）。
+  if (row.kind === "app") return ctx.apps.call(String(spec.appId ?? ""), String(spec.action ?? ""), args, "a2a");
   return runDeclAction(ctx, String(spec.type ?? ""), (spec.config ?? {}) as Record<string, unknown>, args);
 }
