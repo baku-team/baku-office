@@ -59,9 +59,12 @@ const skills = hasPlus && isOrgAdmin ? await listSkills(env).catch(() => []) : [
             </label>
           )}
           <div class="cinput">
+            <input type="file" id="att" accept="image/*,application/pdf" hidden />
+            <button class="btn" id="att-btn" type="button" title="ファイルを添付（画像・PDF）" style="flex:0 0 auto">📎</button>
             <textarea id="msg" placeholder="メッセージを入力（Ctrl/⌘+Enter で送信）"></textarea>
             <button class="btn btn-primary" id="send" style="flex:0 0 auto">送信</button>
           </div>
+          <p id="att-name" class="muted" style="font-size:.78rem;margin:4px 0 0"></p>
           {hasPro && (<p class="muted" style="font-size:.76rem;margin-top:6px">複雑な依頼は内部で役割ごとの子エージェントに分担・並列処理します（無料枠は並列2まで。上限は設定→高度なオプションで拡張）。</p>)}
         </section>
       </div>
@@ -154,12 +157,37 @@ const skills = hasPlus && isOrgAdmin ? await listSkills(env).catch(() => []) : [
           const r = await window.bo.api("/api/chat-sessions", undefined, { method: "GET", successMsg: null });
           if (r.ok) renderSessions(r.data.sessions || []);
         }
+        // ファイル添付（画像/PDF）：選択ファイルを base64 化して /api/chat の image に乗せる（API は受領済み）。
+        let pendingImage = null;
+        let pendingFileName = "";
+        const att = document.getElementById("att");
+        document.getElementById("att-btn")?.addEventListener("click", () => att?.click());
+        att?.addEventListener("change", () => {
+          const f = att.files && att.files[0];
+          if (!f) return;
+          const reader = new FileReader();
+          reader.onload = () => {
+            const url = String(reader.result);
+            pendingImage = { mimeType: f.type || "application/octet-stream", dataB64: url.split(",")[1] || "" };
+            pendingFileName = f.name;
+            const nm = document.getElementById("att-name"); if (nm) nm.textContent = "📎 " + f.name;
+          };
+          reader.readAsDataURL(f);
+        });
+        function clearAttach() {
+          pendingImage = null; pendingFileName = "";
+          if (att) att.value = "";
+          const nm = document.getElementById("att-name"); if (nm) nm.textContent = "";
+        }
         async function send() {
           const ta = document.getElementById("msg");
-          const text = ta.value.trim(); if (!text) return;
-          addMsg("u", text); ta.value = "";
+          const text = ta.value.trim(); if (!text && !pendingImage) return;
+          addMsg("u", text + (pendingFileName ? `\n（添付: ${pendingFileName}）` : "")); ta.value = "";
           const background = !!document.getElementById("bgrun")?.checked;
-          const r = await window.bo.api("/api/chat", { message: text, sessionId: sessionId || undefined, model: sel.value, background }, { btn: document.getElementById("send"), successMsg: null });
+          const body = { message: text, sessionId: sessionId || undefined, model: sel.value, background };
+          if (pendingImage) body.image = pendingImage;
+          const r = await window.bo.api("/api/chat", body, { btn: document.getElementById("send"), successMsg: null });
+          clearAttach();
           if (r.ok) {
             addMsg("a", r.data.reply);
             const isNew = !sessionId;
