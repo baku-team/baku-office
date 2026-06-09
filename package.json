@@ -11,6 +11,7 @@
     "build:client": "npm -w apps/client run build",
     "build:apply": "npm -w apps/apply run build",
     "deploy:scheduler": "npm -w apps/scheduler run deploy",
-    "typecheck": "npm -w packages/shared run typecheck && npm -w apps/host run typecheck && npm -w apps/client run typecheck && npm -w apps/apply run typecheck && npm -w apps/scheduler run typecheck"
+    "typecheck": "npm -w packages/shared run typecheck && npm -w apps/host run typecheck && npm -w apps/client run typecheck && npm -w apps/apply run typecheck && npm -w apps/scheduler run typecheck",
+    "test": "npm -w apps/host test && npm -w apps/client test"
   }
 }
