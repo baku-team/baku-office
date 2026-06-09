@@ -5,7 +5,7 @@ import { getApiKey, entitlementForGate } from "./client.ts";
 import { type Role, atLeast } from "@baku-office/shared";
 import type { Ctx } from "../core/ports.ts";
 import { enabledParts, toolsOf, enabledPartIds, type AgentTool } from "../core/parts.ts";
-import { runToolLoop, type ToolDecl, type Turn, type ChatModel } from "../core/ai.ts";
+import { runToolLoop, type ToolDecl, type Turn, type ChatModel, type TokenUsage } from "../core/ai.ts";
 import { ROLES, toolsForRole, normalizeRole, ROLE_LIST } from "./multi-agent.ts";
 import { maxParallelAgents, agentMaxHops } from "./settings.ts";
 import { callPartner, groupRelayCall } from "./a2a.ts";
@@ -19,7 +19,7 @@ import { listSkills, runSkill, generateSkill } from "./skills.ts";
 import { createDraft } from "./external-apps.ts";
 import { listCapabilities, invokeCapability, capabilitySummary, videoStatusText } from "./capabilities.ts";
 import { getAiEngine, getCustomPrompt } from "./settings.ts";
-import { recordUsage, overBudget } from "./usage.ts";
+import { recordUsage, recordTokens, overBudget } from "./usage.ts";
 
 const SYSTEM =
   "あなたは団体の会計・庶務を補助するLINEアシスタント『baku-office』です。日本語で簡潔に。" +
@@ -166,6 +166,10 @@ export async function runAgent(ctx: Ctx, owner: string, text: string, image?: { 
   }
   const first = { text: text || "（依頼）", image: provider === "claude" ? undefined : image };
 
+  // 実費計測（P0-2）：本体＋子エージェントの全hopの消費tokenを合算し、ループ後にまとめて記録する。
+  const usageAcc: TokenUsage = { inputTokens: 0, outputTokens: 0 };
+  const onUsage = (u: TokenUsage) => { usageAcc.inputTokens += u.inputTokens; usageAcc.outputTokens += u.outputTokens; };
+
   // 子エージェント起動（同じモデルを使い回す）。役割の道具だけを見せ、ネスト委譲は不可。
   const subDeclsFor = (subTools: AgentTool[]) => [
     ...subTools.map((t) => ({ name: t.name, description: t.description, parameters: t.parameters })),
@@ -178,7 +182,7 @@ export async function runAgent(ctx: Ctx, owner: string, text: string, image?: { 
     const subTools = opts.unattended ? subToolsRaw.filter((t) => t.unattended !== false) : subToolsRaw;
     const subExec = (n: string, a: Record<string, unknown>) => execTool(ctx, owner, baseUrl, n, a, role, subTools);
     await recordUsage(env, provider); // 子エージェント分のコストも計上
-    return runToolLoop(model!, `${ROLES[roleKey].system}\n割り当てられたタスクのみを遂行し、結果を簡潔に返す。`, { text: task || "（タスク）" }, subDeclsFor(subTools), subExec, 3, []);
+    return runToolLoop(model!, `${ROLES[roleKey].system}\n割り当てられたタスクのみを遂行し、結果を簡潔に返す。`, { text: task || "（タスク）" }, subDeclsFor(subTools), subExec, 3, [], onUsage);
   }
 
   const cap = await maxParallelAgents(env);
@@ -209,7 +213,9 @@ export async function runAgent(ctx: Ctx, owner: string, text: string, image?: { 
   };
 
   const hops = await agentMaxHops(env);
-  return runToolLoop(model, sys, first, decls as ToolDecl[], exec, hops, history);
+  const out = await runToolLoop(model, sys, first, decls as ToolDecl[], exec, hops, history, onUsage);
+  await recordTokens(env, provider, usageAcc); // 実費（input/output token・推定USD）を記録（P0-2）
+  return out;
 }
 
 // LINE署名検証（HMAC-SHA256・定数時間比較）。

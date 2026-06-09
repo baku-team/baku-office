@@ -32,14 +32,15 @@ export function claudeModel(key: string): ChatModel {
         body: JSON.stringify({ model: "claude-sonnet-4-6", max_tokens: 1500, system, tools: t, messages: toMessages(history) }),
       });
       if (!r.ok) { console.log("[claude]", r.status, (await r.text()).slice(0, 200)); return { text: "（Claudeの応答に失敗しました）" }; }
-      const data = (await r.json()) as { content?: CBlock[]; stop_reason?: string };
+      const data = (await r.json()) as { content?: CBlock[]; stop_reason?: string; usage?: { input_tokens?: number; output_tokens?: number } };
+      const usage = { inputTokens: data.usage?.input_tokens ?? 0, outputTokens: data.usage?.output_tokens ?? 0 };
       const content = data.content ?? [];
       const toolUses = content.filter((c) => c.type === "tool_use");
       if (toolUses.length && data.stop_reason === "tool_use") {
         const toolCalls: ToolCall[] = toolUses.map((c) => ({ id: c.id!, name: c.name!, args: c.input ?? {} }));
-        return { toolCalls };
+        return { toolCalls, usage };
       }
-      return { text: content.filter((c) => c.type === "text").map((c) => c.text ?? "").join("") };
+      return { text: content.filter((c) => c.type === "text").map((c) => c.text ?? "").join(""), usage };
     },
   };
 }

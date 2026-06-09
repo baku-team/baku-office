@@ -4,7 +4,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { geminiModel } from "../src/core/models/gemini.ts";
 import { claudeModel } from "../src/core/models/claude.ts";
-import { runToolLoop, type Turn } from "../src/core/ai.ts";
+import { runToolLoop, type Turn, type TokenUsage } from "../src/core/ai.ts";
+import { estimateUsd } from "../src/lib/usage.ts";
 
 type Captured = { url: string; init: { headers?: Record<string, string>; body?: string } };
 function mockFetch(responses: unknown[]) {
@@ -40,7 +41,7 @@ test("geminiModel：リクエスト wire 形式と functionCall 解釈", async (
 
 test("geminiModel：text 応答", async () => {
   const m = mockFetch([{ candidates: [{ content: { parts: [{ text: "了解です" }] } }] }]);
-  try { assert.deepEqual(await geminiModel("K").turn("S", HISTORY, DECLS), { text: "了解です" }); } finally { m.restore(); }
+  try { assert.deepEqual(await geminiModel("K").turn("S", HISTORY, DECLS), { text: "了解です", usage: { inputTokens: 0, outputTokens: 0 } }); } finally { m.restore(); }
 });
 
 test("claudeModel：リクエスト wire 形式と tool_use 解釈", async () => {
@@ -61,7 +62,40 @@ test("claudeModel：リクエスト wire 形式と tool_use 解釈", async () =>
 
 test("claudeModel：text 応答（stop_reason!=tool_use は確定）", async () => {
   const m = mockFetch([{ content: [{ type: "text", text: "完了" }], stop_reason: "end_turn" }]);
-  try { assert.deepEqual(await claudeModel("K").turn("S", HISTORY, DECLS), { text: "完了" }); } finally { m.restore(); }
+  try { assert.deepEqual(await claudeModel("K").turn("S", HISTORY, DECLS), { text: "完了", usage: { inputTokens: 0, outputTokens: 0 } }); } finally { m.restore(); }
+});
+
+test("usage 捕捉（P0-2）：Gemini usageMetadata / Claude usage を token に変換", async () => {
+  const mg = mockFetch([{ candidates: [{ content: { parts: [{ text: "ok" }] } }], usageMetadata: { promptTokenCount: 1200, candidatesTokenCount: 340 } }]);
+  try {
+    const r = await geminiModel("K").turn("S", HISTORY, DECLS);
+    assert.deepEqual(r.usage, { inputTokens: 1200, outputTokens: 340 });
+  } finally { mg.restore(); }
+  const mc = mockFetch([{ content: [{ type: "text", text: "ok" }], stop_reason: "end_turn", usage: { input_tokens: 900, output_tokens: 210 } }]);
+  try {
+    const r = await claudeModel("K").turn("S", HISTORY, DECLS);
+    assert.deepEqual(r.usage, { inputTokens: 900, outputTokens: 210 });
+  } finally { mc.restore(); }
+});
+
+test("runToolLoop：onUsage が全hopの token を受け取り合算できる（P0-2）", async () => {
+  const m = mockFetch([
+    { candidates: [{ content: { parts: [{ functionCall: { name: "set_reminder", args: { content: "会議" } } }] } }], usageMetadata: { promptTokenCount: 100, candidatesTokenCount: 20 } },
+    { candidates: [{ content: { parts: [{ text: "登録しました" }] } }], usageMetadata: { promptTokenCount: 150, candidatesTokenCount: 30 } },
+  ]);
+  try {
+    const acc: TokenUsage = { inputTokens: 0, outputTokens: 0 };
+    await runToolLoop(geminiModel("K"), "S", { text: "x" }, DECLS, async () => "ok", 4, [], (u) => { acc.inputTokens += u.inputTokens; acc.outputTokens += u.outputTokens; });
+    assert.deepEqual(acc, { inputTokens: 250, outputTokens: 50 });
+  } finally { m.restore(); }
+});
+
+test("estimateUsd（P0-2）：参考単価で推定USDを算出（gemini/claude・未登録は0）", () => {
+  // gemini: 1M in×$0.30 + 1M out×$2.50 = $2.80
+  assert.equal(Math.round(estimateUsd("gemini", 1_000_000, 1_000_000) * 100) / 100, 2.8);
+  // claude: 1M in×$3 + 1M out×$15 = $18
+  assert.equal(estimateUsd("claude", 1_000_000, 1_000_000), 18);
+  assert.equal(estimateUsd("local", 1_000_000, 1_000_000), 0);
 });
 
 test("runToolLoop×geminiModel：道具→次ターンで確定（一本化された経路）", async () => {

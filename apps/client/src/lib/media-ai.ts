@@ -4,7 +4,7 @@ import { randomId } from "@baku-office/shared";
 import { getApiKey } from "./client.ts";
 import { getFile, saveFile } from "./storage.ts";
 import { nowSec } from "./accounting.ts";
-import { recordUsage } from "./usage.ts";
+import { recordUsage, recordTokens } from "./usage.ts";
 
 const GEMINI = "gemini-2.5-flash";
 
@@ -21,14 +21,15 @@ async function geminiUpload(key: string, buf: ArrayBuffer, mime: string): Promis
   if (!up.ok) return null;
   return ((await up.json()) as { file?: { uri?: string } }).file?.uri ?? null;
 }
-async function geminiGenerate(key: string, parts: unknown[], tools?: unknown[]): Promise<string> {
+async function geminiGenerate(env: Env, key: string, parts: unknown[], tools?: unknown[]): Promise<string> {
   const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI}:generateContent?key=${encodeURIComponent(key)}`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ contents: [{ role: "user", parts }], ...(tools ? { tools } : {}), generationConfig: { maxOutputTokens: 1200 } }),
   });
   if (!r.ok) { console.log("[gemini-gen]", r.status, (await r.text()).slice(0, 150)); return ""; }
-  const d = (await r.json()) as { candidates?: { content?: { parts?: { text?: string }[] } }[] };
+  const d = (await r.json()) as { candidates?: { content?: { parts?: { text?: string }[] } }[]; usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number } };
+  await recordTokens(env, "gemini", { inputTokens: d.usageMetadata?.promptTokenCount ?? 0, outputTokens: d.usageMetadata?.candidatesTokenCount ?? 0 });
   return d.candidates?.[0]?.content?.parts?.map((p) => p.text ?? "").join("").trim() ?? "";
 }
 
@@ -40,11 +41,11 @@ export async function transcribeAudio(env: Env, buf: ArrayBuffer, mime: string):
   const prompt = "この音声を日本語で文字起こしし、会議なら話者を区別して要点・決定事項を議事録形式でまとめてください。";
   if (buf.byteLength <= 18 * 1024 * 1024) {
     const b64 = btoa(String.fromCharCode(...new Uint8Array(buf)));
-    return geminiGenerate(key, [{ text: prompt }, { inlineData: { mimeType: mime, data: b64 } }]);
+    return geminiGenerate(env, key, [{ text: prompt }, { inlineData: { mimeType: mime, data: b64 } }]);
   }
   const uri = await geminiUpload(key, buf, mime);
   if (!uri) return null;
-  return geminiGenerate(key, [{ text: prompt }, { file_data: { mime_type: mime, file_uri: uri } }]);
+  return geminiGenerate(env, key, [{ text: prompt }, { file_data: { mime_type: mime, file_uri: uri } }]);
 }
 
 // web検索（Gemini google search grounding）。
@@ -52,7 +53,7 @@ export async function webSearch(env: Env, query: string): Promise<string | null>
   const key = await getApiKey(env, "gemini");
   if (!key) return null;
   await recordUsage(env, "web_search");
-  const text = await geminiGenerate(key, [{ text: query }], [{ googleSearch: {} }]);
+  const text = await geminiGenerate(env, key, [{ text: query }], [{ googleSearch: {} }]);
   return text || "（検索結果が得られませんでした）";
 }
 
@@ -72,7 +73,7 @@ export async function processSummaryJobs(env: Env, limit = 3): Promise<number> {
     if (!f) { await env.DB.prepare("UPDATE summary_jobs SET status='error',updated_at=? WHERE id=?").bind(nowSec(), job.id).run(); continue; }
     await recordUsage(env, "gemini");
     const uri = await geminiUpload(key, f.buf, f.mime);
-    const summary = uri ? await geminiGenerate(key, [{ text: "この資料の要点・数値・結論を漏れなく日本語で要約してください。" }, { file_data: { mime_type: f.mime, file_uri: uri } }]) : "";
+    const summary = uri ? await geminiGenerate(env, key, [{ text: "この資料の要点・数値・結論を漏れなく日本語で要約してください。" }, { file_data: { mime_type: f.mime, file_uri: uri } }]) : "";
     if (!summary) { await env.DB.prepare("UPDATE summary_jobs SET status='error',updated_at=? WHERE id=?").bind(nowSec(), job.id).run(); continue; }
     await env.DB.prepare("UPDATE summary_jobs SET status='done',result=?,updated_at=? WHERE id=?").bind(summary.slice(0, 100000), nowSec(), job.id).run();
     await env.DB.prepare("INSERT INTO knowledge (id,title,body,file_ref,tags,created_by,created_at) VALUES (?,?,?,?,?,?,?)")
@@ -96,7 +97,8 @@ export async function makeDocument(env: Env, owner: string, baseUrl: string, a: 
     body: JSON.stringify({ model: "claude-sonnet-4-6", max_tokens: 4000, system: sys, messages: [{ role: "user", content: `タイトル:${a.title}\n要件:${a.content}` }] }),
   });
   if (!r.ok) { console.log("[claude-doc]", r.status, (await r.text()).slice(0, 150)); return "資料生成に失敗しました。"; }
-  const data = (await r.json()) as { content?: { text?: string }[] };
+  const data = (await r.json()) as { content?: { text?: string }[]; usage?: { input_tokens?: number; output_tokens?: number } };
+  await recordTokens(env, "claude", { inputTokens: data.usage?.input_tokens ?? 0, outputTokens: data.usage?.output_tokens ?? 0 });
   const body = data.content?.map((c) => c.text ?? "").join("") ?? "";
   const mime = type === "csv" ? "text/csv" : type === "txt" ? "text/plain" : "text/markdown";
   const file = new File([new TextEncoder().encode(body)], `${a.title}.${type}`, { type: mime });
@@ -131,7 +133,8 @@ export async function extractInvoiceData(env: Env, file: { buf: ArrayBuffer; mim
   });
   await recordUsage(env, "claude");
   if (!r.ok) { console.log("[invoice-extract]", r.status, (await r.text()).slice(0, 150)); return {}; }
-  const d = (await r.json()) as { content?: { text?: string }[] };
+  const d = (await r.json()) as { content?: { text?: string }[]; usage?: { input_tokens?: number; output_tokens?: number } };
+  await recordTokens(env, "claude", { inputTokens: d.usage?.input_tokens ?? 0, outputTokens: d.usage?.output_tokens ?? 0 });
   const raw = (d.content?.map((c) => c.text ?? "").join("") ?? "").replace(/^```(?:json)?|```$/g, "").trim();
   try {
     const j = JSON.parse(raw) as InvoiceExtract;

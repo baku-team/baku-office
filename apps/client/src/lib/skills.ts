@@ -6,7 +6,7 @@ import { randomId } from "@baku-office/shared";
 import { getApiKey } from "./client.ts";
 import { saveFile } from "./storage.ts";
 import { nowSec } from "./accounting.ts";
-import { recordUsage } from "./usage.ts";
+import { recordUsage, recordTokens } from "./usage.ts";
 
 export type Skill = { id: string; name: string; description: string | null; skill_md: string; mode: string; enabled: number; created_at: number };
 
@@ -43,22 +43,24 @@ function parseSkillJSON(raw: string): SkillDraft | null {
     };
   } catch { return null; }
 }
-async function geminiJSON(key: string, sys: string, prompt: string): Promise<string> {
+async function geminiJSON(env: Env, key: string, sys: string, prompt: string): Promise<string> {
   const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(key)}`, {
     method: "POST", headers: { "content-type": "application/json" },
     body: JSON.stringify({ systemInstruction: { parts: [{ text: sys }] }, contents: [{ role: "user", parts: [{ text: prompt }] }], generationConfig: { temperature: 0.4, maxOutputTokens: 1500 } }),
   });
   if (!r.ok) return "";
-  const d = (await r.json()) as { candidates?: { content?: { parts?: { text?: string }[] } }[] };
+  const d = (await r.json()) as { candidates?: { content?: { parts?: { text?: string }[] } }[]; usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number } };
+  await recordTokens(env, "gemini", { inputTokens: d.usageMetadata?.promptTokenCount ?? 0, outputTokens: d.usageMetadata?.candidatesTokenCount ?? 0 });
   return d.candidates?.[0]?.content?.parts?.map((p) => p.text ?? "").join("") ?? "";
 }
-async function claudeJSON(key: string, sys: string, prompt: string): Promise<string> {
+async function claudeJSON(env: Env, key: string, sys: string, prompt: string): Promise<string> {
   const r = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST", headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
     body: JSON.stringify({ model: "claude-sonnet-4-6", max_tokens: 1500, system: sys, messages: [{ role: "user", content: prompt }] }),
   });
   if (!r.ok) return "";
-  const d = (await r.json()) as { content?: { text?: string }[] };
+  const d = (await r.json()) as { content?: { text?: string }[]; usage?: { input_tokens?: number; output_tokens?: number } };
+  await recordTokens(env, "claude", { inputTokens: d.usage?.input_tokens ?? 0, outputTokens: d.usage?.output_tokens ?? 0 });
   return (d.content ?? []).map((c) => c.text ?? "").join("");
 }
 export async function generateSkill(env: Env, by: string, request: string): Promise<{ ok: boolean; id?: string; name?: string; error?: string }> {
@@ -70,7 +72,7 @@ export async function generateSkill(env: Env, by: string, request: string): Prom
     `次の要望に応えるスキルを設計し、JSONのみ出力（前置き・コードフェンス無し）。\n要望:${request}\n` +
     `形式:{"name":"短い日本語の呼び出し名","description":"用途の1行説明","mode":"instruction または code","skill_md":"# スキル名\\n手順・テンプレート(Markdown)"}\n` +
     `表計算・ファイルの本格生成・計算処理が要るなら mode=code、文書テンプレ中心なら instruction。`;
-  const raw = gkey ? await geminiJSON(gkey, sys, prompt) : await claudeJSON(ckey!, sys, prompt);
+  const raw = gkey ? await geminiJSON(env, gkey, sys, prompt) : await claudeJSON(env, ckey!, sys, prompt);
   await recordUsage(env, gkey ? "gemini" : "claude");
   const draft = parseSkillJSON(raw);
   if (!draft) return { ok: false, error: "スキル生成に失敗しました（応答を解釈できません）。" };
@@ -97,7 +99,8 @@ export async function runSkill(env: Env, owner: string, baseUrl: string, name: s
       }),
     });
     if (!r.ok) { console.log("[skill-code]", r.status, (await r.text()).slice(0, 150)); return "スキル実行（コード）に失敗しました。アカウントで code execution が有効か確認してください。"; }
-    const data = (await r.json()) as { content?: { type: string; text?: string }[] };
+    const data = (await r.json()) as { content?: { type: string; text?: string }[]; usage?: { input_tokens?: number; output_tokens?: number } };
+    await recordTokens(env, "claude", { inputTokens: data.usage?.input_tokens ?? 0, outputTokens: data.usage?.output_tokens ?? 0 });
     const text = (data.content ?? []).map((c) => c.text ?? "").join("").trim();
     return text || "（実行は完了しましたが、テキスト出力はありません。生成ファイルの取得は次段で対応）";
   }
@@ -109,7 +112,8 @@ export async function runSkill(env: Env, owner: string, baseUrl: string, name: s
     body: JSON.stringify({ model: "claude-sonnet-4-6", max_tokens: 4000, system: `あなたは次のスキル手順に従う作成アシスタント。本文(Markdown)のみ出力。\n\n${skill.skill_md}`, messages: [{ role: "user", content: input }] }),
   });
   if (!r.ok) return "スキル実行に失敗しました。";
-  const data = (await r.json()) as { content?: { text?: string }[] };
+  const data = (await r.json()) as { content?: { text?: string }[]; usage?: { input_tokens?: number; output_tokens?: number } };
+  await recordTokens(env, "claude", { inputTokens: data.usage?.input_tokens ?? 0, outputTokens: data.usage?.output_tokens ?? 0 });
   const out = (data.content ?? []).map((c) => c.text ?? "").join("");
   const file = new File([new TextEncoder().encode(out)], `${skill.name}.md`, { type: "text/markdown" });
   const saved = await saveFile(env, file, owner);
