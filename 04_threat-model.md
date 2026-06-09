@@ -2,7 +2,9 @@
 >
 > **実装済みのアプリ層対策（2026-06・第三者レビュー反映）**：アクティベートをホスト署名 relay 必須化（無認証発行を遮断）／エージェントを active 会員に限定＋名簿照会のロール認可／ローカルPASSの PBKDF2 化＋一時Cookie・セッションの HMAC 署名／Stripe Webhook のタイムスタンプ鮮度＋定数時間比較・会員Webhook署名検証／申込導線の IP レート制限＋入力検証（長さ・メール形式）／マイグレーション無視条件の限定＋失敗の診断記録。
 >
-> **追加堅牢化（2026-06-09）**：ホストがサーバーサイド fetch する `deploy_url`（A2A 中継・統合チェック保存）に **SSRF 検査**（`isSafeDeployUrl`＝https必須・IP/内部ホスト名拒否＝⑥）／本番（`ENV≠development`）は管理者セッション署名鍵 `ADMIN_KEY` を**必須化し fail-closed**＋dev 管理者ログインを `ENV=development` 限定で封鎖（④の管理者奪取面を縮小）／配布アプリの**キルスイッチ**（blocked を統合チェックで配り導入済みからも無効化＝⑧の一斉ロールバック）／アプリ公開申請 `registry/submit` を生 licenseId から**署名ライセンストークン認証**へ（なりすまし pending 登録の遮断）／ホスト管理操作の**監査ログ**（`host_audit`・④/⑧の事後追跡）。詳細は [baku-office_review_確認事項と改善点.md](baku-office_review_確認事項と改善点.md)。残るのは上記3ゲート（鍵・管理者奪取の最終堅牢化）。
+> **追加堅牢化（2026-06-09）**：ホストがサーバーサイド fetch する `deploy_url`（A2A 中継・統合チェック保存）に **SSRF 検査**（`isSafeDeployUrl`＝https必須・IP/内部ホスト名拒否＝⑥）／本番（`ENV≠development`）は管理者セッション署名鍵 `ADMIN_KEY` を**必須化し fail-closed**＋dev 管理者ログインを `ENV=development` 限定で封鎖（④の管理者奪取面を縮小）／配布アプリの**キルスイッチ**（blocked を統合チェックで配り導入済みからも無効化＝⑧の一斉ロールバック）／アプリ公開申請 `registry/submit` を生 licenseId から**署名ライセンストークン認証**へ（なりすまし pending 登録の遮断）／ホスト管理操作の**監査ログ**（`host_audit`・④/⑧の事後追跡）。
+>
+> **第2次レビュー対応（2026-06-09・Phase1〜6）**：無認証活性化の取り残し（`/api/activate`・`/api/token` の dev ゼロ入力経路）を `ENV=development` 限定にゲート＝本番は Google relay のみ＋`callback` を https に限定（④・オープンリダイレクト封鎖）／公開 throwaway リポの deploy_code を deploy_url 受領時に即削除（②の露出最小化）／SSRF を FQDN 必須・credentials 拒否・A2A fetch を `redirect:"manual"` に強化（⑥。DNS rebinding は残存）／A2A に **nonce 使い捨て**でリプレイ防止＋公開アクションの権限経路を明示（⑦）・レート計上を実中継のみに是正／`registry/submit` の id 乗っ取り防止（予約id拒否＋所有者不一致は拒否）／セッション署名鍵を MASTER_KEY から **HKDF サブ鍵で分離**（KV 露出時の Cookie 偽造面を縮小・根本は鍵の Secret 必須化＝L3）。詳細は [baku-office_review_確認事項と改善点.md](baku-office_review_確認事項と改善点.md) 第2次対応表。残るのは上記3ゲート（鍵・管理者奪取の最終堅牢化）。
 
 # 04. 脅威モデル（レッドチーム分析）
 
