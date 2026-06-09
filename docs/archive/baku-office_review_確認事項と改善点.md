@@ -1,7 +1,7 @@
 # baku-office 第三者レビュー — 確認事項・改善点
 
 **対象リポジトリ**
-- `baku-team/baku-office`（正本モノレポ：apps/host, apps/client, apps/apply, apps/scheduler, packages/shared, worker）
+- `baku-team/baku-office`（正本モノレポ：apps/host, apps/client, apps/apply, apps/scheduler, packages/shared）
 - `baku-team/baku-office-app`（公開配布バンドル）
 
 **レビュー基盤**：上記2リポジトリの実コードを直接精査（クローン・全主要ソース読込）。仕様書／PROGRESS の記述ではなく**実装の挙動**を一次情報とした。
@@ -29,9 +29,9 @@
 | L7 | 保存リージョン固定・越境同意テンプレ | ⏸ 製品法務判断で保留 |
 | L8 | マイグレーション無視の限定列挙＋会計コアのテスト | ✅ 無視条件の限定＋失敗診断。契約テスト（Node+SQLite・client 35本）整備 |
 | L9 | Stripe `t` 鮮度検証＋署名比較の定数時間化 | ✅ 対応済 |
-| L10 | KMS署名・FIDO2・admin JIT（3ゲート） | ⏸ 本番ゲートとして保留（[PROGRESS.md](PROGRESS.md)） |
+| L10 | KMS署名・FIDO2・admin JIT（3ゲート） | ⏸ 本番ゲートとして保留（[PROGRESS.md](../../PROGRESS.md)） |
 
-**本書になかった追加発見への対応（2026-06-09）**：①ホスト側 fetch（A2A/統合チェック）の `deploy_url` SSRF を `isSafeDeployUrl` で検査 ②本番（`ENV≠development`）は `ADMIN_KEY` を必須化し fail-closed、dev 管理者ログインを ENV で封鎖 ③配布アプリのキルスイッチ（blocked を導入済みクライアントからも無効化）④アプリ公開申請 `registry/submit` を署名ライセンストークン認証へ（なりすまし pending 登録の遮断）⑤ホスト管理操作の監査ログ（`host_audit`・`/audit`）。詳細は [PROGRESS.md](PROGRESS.md) の 2026-06-08/09 セクション。
+**本書になかった追加発見への対応（2026-06-09）**：①ホスト側 fetch（A2A/統合チェック）の `deploy_url` SSRF を `isSafeDeployUrl` で検査 ②本番（`ENV≠development`）は `ADMIN_KEY` を必須化し fail-closed、dev 管理者ログインを ENV で封鎖 ③配布アプリのキルスイッチ（blocked を導入済みクライアントからも無効化）④アプリ公開申請 `registry/submit` を署名ライセンストークン認証へ（なりすまし pending 登録の遮断）⑤ホスト管理操作の監査ログ（`host_audit`・`/audit`）。詳細は [PROGRESS.md](../../PROGRESS.md) の 2026-06-08/09 セクション。
 
 ### 第2次レビュー対応（2026-06-09・別途レビューで検出した残穴を改修）
 
@@ -48,7 +48,7 @@
 | 🟡 | gh_merge_pr のページング未対応／CSV 振替符号／課金 past_due 未処理 | files/check-runs を全ページ取得・符号付金額列・past_due で Free 降格 |
 | UI/UX | host alert/prompt 非統一・apply 無限スピナー・sticky ヘッダ・会計検証・a11y（toast/label）・/audit 検索 | window.bo.api 統一・タイムアウト導線・sticky 解除・入力検証・assertive/label・検索/フィルタ/ページング |
 
-詳細な変更点は [PROGRESS.md](PROGRESS.md) の 2026-06-09（第三者レビュー全改善）を参照。
+詳細な変更点は [PROGRESS.md](../../PROGRESS.md) の 2026-06-09（第三者レビュー全改善）を参照。
 
 ---
 

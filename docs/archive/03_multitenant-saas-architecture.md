@@ -1,4 +1,4 @@
-> ℹ️ **背景設計**：本書は事業・運用設計の前身です。**現行の正本は [integrated_design_package_v1.0.md](integrated_design_package_v1.0.md)**（会計・庶務SaaS／プラン・課金・認証・データモデル等を統合）。実装は `apps/`、運用は [OPERATIONS.md](OPERATIONS.md)、配備・更新は [ARCHITECTURE.md](ARCHITECTURE.md)。本書は事業設計の根拠として保持。
+> ℹ️ **背景設計**：本書は事業・運用設計の前身です。**現行の正本は [integrated_design_package_v1.0.md](../spec/integrated_design_package_v1.0.md)**（会計・庶務SaaS／プラン・課金・認証・データモデル等を統合）。実装は `apps/`、運用は [OPERATIONS.md](../../OPERATIONS.md)、配備・更新は [ARCHITECTURE.md](../../ARCHITECTURE.md)。本書は事業設計の根拠として保持。
 
 # 03. マルチテナント SaaS アーキテクチャ（1000社スケール・CLI運用前提）
 
@@ -767,7 +767,7 @@ interface MessagingChannel {
 
 ### 16-10. 脅威モデル対策（追加防御）
 
-詳細な攻撃分析は [04_threat-model.md](04_threat-model.md)。実装前に組み込む正式対策。
+詳細な攻撃分析は [04_threat-model.md](../spec/04_threat-model.md)。実装前に組み込む正式対策。
 
 **最優先（致命的攻撃の防止）**
 - **署名鍵（指摘#4・最重要）**：**Workers内で署名しない**設計へ。Ed25519秘密鍵は**外部KMS/クラウドHSM、またはオフライン署名専用プロセス**に置き、Workersは署名を依頼するだけ（公開鍵のみ配布）。リースは短命＝署名は低頻度なので外部署名のレイテンシも許容。**素のper-Worker Secretsは不可**（Worker編集者＝Secret編集者で職務分離不能）→ やむを得ずWorker内署名なら **Secrets Store＋プロダクトスコープ＋アクセス監視＋`kid`ローテ必須**。最小アクセス・`kid`即失効・**署名発行の異常監視**。CF外セカンダリは別`kid`。

@@ -1,4 +1,4 @@
-> ℹ️ **背景資料（PoC記録）**：本書は PoC期の記録です。**現行スタックは [README.md](README.md)（Astro+@astrojs/cloudflare、D1/KV/R2、Gemini/Claude/任意API・BYOK）**、正本は [integrated_design_package_v1.0.md](integrated_design_package_v1.0.md)。PoCコード（`poc/`・`poc-workers/`）は削除済み。
+> ℹ️ **背景資料（PoC記録）**：本書は PoC期の記録です。**現行スタックは [README.md](../../README.md)（Astro+@astrojs/cloudflare、D1/KV/R2、Gemini/Claude/任意API・BYOK）**、正本は [integrated_design_package_v1.0.md](../spec/integrated_design_package_v1.0.md)。PoCコード（`poc/`・`poc-workers/`）は削除済み。
 
 # 05. 実装 — PoC記録と技術スタック
 
