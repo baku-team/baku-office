@@ -1,6 +1,6 @@
 import type { APIRoute } from "astro";
 import { getSession } from "../../lib/auth.ts";
-import { googleConnected, disconnectGoogle } from "../../lib/google.ts";
+import { googleStatus, disconnectGoogle } from "../../lib/google.ts";
 
 export const prerender = false;
 const json = (o: unknown, s = 200) => new Response(JSON.stringify(o), { status: s, headers: { "content-type": "application/json" } });
@@ -16,7 +16,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
     return json({ ok: true });
   }
   if (b._action === "status") {
-    return json({ ok: true, connected: await googleConnected(env) });
+    return json({ ok: true, ...(await googleStatus(env)) });
   }
   return json({ error: "不明な操作" }, 400);
 };
