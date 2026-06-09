@@ -31,6 +31,12 @@ export const POST: APIRoute = async ({ request, locals }) => {
     const v = await setRetentionDays(env, Number(b.days));
     return json({ ok: true, days: v });
   }
+  // エージェント承認ゲート（対外/破壊系の人間承認・P0-4）。既定 on。
+  if (b._action === "agent_approval") {
+    const { setApprovalMode } = await import("../../lib/approvals.ts");
+    const v = await setApprovalMode(env, b.on === true);
+    return json({ ok: true, on: v });
+  }
   if (b._action === "ai_engine") {
     const v = await setAiEngine(env, String(b.engine ?? "gemini"));
     return json({ ok: true, engine: v });
