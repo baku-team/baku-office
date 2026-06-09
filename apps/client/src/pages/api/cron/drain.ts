@@ -12,8 +12,9 @@ import { flushReports } from "../../../lib/reports.ts";
 export const prerender = false;
 const json = (o: unknown, s = 200) => new Response(JSON.stringify(o), { status: s, headers: { "content-type": "application/json" } });
 
-// 期限到来リマインダーを一括配信（外部スケジューラ＝cron-job.org 等から毎分叩く）。
-// Astro単一Workerはネイティブcron非対応のため、INTERNAL_KEY 保護のHTTPエンドポイントで代替。
+// 期限到来リマインダー等の定期処理を一括実行（INTERNAL_KEY 保護のHTTPエンドポイント）。
+// Astro単一Workerはネイティブcron非対応のため、当社運用は apps/scheduler（Cron Triggers）が
+// Service Binding 経由で起動。配布クライアント（別アカウント）は外部スケジューラ等で起動する。
 export const POST: APIRoute = async ({ request, locals }) => {
   const env = locals.runtime.env;
   if (!env.INTERNAL_KEY || request.headers.get("x-internal-key") !== env.INTERNAL_KEY) return json({ error: "forbidden" }, 403);
