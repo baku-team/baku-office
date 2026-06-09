@@ -19,7 +19,8 @@ const groups: Group[] = [
     { href: "/billing", label: "プラン・課金", desc: "Free/Plus/Pro のアップグレード", show: isAdminOrg },
   ] },
   { title: "連携・AI", items: [
-    { href: "/settings/keys", label: "連携設定（APIキー）", desc: "Gemini / LINE / Claude", show: true },
+    { href: "/settings/keys", label: "連携設定（APIキー）", desc: "Gemini / LINE / Claude / Google", show: true },
+    { href: "/settings/google-setup", label: "Google 連携セットアップ", desc: "Calendar/Gmail/Meet のOAuth設定を手順で案内", show: isAdminOrg },
     { href: "/usage", label: "使用量・上限", desc: "API消費・上限・任意API・ストレージ容量", show: hasPlus },
     { href: "/drive", label: "Googleドライブ連携", desc: "同期・バックアップ", show: hasPlus },
   ] },

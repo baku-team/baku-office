@@ -1,0 +1,114 @@
+---
+export const prerender = false;
+import App from "../../layouts/App.astro";
+const env = Astro.locals.runtime.env;
+const { getSession } = await import("../../lib/auth.ts");
+const ses = await getSession(env, Astro.request);
+if (!ses) return Astro.redirect("/login", 302);
+const isAdmin = ses.role === "admin" && ses.ctx === "org";
+
+const { googleConfigured, SCOPE_GROUPS } = await import("../../lib/google.ts");
+const { hasApiKey } = await import("../../lib/client.ts");
+const configured = isAdmin ? await googleConfigured(env) : false;
+const bySecret = { id: !!env.GOOGLE_CLIENT_ID, secret: !!env.GOOGLE_CLIENT_SECRET };
+const status = {
+  id: bySecret.id || (await hasApiKey(env, "google_client_id")),
+  secret: bySecret.secret || (await hasApiKey(env, "google_client_secret")),
+};
+const redirectUri = `${Astro.url.origin}/api/google/callback`;
+// 同意画面に登録するスコープ一覧（用途別・Restricted は審査対象）。
+const allScopes = (Object.keys(SCOPE_GROUPS) as (keyof typeof SCOPE_GROUPS)[]).flatMap((g) =>
+  SCOPE_GROUPS[g].scopes.map((s) => ({ scope: s, label: SCOPE_GROUPS[g].label, restricted: SCOPE_GROUPS[g].restricted })),
+);
+---
+<App title="Google連携セットアップ" active="/settings/keys">
+  <h1>Google 連携セットアップ</h1>
+  {!isAdmin && (<div class="card"><div class="banner banner-warn">この画面は管理者のみ利用できます。</div></div>)}
+  {isAdmin && (
+    <Fragment>
+      <div class="banner banner-info">
+        Google は OAuth クライアントID/シークレットの自動発行を許可していないため、<strong>Google Cloud Console での作成手順は手動</strong>です。本ページは各ステップへの直接リンクと貼り付け用の値で、その手間を最小化します。
+      </div>
+      {configured ? (
+        <div class="banner banner-ok">✅ すでに Google 連携の資格情報は設定済みです。各機能の連携は <a href="/calendar">カレンダー</a> / <a href="/gmail">Gmail</a> / <a href="/meet">Meet</a> の画面から行えます。</div>
+      ) : (
+        <div class="banner banner-warn">未設定です。以下の手順で設定してください（所要 5〜10 分）。</div>
+      )}
+
+      <ol class="steps">
+        <li>
+          <h3>1. プロジェクトを作成（または選択）</h3>
+          <p class="muted">Google Cloud に未作成ならプロジェクトを1つ作成します。</p>
+          <a class="btn btn-primary" href="https://console.cloud.google.com/projectcreate" target="_blank" rel="noopener">プロジェクト作成を開く ↗</a>
+        </li>
+        <li>
+          <h3>2. 必要な API を有効化</h3>
+          <p class="muted">使う機能の API だけで構いません（上のプロジェクトを選んでから各リンクで「有効にする」）。</p>
+          <div class="row">
+            <a class="btn" href="https://console.cloud.google.com/apis/library/calendar-json.googleapis.com" target="_blank" rel="noopener">Calendar API ↗</a>
+            <a class="btn" href="https://console.cloud.google.com/apis/library/gmail.googleapis.com" target="_blank" rel="noopener">Gmail API ↗</a>
+            <a class="btn" href="https://console.cloud.google.com/apis/library/meet.googleapis.com" target="_blank" rel="noopener">Meet API ↗</a>
+          </div>
+        </li>
+        <li>
+          <h3>3. OAuth 同意画面を設定</h3>
+          <p class="muted">User Type は組織内利用なら「内部」、外部利用なら「外部」。アプリ名・サポートメールを入力し、下表のスコープを追加します。テスト段階は「テストユーザー」に連携する Google アカウントを追加してください。</p>
+          <a class="btn btn-primary" href="https://console.cloud.google.com/apis/credentials/consent" target="_blank" rel="noopener">同意画面を開く ↗</a>
+          <div class="table-wrap" style="margin-top:.6rem"><table>
+            <thead><tr><th>スコープ</th><th>用途</th><th>区分</th></tr></thead>
+            <tbody>
+              {allScopes.map((s) => (
+                <tr><td><code style="font-size:.78rem">{s.scope}</code></td><td>{s.label}</td><td>{s.restricted ? <span class="pill" style="background:#fee2e2;color:#b91c1c">Restricted（審査対象）</span> : "通常"}</td></tr>
+              ))}
+            </tbody>
+          </table></div>
+          <p class="muted">※ Gmail の閲覧/送信（Restricted）を外部公開アプリで使う場合、Google の審査が必要になることがあります。まず Calendar/Meet だけで始めるのが簡単です。</p>
+        </li>
+        <li>
+          <h3>4. OAuth クライアント ID を作成</h3>
+          <p class="muted">「アプリケーションの種類＝<strong>ウェブ アプリケーション</strong>」を選び、<strong>承認済みのリダイレクト URI</strong> に下の値をそのまま貼り付けます。</p>
+          <div class="field">
+            <label>承認済みのリダイレクト URI（コピーして貼り付け）</label>
+            <div class="row"><input id="redir" type="text" readonly value={redirectUri} style="flex:1;font-family:monospace;font-size:.82rem" /><button class="btn" id="copyRedir">コピー</button></div>
+          </div>
+          <a class="btn btn-primary" href="https://console.cloud.google.com/apis/credentials/oauthclient" target="_blank" rel="noopener">クライアント作成を開く ↗</a>
+        </li>
+        <li>
+          <h3>5. 発行された ID / シークレットを登録</h3>
+          <p class="muted">作成後に表示される<strong>クライアントID</strong>と<strong>クライアントシークレット</strong>を貼り付けて保存します（暗号化保存・再デプロイ不要）。</p>
+          <div class="card">
+            <div class="field"><label>クライアントID <span class="muted">（{status.id ? "✓ 設定済み" : "未設定"}{bySecret.id ? "・Worker Secret" : ""}）</span></label><input id="gcid" name="google_client_id" type="text" placeholder="xxxxx.apps.googleusercontent.com" autocomplete="off" disabled={bySecret.id} /></div>
+            <div class="field"><label>クライアントシークレット <span class="muted">（{status.secret ? "✓ 設定済み" : "未設定"}{bySecret.secret ? "・Worker Secret" : ""}）</span></label><input id="gcsec" name="google_client_secret" type="password" placeholder="GOCSPX-..." autocomplete="off" disabled={bySecret.secret} /></div>
+            {(bySecret.id || bySecret.secret) && (<p class="muted">Worker Secret で投入済みの項目は画面から変更できません（Secret が優先されます）。</p>)}
+            <button class="btn btn-primary" id="saveGoogle">保存</button>
+          </div>
+        </li>
+      </ol>
+      <p class="muted">うまくいかない場合：連携時に <code>error=token</code> 等が出るときは、ステップ4のリダイレクト URI 不一致（末尾スラッシュ・http/https・ドメイン違い）が最有力です。</p>
+
+      <script slot="scripts" is:inline>
+        document.getElementById("copyRedir")?.addEventListener("click", async () => {
+          const t = document.getElementById("redir");
+          try { await navigator.clipboard.writeText(t.value); window.bo?.toast?.("コピーしました"); }
+          catch { t.select(); document.execCommand("copy"); }
+        });
+        document.getElementById("saveGoogle")?.addEventListener("click", async (e) => {
+          const data = {};
+          ["gcid", "gcsec"].forEach((id) => { const i = document.getElementById(id); if (i && i.value && !i.disabled) data[i.name] = i.value; });
+          if (!Object.keys(data).length) { window.bo.toast("入力がありません", "info"); return; }
+          const { ok, data: j } = await window.bo.api("/api/keys", data, { btn: e.currentTarget, successMsg: null });
+          if (!ok) return;
+          const res = j.result || {};
+          const anyFail = Object.values(res).some((v) => !v.ok);
+          window.bo.toast(anyFail ? "保存に失敗した項目があります" : "保存しました。連携画面から接続できます。", anyFail ? "err" : "ok");
+          if (!anyFail) setTimeout(() => location.reload(), 1000);
+        });
+      </script>
+      <style>
+        .steps { list-style: none; padding: 0; counter-reset: none; }
+        .steps > li { background: #fff; border: 1px solid #e5e9ee; border-radius: 10px; padding: 1rem 1.2rem; margin-bottom: .8rem; }
+        .steps h3 { margin: 0 0 .3rem; }
+      </style>
+    </Fragment>
+  )}
+</App>
