@@ -1,6 +1,6 @@
 // アプリ・レジストリ中枢（ホスト側）：存在するアプリの管理＋利用状況の集計＋署名付き配布＋ストア。
 import { nowSec, signingJwk } from "./host.ts";
-import { signEnvelope, importSignKey, randomId, atLeast, openLicense, type Entitlement, type Envelope } from "@baku-office/shared";
+import { signEnvelope, importSignKey, atLeast, openLicense, type Entitlement, type Envelope } from "@baku-office/shared";
 
 // ライセンストークン → {licenseId, 最新entitlement}（store/DL のプラン判定・なりすまし防止）。
 export async function callerFromToken(env: Env, token: string | undefined): Promise<{ licenseId: string; entitlement: Entitlement } | null> {
@@ -147,7 +147,9 @@ export async function myApps(env: Env, licenseId: string): Promise<{ id: string;
 }
 
 export async function recordDownload(env: Env, appId: string, licenseId: string): Promise<void> {
-  await env.DB.prepare("INSERT INTO app_downloads (id,app_id,license_id,downloaded_at) VALUES (?,?,?,?)").bind(randomId(8), appId, licenseId, nowSec()).run();
+  // ユニーク導入数として記録（同一ライセンスの再DLは時刻更新のみ＝二重計上しない）。
+  await env.DB.prepare("INSERT INTO app_downloads (app_id,license_id,downloaded_at) VALUES (?,?,?) ON CONFLICT(app_id,license_id) DO UPDATE SET downloaded_at=excluded.downloaded_at")
+    .bind(appId, licenseId, nowSec()).run();
 }
 export async function rateApp(env: Env, appId: string, licenseId: string, rating: number, body?: string): Promise<{ ok: boolean; error?: string }> {
   const r = Math.max(1, Math.min(5, Math.round(rating)));
