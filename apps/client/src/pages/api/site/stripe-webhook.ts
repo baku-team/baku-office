@@ -1,6 +1,7 @@
 import type { APIRoute } from "astro";
 import { getApiKey } from "../../../lib/client.ts";
 import { nowSec } from "../../../lib/accounting.ts";
+import { verifyStripeSig } from "@baku-office/shared"; // §5：署名検証は shared に一本化
 
 export const prerender = false;
 
@@ -30,20 +31,3 @@ export const POST: APIRoute = async ({ request, locals }) => {
   }
   return new Response("ok");
 };
-
-// Stripe Webhook 署名検証（HMAC-SHA256・t=タイムスタンプ,v1=署名）。t の鮮度（±5分）も検証。比較は定数時間。
-async function verifyStripeSig(secret: string, payload: string, header: string, toleranceSec = 300): Promise<boolean> {
-  const parts = Object.fromEntries(header.split(",").map((kv) => kv.split("=")));
-  const t = parts["t"];
-  const v1 = parts["v1"];
-  if (!t || !v1) return false;
-  const ts = Number(t);
-  if (!Number.isFinite(ts) || Math.abs(nowSec() - ts) > toleranceSec) return false;
-  const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
-  const mac = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(`${t}.${payload}`));
-  const hex = Array.from(new Uint8Array(mac), (b) => b.toString(16).padStart(2, "0")).join("");
-  if (hex.length !== v1.length) return false;
-  let r = 0;
-  for (let i = 0; i < hex.length; i++) r |= hex.charCodeAt(i) ^ v1.charCodeAt(i);
-  return r === 0;
-}
