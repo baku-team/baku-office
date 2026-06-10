@@ -69,7 +69,7 @@ const cols = canEdit ? 7 : 6;
           if (r.ok) { window.bo.toast("更新しました"); setTimeout(() => location.reload(), 500); }
         });
         tr.querySelector(".e-del")?.addEventListener("click", async (e) => {
-          if (confirm("この会員を削除しますか？")) { const r = await api({ _action: "delete", id }, e.currentTarget); if (r.ok) setTimeout(() => location.reload(), 400); }
+          if (await window.bo.confirm("この会員を削除しますか？", { confirmLabel: "削除", danger: true, auditHref: "/diagnostics" })) { const r = await api({ _action: "delete", id }, e.currentTarget); if (r.ok) setTimeout(() => location.reload(), 400); }
         });
       });
     </script>

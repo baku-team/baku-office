@@ -80,7 +80,7 @@ const yen = (n: number) => "¥" + n.toLocaleString("ja-JP");
       if(r.ok)setTimeout(()=>location.reload(),600);
     });
     document.querySelectorAll(".del[data-del]").forEach(b=>b.addEventListener("click",async(e)=>{
-      if(!confirm("この取引を削除（ゴミ箱へ）しますか？"))return;
+      if(!(await window.bo.confirm("この取引を削除（ゴミ箱へ移動）しますか？",{confirmLabel:"削除",danger:true,auditHref:"/diagnostics"})))return;
       const r=await window.bo.api("/api/tx",{_action:"delete",id:e.target.dataset.del},{btn:e.target,successMsg:"削除しました"});
       if(r.ok)setTimeout(()=>location.reload(),500);
     }));

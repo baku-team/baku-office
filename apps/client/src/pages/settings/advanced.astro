@@ -185,7 +185,13 @@ const curMax = hasPlus ? await maxUploadMb(env) : 5;
       document.getElementById("saveMax")?.addEventListener("click", async (e) => { const v = document.getElementById("maxmb").value; const r = await window.bo.api("/api/settings", { _action: "max_upload", mb: Number(v) }, { btn: e.currentTarget, successMsg: "上限を保存しました" }); if (r.ok) setTimeout(() => location.reload(), 600); });
       document.getElementById("saveWpaid")?.addEventListener("click", async (e) => { const workersPaid = document.getElementById("wpaid").checked; const r = await window.bo.api("/api/settings", { _action: "workers_paid", workersPaid }, { btn: e.currentTarget, successMsg: "保存しました" }); if (r.ok) setTimeout(() => location.reload(), 600); });
       // オートパイロット：有効トグル
-      document.getElementById("autoOn")?.addEventListener("change", async (e) => { await window.bo.api("/api/settings", { _action: "autonomy_toggle", on: e.currentTarget.checked }, { btn: e.currentTarget, successMsg: e.currentTarget.checked ? "オートパイロットを有効化" : "無効化しました" }); });
+      document.getElementById("autoOn")?.addEventListener("change", async (e) => {
+        const box = e.currentTarget; // await を挟むと change の currentTarget は null になるため退避。
+        const on = box.checked;
+        // 有効化はAIへの運用代行委任＝影響が大きいため確認を挟む（無効化は即時）。
+        if (on && !(await window.bo.confirm("オートパイロットを有効にすると、AIが自団体のCloudflare/GitHub運用（破壊的操作を除く）を自動実行します。よろしいですか？", { confirmLabel: "有効にする", danger: true, auditHref: "/diagnostics" }))) { box.checked = false; return; }
+        await window.bo.api("/api/settings", { _action: "autonomy_toggle", on }, { btn: box, successMsg: on ? "オートパイロットを有効化" : "無効化しました" });
+      });
       // CF：トークン貼付→アカウント自動検出
       document.getElementById("saveCf")?.addEventListener("click", async (e) => {
         const cfToken = document.getElementById("cfTok").value.trim();

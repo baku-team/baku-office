@@ -48,7 +48,7 @@ const kb = (n: number) => (n < 1024 ? n + " B" : (n / 1024).toFixed(1) + " KB");
       } finally { window.bo.busy(btn, false); }
     });
     document.querySelectorAll("tr[data-id] .del").forEach((b) => b.addEventListener("click", async (e) => {
-      if (!confirm("ゴミ箱へ移動しますか？")) return;
+      if (!(await window.bo.confirm("このファイルをゴミ箱へ移動しますか？", { confirmLabel: "削除", danger: true, auditHref: "/diagnostics" }))) return;
       const r = await window.bo.api("/api/files", { _action: "delete", id: e.target.closest("tr").dataset.id }, { btn: e.target, successMsg: "ゴミ箱へ移動しました" });
       if (r.ok) setTimeout(() => location.reload(), 600);
     }));

@@ -52,6 +52,12 @@ h2 { font-size: 1.15rem; margin: 2rem 0 .5rem; padding-bottom: .35rem; border-bo
 .field label { display: block; font-weight: 600; font-size: .9rem; margin-bottom: .25rem; }
 input, select, textarea { width: 100%; padding: .55rem .65rem; border: 1px solid #cbd5e1; border-radius: 10px; font: inherit; background: #fff; color: var(--ink); }
 input:focus, select:focus, textarea:focus { outline: 2px solid rgba(37,99,235,.35); border-color: var(--brand); }
+/* キーボード操作の可視フォーカス（a11y）。ボタン/リンク/タブ可能要素に明確な輪郭を出す。 */
+a:focus-visible, button:focus-visible, .btn:focus-visible, [tabindex]:focus-visible, summary:focus-visible {
+  outline: 3px solid #2563eb; outline-offset: 2px; border-radius: 6px;
+}
+/* エラー状態のフォーム要素（aria-invalid を視覚化）。色だけでなく境界＋影で示す。 */
+[aria-invalid="true"] { border-color: var(--danger) !important; box-shadow: 0 0 0 2px rgba(185,28,28,.18); }
 .row { display: flex; gap: .5rem; flex-wrap: wrap; align-items: end; }
 .row > * { flex: 1; min-width: 120px; }
 
@@ -83,4 +89,20 @@ details summary { cursor: pointer; font-weight: 600; }
 .modal.open { display: flex; }
 .modal .box { background: #fff; border-radius: 16px; padding: 1.25rem; width: min(94vw, 460px); }
 
+/* 確認ダイアログ（window.bo.confirm・危険操作の統一・§9） */
+.bo-modal-ov { position: fixed; inset: 0; background: rgba(15,23,42,.5); z-index: 120; display: flex; align-items: center; justify-content: center; padding: 1rem; }
+.bo-modal { background: #fff; border-radius: 16px; padding: 1.25rem; width: min(94vw, 440px); box-shadow: 0 12px 40px rgba(0,0,0,.22); }
+.bo-modal-title { margin: 0 0 .4rem; font-size: 1.1rem; }
+.bo-modal-msg { margin: 0 0 .6rem; color: #334155; line-height: 1.6; white-space: pre-wrap; }
+.bo-modal-warn { margin: 0 0 .6rem; color: #b91c1c; font-weight: 700; font-size: .9rem; }
+.bo-modal-audit { display: inline-block; margin: 0 0 .6rem; font-size: .85rem; }
+.bo-modal-row { display: flex; gap: .6rem; justify-content: flex-end; margin-top: .4rem; }
+
 @media (max-width: 560px) { h1 { font-size: 1.3rem; } .card .num { font-size: 1.35rem; } }
+
+/* モーション低減の希望を尊重（a11y）。装飾的トランジション/アニメを実質無効化。 */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition-duration: .01ms !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; }
+  /* 処理中スピナーは機能的指標のため回転を維持（停止すると進行が判別できない）。 */
+  .btn .spin { animation-duration: .6s !important; animation-iteration-count: infinite !important; }
+}

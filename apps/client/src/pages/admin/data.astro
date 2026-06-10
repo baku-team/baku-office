@@ -43,7 +43,7 @@ const t = (s: number) => new Date(s * 1000).toISOString().slice(0, 16).replace("
   document.querySelectorAll("tr[data-id]").forEach(tr=>{
     const table=tr.dataset.t,id=tr.dataset.id;
     tr.querySelector(".restore").onclick=async()=>{await post({_action:"restore",table,id});location.reload();};
-    tr.querySelector(".purge").onclick=async()=>{if(confirm("完全削除しますか？元に戻せません。")){await post({_action:"purge",table,id});location.reload();}};
+    tr.querySelector(".purge").onclick=async()=>{if(confirm("このレコードを完全削除しますか？元に戻せません。")){await post({_action:"purge",table,id});location.reload();}};
   });
 </script>
 </main></body></html>

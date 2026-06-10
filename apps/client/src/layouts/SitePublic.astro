@@ -42,7 +42,7 @@ const CSP = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 's
             <input id="j-name" placeholder="お名前" required />
             <input id="j-contact" placeholder="連絡先（電話/メール）" />
             <button type="submit">申し込む</button>
-            <div class="jmsg" id="joinMsg"></div>
+            <div class="jmsg" id="joinMsg" role="status" aria-live="polite"></div>
           </form>
         </section>
       )}
