@@ -11,6 +11,10 @@ const { buildDisclosure } = await import("../lib/disclosure.ts");
 const d = await buildDisclosure(env);
 const retentionText = d.retentionDays > 0 ? `${d.retentionDays}日（経過後は自動で物理削除）` : "無期限（手動削除まで保持）";
 
+// 法務文書の記入式雛形（管理者のみ・§5）。
+const { buildLegalTemplates } = await import("../lib/legal-templates.ts");
+const tpl = isAdmin ? await buildLegalTemplates(env) : null;
+
 // プライバシーポリシーへ転記できるプレーンテキスト（コピー用）。
 const plain = [
   "【外部送信・AI利用・保存期間・削除方法のお知らせ】",
@@ -91,6 +95,38 @@ const plain = [
           catch { t.select(); document.execCommand("copy"); }
         });
       </script>
+
+      {tpl && (
+        <Fragment>
+          <h2>法務文書の記入式雛形</h2>
+          <div class="banner banner-warn">以下は<strong>記入式の雛形（素材）</strong>です。〔 〕の事業者情報を記入し、<strong>必ず弁護士等の専門家の確認</strong>を経てご利用ください。現在の連携設定（サブプロセッサ・保持期間）を反映しています。</div>
+          <p class="muted" style="font-size:.85rem">{tpl.note}</p>
+
+          <details>
+            <summary><strong>プライバシーポリシー（雛形）</strong></summary>
+            <textarea class="tpl" readonly rows="18" style="width:100%;font-family:monospace;font-size:.78rem;margin-top:.4rem">{tpl.privacy}</textarea>
+            <button class="btn btn-sm tpl-copy" type="button" style="margin-top:.3rem">コピー</button>
+          </details>
+          <details style="margin-top:.5rem">
+            <summary><strong>利用規約（雛形）</strong></summary>
+            <textarea class="tpl" readonly rows="16" style="width:100%;font-family:monospace;font-size:.78rem;margin-top:.4rem">{tpl.terms}</textarea>
+            <button class="btn btn-sm tpl-copy" type="button" style="margin-top:.3rem">コピー</button>
+          </details>
+          <details style="margin-top:.5rem">
+            <summary><strong>個人データ取扱いの取り決め（DPA・雛形）</strong></summary>
+            <textarea class="tpl" readonly rows="16" style="width:100%;font-family:monospace;font-size:.78rem;margin-top:.4rem">{tpl.dpa}</textarea>
+            <button class="btn btn-sm tpl-copy" type="button" style="margin-top:.3rem">コピー</button>
+          </details>
+          <script slot="scripts" is:inline>
+            document.querySelectorAll(".tpl-copy").forEach((b) => b.addEventListener("click", async (e) => {
+              const ta = e.currentTarget.closest("details")?.querySelector(".tpl");
+              if (!ta) return;
+              try { await navigator.clipboard.writeText(ta.value); window.bo?.toast?.("コピーしました"); }
+              catch { ta.select(); document.execCommand("copy"); }
+            }));
+          </script>
+        </Fragment>
+      )}
     </Fragment>
   )}
 </App>
