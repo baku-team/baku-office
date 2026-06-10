@@ -97,6 +97,7 @@ export async function buildDisclosure(env: Env): Promise<Disclosure> {
     limitedUse: usesRestricted ? LIMITED_USE : undefined,
     responsibilityNote: [
       "・業務データ（会員名簿・会計・ファイル等）は顧客（団体）自身の Cloudflare アカウント内に保存され、ホスト（baku-office 提供者）は通常これを閲覧しません。ホストはライセンス・配信・課金・通知のみを担います。",
+      "・保存時暗号化に用いる暗号鍵も団体自身の Cloudflare アカウント内で管理されます。したがって団体の Cloudflare アカウント（ログイン情報）の保護が安全性の前提です。アカウントが第三者に侵害された場合、保存時暗号化は保護として機能しないことがあります。",
       "・外部AI/外部API（BYOK で団体が有効化したもの）に送信されるデータの取扱いは各提供元の規約に従い、その有効化判断と費用負担は団体に帰属します。",
       "・Cloudflare/外部API の実費（Workers/D1/KV/R2、AIトークン等）は顧客負担です。アプリ内の上限は推定であり、実請求は各プロバイダの計上が正です。",
     ].join("\n"),

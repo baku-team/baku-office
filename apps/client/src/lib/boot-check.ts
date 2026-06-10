@@ -40,15 +40,16 @@ export async function bootCheck(env: Env): Promise<void> {
         await logDiag(env, f.level, "bootcheck", `本番設定点検: ${f.key} — ${f.detail}`);
       }
     }
-    // 鍵保管の点検（全環境・§3-1/P1-2）。配布顧客環境は ENVIRONMENT 未設定のため production 限定だと
-    // 一度も発火しない＝顧客は全件 KV 自動生成（鍵と暗号文が同一 KV に同居）が既定になる。環境を問わず診断に残す。
+    // 鍵保管の点検（§3-1/P1-2）。方針：顧客環境（ENVIRONMENT 未設定・非エンジニアのWeb専用運用）は
+    // ゼロ設定（KV 鍵保管）を正式に許容し、リスクは法務開示（disclosure/legal-templates）で明示する。
+    // したがって顧客環境の KV 自動生成は設計どおり＝警告を出さない。自社本番のみ Secret 必須として厳格に点検。
     const src = await masterKeySource(env);
     if (src === "missing-prod") {
       await logDiag(env, "error", "security",
         "本番で MASTER_KEY が未投入＝暗号処理をブロック中。`wrangler secret put MASTER_KEY --env production` で投入してください（§10.1）。");
-    } else if (src === "kv-autogen") {
-      await logDiag(env, env.ENVIRONMENT === "production" ? "error" : "warn", "security",
-        "MASTER_KEY が KV 自動生成です（鍵と暗号文が同一 KV に同居）。アカウント侵害時にアプリ層暗号化が無力化します。Worker Secret(MASTER_KEY) の投入を強く推奨します（§3-1/§10.1）。");
+    } else if (src === "kv-autogen" && env.ENVIRONMENT === "production") {
+      await logDiag(env, "error", "security",
+        "本番(自社)で MASTER_KEY が KV 自動生成です＝運用事故（鍵と暗号文が同居）。Worker Secret(MASTER_KEY) を投入してください（§10.1）。");
     }
     // 鍵保管が未確定（初回リクエストで暗号未実行＝"unknown"）のうちは KV_FLAG を立てず、次リクエストで再点検する。
     // WHY: bootCheck は1回しか走らないため、鍵生成より前に確定させると kv-autogen 警告を取り逃す。

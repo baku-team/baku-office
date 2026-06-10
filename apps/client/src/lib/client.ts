@@ -132,8 +132,10 @@ export class MasterKeyMissingError extends Error {
 }
 
 // 鍵の「保管」を KvPort 経由に分離（§14-3）。secret(env.MASTER_KEY) 優先。
-// 本番（ENVIRONMENT=production）では secret 未投入時に KV 自動生成せずブロック（鍵と暗号文の同居回避・§10.1）。
-// dev/test のみ zero-config 維持のため KV 自動生成を許可する。
+// 本番（ENVIRONMENT=production・自社）では secret 未投入時に KV 自動生成せずブロック（鍵と暗号文の同居回避・§10.1）。
+// 顧客環境（ENVIRONMENT 未設定）と dev/test は zero-config 維持のため KV 自動生成を許可する。
+// 設計判断（§3-1）：顧客は非エンジニアの Web 専用運用で Worker Secret の手投入が非現実的なため、
+// ゼロ設定（KV 鍵保管）を正式に許容する。アカウント侵害時のリスクは法務開示（disclosure/legal-templates）で明示。
 // 演算（HKDF/AES-GCM）は shared の純粋関数のまま。保管先だけ Profile で差し替え可能。
 async function resolveMasterKey(env: Env, kv: KvPort): Promise<string> {
   let k = await kv.get("master_key");
@@ -145,7 +147,7 @@ async function resolveMasterKey(env: Env, kv: KvPort): Promise<string> {
     k = generateMasterKey();
     await kv.put("master_key", k);
     await kv.put("master_key_source", "kv-autogen");
-    await logDiag(env, "warn", "security", "MASTER_KEY 未設定のため KV に自動生成しました（dev/test）。本番は Worker Secret(MASTER_KEY)の投入が必須です（鍵と暗号文の同居を避けるため）。");
+    await logDiag(env, "warn", "security", "MASTER_KEY 未設定のため KV に自動生成しました（ゼロ設定の既定・§3-1）。鍵は団体の Cloudflare アカウント内 KV に保管されます。自社本番のみ Worker Secret(MASTER_KEY) の投入が必須です。");
   }
   return k;
 }
