@@ -2,6 +2,21 @@
 import { randomId, encryptBytes, decryptBytes } from "@baku-office/shared";
 import { nowSec } from "./accounting.ts";
 import { masterKey } from "./client.ts";
+import type { Session } from "./auth.ts";
+
+// ファイルアクセス文脈（P0-1）。org=組織共有プール／personal=個人(LINE等)の私的ファイル。
+export type FileCtx = "org" | "personal";
+
+// セッションのアクセス可能範囲を WHERE 句へ落とす（IDOR是正の中核）。
+//   admin            … 全件（運用・監査のため）。
+//   org 文脈の非admin … 組織共有(ctx='org' or NULL=legacy) ＋ 自分が作成したもの。
+//   personal 文脈     … 自分が作成したもののみ。
+// 返り値の clause は `AND (...)` を含めず純粋な条件式、bind は末尾に積む引数。
+function scopeClause(ses: Session): { clause: string; binds: unknown[] } {
+  if (ses.role === "admin") return { clause: "1=1", binds: [] };
+  if (ses.ctx === "org") return { clause: "(ctx = 'org' OR ctx IS NULL OR created_by = ?)", binds: [ses.uid] };
+  return { clause: "created_by = ?", binds: [ses.uid] };
+}
 
 // KV値の物理上限は25MiB。既定は安全側5MB、高度なオプションで1〜25MBに変更可（§11）。
 const KV_HARD_MAX_MB = 25;
@@ -43,7 +58,9 @@ export async function setRetentionDays(env: Env, days: number): Promise<number> 
 }
 
 // 保存：R2優先／KVフォールバック（上限超過はエラー）。本体は MASTER_KEY 由来鍵で保存時暗号化（P0-5）。
-export async function saveFile(env: Env, file: File, createdBy: string): Promise<{ id: string; mode: string }> {
+// ctx 既定は 'org'（システム生成・取込・組織内アップロードの大半が組織データのため）。
+// 個人(LINE/Discord)文脈のユーザーアップロードは呼び出し側で 'personal' を渡す（P0-1スコープ）。
+export async function saveFile(env: Env, file: File, createdBy: string, ctx: FileCtx = "org"): Promise<{ id: string; mode: string }> {
   const id = randomId();
   const plain = await file.arrayBuffer();
   const size = plain.byteLength; // 表示は平文サイズ
@@ -64,8 +81,8 @@ export async function saveFile(env: Env, file: File, createdBy: string): Promise
   }
   const days = await getRetentionDays(env);
   const expires = days > 0 ? nowSec() + days * 86400 : null;
-  await env.DB.prepare("INSERT INTO files (id,name,size,mime,ref,created_by,created_at,enc,expires_at) VALUES (?,?,?,?,?,?,?,1,?)")
-    .bind(id, file.name || "file", size, file.type || null, ref, createdBy, nowSec(), expires)
+  await env.DB.prepare("INSERT INTO files (id,name,size,mime,ref,created_by,created_at,enc,expires_at,ctx) VALUES (?,?,?,?,?,?,?,1,?,?)")
+    .bind(id, file.name || "file", size, file.type || null, ref, createdBy, nowSec(), expires, ctx)
     .run();
   return { id, mode };
 }
@@ -83,6 +100,8 @@ async function readBlob(env: Env, ref: string, enc: number): Promise<ArrayBuffer
   return enc ? decryptBytes(await masterKey(env), raw, "files") : raw;
 }
 
+// 低レベル取得（所有者検査なし）。サーバ内部の正当な用途（drive バックアップ・invoices・media-ai 等）専用。
+// HTTP 経由のユーザー要求では必ず *ForSession を使う（P0-1）。
 export async function getFile(env: Env, id: string): Promise<{ buf: ArrayBuffer; mime: string; name: string } | null> {
   const row = await env.DB.prepare("SELECT name,mime,ref,enc FROM files WHERE id=? AND deleted_at IS NULL").bind(id).first<{ name: string; mime: string | null; ref: string; enc: number }>();
   if (!row) return null;
@@ -91,11 +110,43 @@ export async function getFile(env: Env, id: string): Promise<{ buf: ArrayBuffer;
   return { buf, mime: row.mime ?? "application/octet-stream", name: row.name };
 }
 
+// ファイルが指定 owner の作成物か（agent ツール等で model 指定 id を raw 取得する経路の所有者検査・P0-1補完）。
+export async function fileBelongsTo(env: Env, id: string, owner: string): Promise<boolean> {
+  const row = await env.DB.prepare("SELECT created_by FROM files WHERE id=? AND deleted_at IS NULL").bind(id).first<{ created_by: string | null }>();
+  return !!row && row.created_by === owner;
+}
+
 export async function listFiles(env: Env): Promise<FileRow[]> {
   return (await env.DB.prepare("SELECT id,name,size,mime,ref,created_at FROM files WHERE deleted_at IS NULL ORDER BY created_at DESC").all<FileRow>()).results;
 }
 export async function softDeleteFile(env: Env, id: string): Promise<void> {
   await env.DB.prepare("UPDATE files SET deleted_at=? WHERE id=?").bind(nowSec(), id).run();
+}
+
+// ── 所有者/ロール検査つき（P0-1 IDOR是正）。HTTP のダウンロード/削除/一覧はこちらを使う。──
+// 取得：スコープ外 id は「存在しない」扱い（null）にして列挙ともリーク差を作らない。
+export async function getFileForSession(env: Env, id: string, ses: Session): Promise<{ buf: ArrayBuffer; mime: string; name: string } | null> {
+  const { clause, binds } = scopeClause(ses);
+  const row = await env.DB.prepare(`SELECT name,mime,ref,enc FROM files WHERE id=? AND deleted_at IS NULL AND ${clause}`)
+    .bind(id, ...binds).first<{ name: string; mime: string | null; ref: string; enc: number }>();
+  if (!row) return null;
+  const buf = await readBlob(env, row.ref, row.enc);
+  if (!buf) return null;
+  return { buf, mime: row.mime ?? "application/octet-stream", name: row.name };
+}
+
+export async function listFilesForSession(env: Env, ses: Session): Promise<FileRow[]> {
+  const { clause, binds } = scopeClause(ses);
+  return (await env.DB.prepare(`SELECT id,name,size,mime,ref,created_at FROM files WHERE deleted_at IS NULL AND ${clause} ORDER BY created_at DESC`)
+    .bind(...binds).all<FileRow>()).results;
+}
+
+// 削除：スコープ内に該当行があった場合のみ true。所有者でなければ false（呼び出し側で 403/404 を返す）。
+export async function softDeleteFileForSession(env: Env, id: string, ses: Session): Promise<boolean> {
+  const { clause, binds } = scopeClause(ses);
+  const r = await env.DB.prepare(`UPDATE files SET deleted_at=? WHERE id=? AND deleted_at IS NULL AND ${clause}`)
+    .bind(nowSec(), id, ...binds).run();
+  return (r.meta?.changes ?? 0) > 0;
 }
 
 // 実体（R2/KV）を物理削除。

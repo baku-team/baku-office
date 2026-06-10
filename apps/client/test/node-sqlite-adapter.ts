@@ -18,7 +18,7 @@ export function memKv(): KvPort {
 export function nodeSqlStore(db: DatabaseSync): SqlStore {
   const mk = (sql: string, bound: unknown[] = []) => ({
     bind: (...vals: unknown[]) => mk(sql, vals),
-    run: async () => { db.prepare(sql).run(...(bound as never[])); return { success: true, results: [], meta: {} }; },
+    run: async () => { const r = db.prepare(sql).run(...(bound as never[])); return { success: true, results: [], meta: { changes: Number(r.changes ?? 0) } }; },
     all: async () => ({ results: db.prepare(sql).all(...(bound as never[])) }),
     first: async () => db.prepare(sql).get(...(bound as never[])) ?? null,
     raw: async () => [],

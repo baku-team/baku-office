@@ -1,13 +1,16 @@
 import type { APIRoute } from "astro";
 import { createTx, softDeleteTx, currentPeriod, ensureSeed } from "../../lib/accounting.ts";
+import { requireOrgAdmin } from "../../lib/auth.ts";
 
 export const prerender = false;
 
 const json = (o: unknown, s = 200) => new Response(JSON.stringify(o), { status: s, headers: { "content-type": "application/json" } });
 
-// 取引の登録／ソフトデリート。
+// 取引の登録／ソフトデリート。会計データAPI（data.ts）と同基準＝admin+org のみ。
+// WHY: 未認証だと第三者が取引を登録/削除でき、会計データを改竄できた。
 export const POST: APIRoute = async ({ request, locals }) => {
   const env = locals.runtime.env;
+  if (!(await requireOrgAdmin(env, request))) return json({ error: "管理者のみ" }, 403);
   await ensureSeed(env);
   const b = (await request.json().catch(() => ({}))) as Record<string, unknown>;
 

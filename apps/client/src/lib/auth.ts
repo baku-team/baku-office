@@ -73,6 +73,14 @@ export async function getSession(env: Env, request: Request): Promise<Session | 
   }
 }
 
+// 組織管理者ゲート（admin かつ org 文脈）。多くの管理系APIで使う共通判定。
+// 返り値: 条件を満たせば Session、満たさなければ null（呼び出し側で 403）。
+export async function requireOrgAdmin(env: Env, request: Request): Promise<Session | null> {
+  const ses = await getSession(env, request);
+  if (!ses || ses.role !== "admin" || ses.ctx !== "org") return null;
+  return ses;
+}
+
 // ロール→アクセス可能セクション（設計書§6.4の既定）。
 export function canAccess(role: Role, section: "accounting" | "documents" | "members" | "billing" | "review_accounting" | "review_documents"): boolean {
   if (role === "admin") return true;

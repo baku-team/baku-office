@@ -5,7 +5,7 @@ import type { Part } from "../core/parts.ts";
 import type { Ctx } from "../core/ports.ts";
 import { randomId } from "@baku-office/shared";
 import { nowSec } from "../lib/accounting.ts";
-import { getFile } from "../lib/storage.ts";
+import { getFile, fileBelongsTo } from "../lib/storage.ts";
 import { extractInvoiceData } from "../lib/media-ai.ts";
 import { setReminder } from "./reminders.ts";
 
@@ -35,6 +35,10 @@ export async function saveInvoice(ctx: Ctx, owner: string, d: { fileId?: string;
 
 // file_id のファイルを取得 → Claude抽出 → 保存。手動アップロード・メール添付・チャット添付の共通入口。
 export async function registerInvoiceFromFile(ctx: Ctx, owner: string, fileId: string, source = "manual"): Promise<{ id?: string; vendor?: string; amount?: number; due_date?: string; error?: string }> {
+  // 所有者検査（P0-1補完）。WHY: チャットの register_invoice ツールは model 指定の file_id を
+  // raw getFile に渡すため、自分が保存したファイル以外を抽出できると他者ファイルのIDORになる。
+  // 正規フロー（手動アップロード/チャット添付）は直前に owner 本人が保存＝created_by===owner。
+  if (!(await fileBelongsTo(ctx.env, fileId, owner))) return { error: "ファイルが見つかりません。" };
   const f = await getFile(ctx.env, fileId);
   if (!f) return { error: "ファイルが見つかりません。" };
   const ex = await extractInvoiceData(ctx.env, f);

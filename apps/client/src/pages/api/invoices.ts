@@ -22,7 +22,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
     const fd = await request.formData();
     const file = fd.get("file");
     if (!(file instanceof File)) return json({ error: "ファイルが必要です" }, 400);
-    const saved = await saveFile(env, file, ses.uid);
+    const saved = await saveFile(env, file, ses.uid, ses.ctx);
     const r = await registerInvoiceFromFile(ctx, ses.uid, saved.id, "manual");
     if (r.error) return json({ error: r.error }, 400);
     return json({ ok: true, ...r });

@@ -1,5 +1,6 @@
 import type { APIRoute } from "astro";
 import { createCheckout, stripeEnabled } from "../../../lib/billing.ts";
+import { isDevEnv } from "../../../lib/hostauth.ts";
 import type { Plan } from "@baku-office/shared";
 
 export const prerender = false;
@@ -24,7 +25,10 @@ export const POST: APIRoute = async ({ request, locals }) => {
     if (!url) return json({ error: "Stripe Checkout 生成に失敗" }, 502);
     return json({ ok: true, url, mode: "stripe" });
   }
-  // dev：入金シミュレートURL（本番ではこの分岐は無効）。
+  // P0-2: Stripe未設定で dev URL を返すのは ENV=development のときだけ。
+  // 本番で Stripe 未設定なら fail-closed（無認証昇格URLを発行しない）。
+  if (!isDevEnv(env)) return json({ error: "課金が未設定です（管理者へ連絡してください）" }, 503);
+  // dev：入金シミュレートURL。
   const url = `${new URL(request.url).origin}/api/billing/dev-confirm?license_id=${b.licenseId}&plan=${b.plan}&return=${encodeURIComponent(ret)}`;
   return json({ ok: true, url, mode: "dev" });
 };
