@@ -110,6 +110,12 @@ export async function getFile(env: Env, id: string): Promise<{ buf: ArrayBuffer;
   return { buf, mime: row.mime ?? "application/octet-stream", name: row.name };
 }
 
+// ファイルが指定 owner の作成物か（agent ツール等で model 指定 id を raw 取得する経路の所有者検査・P0-1補完）。
+export async function fileBelongsTo(env: Env, id: string, owner: string): Promise<boolean> {
+  const row = await env.DB.prepare("SELECT created_by FROM files WHERE id=? AND deleted_at IS NULL").bind(id).first<{ created_by: string | null }>();
+  return !!row && row.created_by === owner;
+}
+
 export async function listFiles(env: Env): Promise<FileRow[]> {
   return (await env.DB.prepare("SELECT id,name,size,mime,ref,created_at FROM files WHERE deleted_at IS NULL ORDER BY created_at DESC").all<FileRow>()).results;
 }

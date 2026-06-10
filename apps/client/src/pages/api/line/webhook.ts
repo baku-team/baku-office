@@ -53,7 +53,8 @@ export const POST: APIRoute = async ({ request, locals }) => {
         if (!content) { out = "ファイルを取得できませんでした。"; }
         else {
           const file = new File([content.buf], m.fileName ?? "document", { type: content.mime });
-          const saved = await saveFile(env, file, `line:${userId}`).catch(() => null);
+          // LINE は個人文脈＝personal で保存（org 共有プールに混ぜない・P0-1）。
+          const saved = await saveFile(env, file, `line:${userId}`, "personal").catch(() => null);
           if (!saved) out = "ファイル保存に失敗しました（標準モードは5MBまで）。";
           else { await enqueueSummary(env, `line:${userId}`, saved.id, m.fileName ?? "document"); out = "📄 資料を受け取りました。要約して『資料』に保存します（少し後に反映）。"; }
         }
