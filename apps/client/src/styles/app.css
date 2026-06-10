@@ -62,11 +62,9 @@ a:focus-visible, button:focus-visible, .btn:focus-visible, [tabindex]:focus-visi
 .row > * { flex: 1; min-width: 120px; }
 
 /* Tables (responsive) */
-.table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); max-height: 70vh; }
+.table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
 table { border-collapse: collapse; width: 100%; font-size: .9rem; min-width: 480px; }
 th, td { padding: .55rem .7rem; border-bottom: 1px solid var(--line); text-align: left; }
-/* 縦スクロール時に見出しを固定（モバイルで「この列は何か」を見失わない・a11y）。 */
-.table-wrap thead th { position: sticky; top: 0; z-index: 1; background: var(--surface); }
 th { background: #f8fafc; font-weight: 600; }
 td.r, th.r { text-align: right; }
 tr:last-child td { border-bottom: 0; }
@@ -102,7 +100,9 @@ details summary { cursor: pointer; font-weight: 600; }
 
 @media (max-width: 560px) { h1 { font-size: 1.3rem; } .card .num { font-size: 1.35rem; } }
 
-/* モーション低減の希望を尊重（a11y）。トランジション/アニメを実質無効化。 */
+/* モーション低減の希望を尊重（a11y）。装飾的トランジション/アニメを実質無効化。 */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition-duration: .01ms !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; }
+  /* 処理中スピナーは機能的指標のため回転を維持（停止すると進行が判別できない）。 */
+  .btn .spin { animation-duration: .6s !important; animation-iteration-count: infinite !important; }
 }

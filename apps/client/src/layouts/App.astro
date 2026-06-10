@@ -110,6 +110,7 @@ if (ses) { try { unreadNotif = await (await import("../lib/notifications.ts")).c
       // 監査ログ導線を標準化。Promise<boolean> を返す。a11y: role=dialog/aria-modal・フォーカストラップ・
       // ESC=キャンセル・既定フォーカスはキャンセル（誤確定の防止）。
       type ConfirmOpts = { title?: string; confirmLabel?: string; cancelLabel?: string; danger?: boolean; irreversible?: boolean; auditHref?: string };
+      let boModalSeq = 0;
       function confirmDialog(message: string, opts: ConfirmOpts = {}): Promise<boolean> {
         return new Promise((resolve) => {
           const prev = document.activeElement as HTMLElement | null;
@@ -120,7 +121,8 @@ if (ses) { try { unreadNotif = await (await import("../lib/notifications.ts")).c
           dlg.className = "bo-modal";
           dlg.setAttribute("role", "dialog");
           dlg.setAttribute("aria-modal", "true");
-          const titleId = "bo-mt", descId = "bo-md";
+          const uid = "bo-m" + (++boModalSeq); // 同時表示でもID衝突しないよう連番化。
+          const titleId = uid + "t", descId = uid + "d";
           dlg.setAttribute("aria-labelledby", titleId);
           dlg.setAttribute("aria-describedby", descId);
           const danger = !!opts.danger || !!opts.irreversible;
@@ -160,8 +162,10 @@ if (ses) { try { unreadNotif = await (await import("../lib/notifications.ts")).c
           const onKey = (e: KeyboardEvent) => {
             if (e.key === "Escape") { e.preventDefault(); close(false); }
             else if (e.key === "Tab") {
-              // フォーカスを2ボタン間にトラップ。
-              const f = [cancel, ok]; const i = f.indexOf(document.activeElement as HTMLButtonElement);
+              // ダイアログ内の全フォーカス可能要素を巡回（監査リンクも到達可能に）。
+              const f = Array.from(dlg.querySelectorAll<HTMLElement>("a[href],button")).filter((el) => !el.hasAttribute("disabled"));
+              if (!f.length) { e.preventDefault(); return; }
+              const i = f.indexOf(document.activeElement as HTMLElement);
               e.preventDefault();
               const next = e.shiftKey ? (i <= 0 ? f.length - 1 : i - 1) : (i >= f.length - 1 ? 0 : i + 1);
               f[next].focus();
