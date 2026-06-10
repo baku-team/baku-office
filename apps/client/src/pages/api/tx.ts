@@ -1,6 +1,6 @@
 import type { APIRoute } from "astro";
 import { createTx, softDeleteTx, currentPeriod, ensureSeed } from "../../lib/accounting.ts";
-import { getSession } from "../../lib/auth.ts";
+import { requireOrgAdmin } from "../../lib/auth.ts";
 
 export const prerender = false;
 
@@ -10,8 +10,7 @@ const json = (o: unknown, s = 200) => new Response(JSON.stringify(o), { status: 
 // WHY: 未認証だと第三者が取引を登録/削除でき、会計データを改竄できた。
 export const POST: APIRoute = async ({ request, locals }) => {
   const env = locals.runtime.env;
-  const ses = await getSession(env, request);
-  if (!ses || ses.role !== "admin" || ses.ctx !== "org") return json({ error: "管理者のみ" }, 403);
+  if (!(await requireOrgAdmin(env, request))) return json({ error: "管理者のみ" }, 403);
   await ensureSeed(env);
   const b = (await request.json().catch(() => ({}))) as Record<string, unknown>;
 

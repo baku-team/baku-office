@@ -12,6 +12,7 @@ const API_DIR = join(dirname(fileURLToPath(import.meta.url)), "../src/pages/api"
 // 認可とみなすシグナル（いずれかを含めば可）：セッション／署名検証／共有秘密／dev限定。
 const AUTH_SIGNALS = [
   /getSession\s*\(/,            // ユーザーセッション
+  /requireOrgAdmin\s*\(/,      // 組織管理者ゲート（getSession ラッパ）
   /verifyEnvelope\s*\(/,       // A2A 署名
   /verifyStripeSig\s*\(/,      // Stripe Webhook 署名
   /verifyLineSignature\s*\(/,  // LINE Webhook 署名

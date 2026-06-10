@@ -23,8 +23,14 @@ export function checkProdEnv(env: Env): Finding[] {
   return out;
 }
 
+// isolate 内で一度実行したら以後スキップ（毎リクエストの KV 読みを避ける）。
+// KV_FLAG は isolate 横断の診断重複抑止用。早めに true にして isolate 内の重複実行も防ぐ。
+let isolateChecked = false;
+
 // 初回リクエスト時に一度だけ点検して診断に残す（冪等・失敗は握りつぶす）。
 export async function bootCheck(env: Env): Promise<void> {
+  if (isolateChecked) return;
+  isolateChecked = true; // KV 読み前に立てる＝isolate 内の並行リクエストで多重実行しない
   try {
     if (env.ENVIRONMENT !== "production") return;
     if ((await env.LICENSE.get(KV_FLAG)) === "1") return;
