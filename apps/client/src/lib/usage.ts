@@ -1,6 +1,13 @@
 // API使用量（回数ベース）の記録・集計・上限。AI機能や各APIの利用を日次でカウントし、
 // 「API使用量」画面で可視化＋無料枠アラート＋従量上限を制御する（§使用量画面）。
 import { resolvePricing } from "../core/models/config.ts";
+import { logDiag } from "./diag.ts";
+
+// 使用量の記録失敗を診断に残す（P1-2）。WHY: 握りつぶすと上限判定が壊れても気づけない。
+// auto-report の連鎖を避けるため warn（error にしない）。記録失敗で本処理は止めない。
+function noteRecordFailure(env: Env, provider: string, e: unknown): void {
+  void logDiag(env, "warn", "usage", `使用量記録に失敗（上限判定が不正確になる恐れ）: ${provider}`, (e as Error)?.message ?? String(e));
+}
 
 export const USAGE_PROVIDERS = ["gemini", "claude", "web_search", "image_gen", "tts", "video_gen", "custom"] as const;
 export type UsageProvider = string;
@@ -26,7 +33,7 @@ export async function recordUsage(env: Env, provider: string): Promise<void> {
     await env.DB.prepare(
       "INSERT INTO api_usage (provider, day, count) VALUES (?,?,1) ON CONFLICT(provider, day) DO UPDATE SET count = count + 1",
     ).bind(provider, todayUtc()).run();
-  } catch { /* noop */ }
+  } catch (e) { noteRecordFailure(env, provider, e); }
 }
 
 // 応答 usage（input/output token）と推定USDを加算。countは増やさない（recordUsageと二重計上を避ける）。
@@ -39,7 +46,7 @@ export async function recordTokens(env: Env, provider: string, u: TokenUsage): P
     await env.DB.prepare(
       "INSERT INTO api_usage (provider, day, count, input_tokens, output_tokens, est_usd) VALUES (?,?,0,?,?,?) ON CONFLICT(provider, day) DO UPDATE SET input_tokens = input_tokens + excluded.input_tokens, output_tokens = output_tokens + excluded.output_tokens, est_usd = est_usd + excluded.est_usd",
     ).bind(provider, todayUtc(), i, o, usd).run();
-  } catch { /* noop */ }
+  } catch (e) { noteRecordFailure(env, provider, e); }
 }
 
 // token以外の従量単位（Web検索回数・音声/動画秒数など）を加算。
@@ -50,7 +57,7 @@ export async function recordUnits(env: Env, provider: string, units: number): Pr
     await env.DB.prepare(
       "INSERT INTO api_usage (provider, day, count, units) VALUES (?,?,0,?) ON CONFLICT(provider, day) DO UPDATE SET units = units + excluded.units",
     ).bind(provider, todayUtc(), n).run();
-  } catch { /* noop */ }
+  } catch (e) { noteRecordFailure(env, provider, e); }
 }
 
 export type DayCount = { day: string; count: number };
