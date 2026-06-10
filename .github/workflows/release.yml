@@ -1,8 +1,8 @@
 name: Release signed client bundle
 
 # 第2層更新（案①・日和見ローダ）用の署名付きリリースを公開する恒久パイプライン。
-#   ビルド → tar → RELEASE署名鍵で署名 → baku-office-app に GitHub Release 公開 → host /api/release/publish 通知。
-#   クライアントは再ビルド時に host/api/release/latest を見て tarball を取得・/api/release/pubkey で検証し差し替え。
+#   ビルド → tar → RELEASE署名鍵で署名 → 【同梱鍵との整合をCIで検証】→ baku-office-app に GitHub Release 公開 → host /api/release/publish 通知。
+#   クライアントは再ビルド時に host/api/release/latest を見て tarball を取得し、【同梱 release-pubkey.json（ピン留め）】で検証し差し替え（§3-2：ホストから鍵を取らない）。
 # 必要 secrets（baku-office private repo）：
 #   PUBLISH_TOKEN（baku-office-app の Contents:RW・Release作成）／RELEASE_SIGNING_JWK（Ed25519秘密鍵JWK）／RELEASE_PUBLISH_KEY（host共有）。
 on:
@@ -53,6 +53,9 @@ jobs:
           V="${{ steps.ver.outputs.v }}"
           tar -czf bundle.tgz -C apps/client/release .
           SIG="$(node apps/client/scripts/sign-release.mjs bundle.tgz)"
+          # §3-2 ガード：同梱 release-pubkey.json が署名鍵の公開部分と一致し、署名がその鍵で検証できることを確認。
+          # 不一致なら顧客側 prebuild が fail-closed で全更新停止＝公開前に必ず弾く。
+          node apps/client/scripts/verify-release.mjs bundle.tgz "$SIG"
           gh release create "v$V" bundle.tgz -R baku-team/baku-office-app -t "v$V" -n "client distribution bundle v$V (auto-signed)"
           URL="https://github.com/baku-team/baku-office-app/releases/download/v$V/bundle.tgz"
           echo "publishing to host: $V $URL"
