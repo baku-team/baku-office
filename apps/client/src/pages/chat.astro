@@ -224,7 +224,7 @@ const skills = hasPlus && isOrgAdmin ? await listSkills(env).catch(() => []) : [
           const id = tr.dataset.sid;
           tr.querySelector(".sen")?.addEventListener("click", async (e) => { const r = await sk({ _action: "enable", id, enabled: true }, e.target); if (r.ok) setTimeout(() => location.reload(), 500); });
           tr.querySelector(".sdis")?.addEventListener("click", async (e) => { const r = await sk({ _action: "enable", id, enabled: false }, e.target); if (r.ok) setTimeout(() => location.reload(), 500); });
-          tr.querySelector(".sdel")?.addEventListener("click", async (e) => { if (confirm("削除しますか？")) { const r = await sk({ _action: "delete", id }, e.target); if (r.ok) setTimeout(() => location.reload(), 500); } });
+          tr.querySelector(".sdel")?.addEventListener("click", async (e) => { if (await window.bo.confirm("このスキルを削除しますか？", { confirmLabel: "削除", danger: true })) { const r = await sk({ _action: "delete", id }, e.target); if (r.ok) setTimeout(() => location.reload(), 500); } });
         });
     })();
   </script>

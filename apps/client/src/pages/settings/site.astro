@@ -64,7 +64,7 @@ const origin = Astro.url.origin;
             location.hash = "editor";
           });
           tr.querySelector(".s-del")?.addEventListener("click", async (e) => {
-            if (confirm("このページを削除しますか？")) { const r = await window.bo.api("/api/site", { _action: "delete", slug: tr.dataset.slug }, { btn: e.currentTarget }); if (r.ok) setTimeout(() => location.reload(), 400); }
+            if (await window.bo.confirm("この公開ページを削除しますか？（公開中の場合は閲覧できなくなります）", { confirmLabel: "削除", danger: true, irreversible: true })) { const r = await window.bo.api("/api/site", { _action: "delete", slug: tr.dataset.slug }, { btn: e.currentTarget }); if (r.ok) setTimeout(() => location.reload(), 400); }
           });
         });
         save.addEventListener("click", async (e) => {

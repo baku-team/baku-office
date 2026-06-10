@@ -73,7 +73,7 @@ const fmt = (s: number) => new Date(s * 1000).toISOString().slice(0, 10);
           if (runBtn) runBtn.disabled = false;
         });
         if (runBtn) runBtn.addEventListener("click", async (e) => {
-          if (!confirm("この内容で取り込みますか？")) return;
+          if (!(await window.bo.confirm("この内容で取り込みますか？", { confirmLabel: "取り込む" }))) return;
           const r = await window.bo.api("/api/import", { _action: "run", ...body() }, { btn: e.currentTarget, successMsg: null });
           if (r.ok) { window.bo.toast(r.data.imported + " 件取り込みました（R2:" + r.data.files + "）"); setTimeout(() => location.reload(), 1000); }
         });

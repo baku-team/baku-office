@@ -106,7 +106,75 @@ if (ses) { try { unreadNotif = await (await import("../lib/notifications.ts")).c
           toast("通信に失敗しました：" + ((e as Error)?.message || ""), "err"); return { ok: false, error: e };
         } finally { busy(btn, false); }
       }
-      (window as any).bo = { toast, busy, api };
+      // 確認ダイアログ（危険操作の統一・§9）。window.confirm を置換し、リスクラベル・取消不可表示・
+      // 監査ログ導線を標準化。Promise<boolean> を返す。a11y: role=dialog/aria-modal・フォーカストラップ・
+      // ESC=キャンセル・既定フォーカスはキャンセル（誤確定の防止）。
+      type ConfirmOpts = { title?: string; confirmLabel?: string; cancelLabel?: string; danger?: boolean; irreversible?: boolean; auditHref?: string };
+      function confirmDialog(message: string, opts: ConfirmOpts = {}): Promise<boolean> {
+        return new Promise((resolve) => {
+          const prev = document.activeElement as HTMLElement | null;
+          const ov = document.createElement("div");
+          ov.className = "bo-modal-ov";
+          ov.setAttribute("role", "presentation");
+          const dlg = document.createElement("div");
+          dlg.className = "bo-modal";
+          dlg.setAttribute("role", "dialog");
+          dlg.setAttribute("aria-modal", "true");
+          const titleId = "bo-mt", descId = "bo-md";
+          dlg.setAttribute("aria-labelledby", titleId);
+          dlg.setAttribute("aria-describedby", descId);
+          const danger = !!opts.danger || !!opts.irreversible;
+          const h = document.createElement("h2");
+          h.id = titleId; h.className = "bo-modal-title"; h.textContent = opts.title || (danger ? "確認" : "確認");
+          const p = document.createElement("p");
+          p.id = descId; p.className = "bo-modal-msg"; p.textContent = message;
+          dlg.appendChild(h); dlg.appendChild(p);
+          if (opts.irreversible) {
+            const w = document.createElement("p");
+            w.className = "bo-modal-warn"; w.textContent = "⚠ この操作は取り消せません。";
+            dlg.appendChild(w);
+          }
+          if (opts.auditHref) {
+            const a = document.createElement("a");
+            a.href = /^(\/|#)/.test(opts.auditHref) ? opts.auditHref : "#";
+            a.className = "bo-modal-audit"; a.textContent = "操作履歴（監査ログ）を見る";
+            dlg.appendChild(a);
+          }
+          const row = document.createElement("div");
+          row.className = "bo-modal-row";
+          const cancel = document.createElement("button");
+          cancel.type = "button"; cancel.className = "btn"; cancel.textContent = opts.cancelLabel || "キャンセル";
+          const ok = document.createElement("button");
+          ok.type = "button"; ok.className = "btn " + (danger ? "btn-danger" : "btn-primary"); ok.textContent = opts.confirmLabel || "実行";
+          row.appendChild(cancel); row.appendChild(ok);
+          dlg.appendChild(row);
+          ov.appendChild(dlg);
+          document.body.appendChild(ov);
+
+          const close = (val: boolean) => {
+            document.removeEventListener("keydown", onKey, true);
+            ov.remove();
+            if (prev && typeof prev.focus === "function") prev.focus();
+            resolve(val);
+          };
+          const onKey = (e: KeyboardEvent) => {
+            if (e.key === "Escape") { e.preventDefault(); close(false); }
+            else if (e.key === "Tab") {
+              // フォーカスを2ボタン間にトラップ。
+              const f = [cancel, ok]; const i = f.indexOf(document.activeElement as HTMLButtonElement);
+              e.preventDefault();
+              const next = e.shiftKey ? (i <= 0 ? f.length - 1 : i - 1) : (i >= f.length - 1 ? 0 : i + 1);
+              f[next].focus();
+            }
+          };
+          document.addEventListener("keydown", onKey, true);
+          ov.addEventListener("mousedown", (e) => { if (e.target === ov) close(false); });
+          cancel.addEventListener("click", () => close(false));
+          ok.addEventListener("click", () => close(true));
+          cancel.focus(); // 既定はキャンセル＝誤確定を防ぐ
+        });
+      }
+      (window as any).bo = { toast, busy, api, confirm: confirmDialog };
       const lo = document.getElementById("bo-logout");
       if (lo) lo.addEventListener("click", async (e) => { e.preventDefault(); await fetch("/api/login", { method: "DELETE" }); location.href = "/login"; });
       // 通知ベル：クリックで一覧をパネル表示し、開いたら全既読にしてバッジを消す。

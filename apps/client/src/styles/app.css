@@ -83,4 +83,13 @@ details summary { cursor: pointer; font-weight: 600; }
 .modal.open { display: flex; }
 .modal .box { background: #fff; border-radius: 16px; padding: 1.25rem; width: min(94vw, 460px); }
 
+/* 確認ダイアログ（window.bo.confirm・危険操作の統一・§9） */
+.bo-modal-ov { position: fixed; inset: 0; background: rgba(15,23,42,.5); z-index: 120; display: flex; align-items: center; justify-content: center; padding: 1rem; }
+.bo-modal { background: #fff; border-radius: 16px; padding: 1.25rem; width: min(94vw, 440px); box-shadow: 0 12px 40px rgba(0,0,0,.22); }
+.bo-modal-title { margin: 0 0 .4rem; font-size: 1.1rem; }
+.bo-modal-msg { margin: 0 0 .6rem; color: #334155; line-height: 1.6; white-space: pre-wrap; }
+.bo-modal-warn { margin: 0 0 .6rem; color: #b91c1c; font-weight: 700; font-size: .9rem; }
+.bo-modal-audit { display: inline-block; margin: 0 0 .6rem; font-size: .85rem; }
+.bo-modal-row { display: flex; gap: .6rem; justify-content: flex-end; margin-top: .4rem; }
+
 @media (max-width: 560px) { h1 { font-size: 1.3rem; } .card .num { font-size: 1.35rem; } }

@@ -76,7 +76,7 @@ const FALLBACK = "https://dash.cloudflare.com/?to=/:account/workers-and-pages";
     });
     const clr = document.getElementById("clearhook");
     if (clr) clr.addEventListener("click", async (e) => {
-      if (!confirm("自動更新の設定を解除しますか？")) return;
+      if (!(await window.bo.confirm("自動更新の設定を解除しますか？", { confirmLabel: "解除", danger: true }))) return;
       const r = await window.bo.api("/api/update", { _action: "delete" }, { btn: e.currentTarget, successMsg: "解除しました" });
       if (r.ok) setTimeout(() => location.reload(), 600);
     });

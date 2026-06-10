@@ -72,7 +72,7 @@ const fmt = (s: number | null) => (s ? new Date(s * 1000).toISOString().slice(0,
               if (r.ok) setTimeout(() => location.reload(), 600);
             });
             tr.querySelector(".rj")?.addEventListener("click", async (e) => {
-              if (!confirm("却下しますか？")) return;
+              if (!(await window.bo.confirm("この承認待ち操作を却下しますか？", { confirmLabel: "却下", danger: true }))) return;
               const r = await window.bo.api("/api/agent-actions", { _action: "reject", id }, { btn: e.currentTarget, successMsg: "却下しました" });
               if (r.ok) setTimeout(() => location.reload(), 600);
             });
