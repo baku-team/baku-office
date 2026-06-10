@@ -2,7 +2,8 @@ import { defineMiddleware } from "astro:middleware";
 import { getToken } from "./lib/client.ts";
 import { ensureSchema } from "./lib/migrate.ts";
 import { bootCheck } from "./lib/boot-check.ts";
-import { sameOrigin } from "./lib/auth.ts";
+import { sameOrigin, getSession } from "./lib/auth.ts";
+import { needsConsent } from "./lib/consent.ts";
 import { buildCtx } from "./core/ctx.ts";
 
 // ログイン誘導を素通りさせる静的アセットの拡張子 allowlist。
@@ -80,6 +81,15 @@ export const onRequest = defineMiddleware(async (context, next) => {
     // LICENSE_ID が設定されていれば自動アクティベート（アプリを開くだけで完了）。無ければ手動入力画面へ。
     if (env.LICENSE_ID) return withSec(context.redirect("/activate?license_id=" + encodeURIComponent(env.LICENSE_ID), 302));
     return withSec(context.redirect("/activate", 302));
+  }
+
+  // 導入時の規約同意ゲート（GA要件）：団体管理者が未同意なら /consent へ誘導し、同意するまで先へ進めない。
+  // 管理者の責務として団体1回（改訂時は再同意）。個人/非adminには求めない。/consent 自身は除外。
+  if (pathname !== "/consent") {
+    const ses = await getSession(env, context.request);
+    if (ses?.ctx === "org" && ses.role === "admin" && (await needsConsent(env))) {
+      return withSec(context.redirect("/consent", 302));
+    }
   }
   return withSec(await next());
 });

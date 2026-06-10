@@ -1,0 +1,85 @@
+---
+export const prerender = false;
+import { getSession } from "../lib/auth.ts";
+import { HOST_TERMS, HOST_PRIVACY, IMPORTANT_NOTES, CONSENT_VERSION, needsConsent } from "../lib/consent.ts";
+
+const env = Astro.locals.runtime.env;
+const ses = await getSession(env, Astro.request);
+// 管理者以外がURL直打ちした場合はトップへ（同意は団体管理者の責務）。
+if (!ses || ses.ctx !== "org" || ses.role !== "admin") return Astro.redirect("/", 302);
+// 既に同意済みならトップへ（再表示しない）。
+if (!(await needsConsent(env))) return Astro.redirect("/", 302);
+
+// このページ専用 CSP（nonce）。同意 script のみ nonce 許可（多層防御）。
+const nonce = Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, "0")).join("");
+const CSP = `default-src 'self'; script-src 'self' 'nonce-${nonce}'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'`;
+const docs = [
+  { h: "利用規約", body: HOST_TERMS },
+  { h: "プライバシーポリシー", body: HOST_PRIVACY },
+  { h: "重要事項", body: IMPORTANT_NOTES },
+];
+---
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="Content-Security-Policy" content={CSP} />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ご利用開始前のご確認</title>
+    <style>
+      * { box-sizing: border-box; }
+      body { font-family: system-ui, "Hiragino Sans", "Noto Sans JP", Meiryo, sans-serif; margin: 0; background: #f4f6f9; color: #1f2933; line-height: 1.8; }
+      .wrap { max-width: 760px; margin: 0 auto; padding: 28px 18px 64px; }
+      h1 { color: #14365c; font-size: 1.3rem; }
+      .doc { background: #fff; border: 1px solid #dde3ea; border-radius: 12px; padding: 16px 18px; margin: 14px 0; }
+      .doc h2 { color: #14365c; font-size: 1.05rem; margin: 0 0 8px; }
+      .doc pre { white-space: pre-wrap; word-break: break-word; font: inherit; margin: 0; }
+      .agree { position: sticky; bottom: 0; background: #fff; border: 1px solid #dde3ea; border-radius: 12px; padding: 16px 18px; margin-top: 18px; box-shadow: 0 -4px 16px rgba(0,0,0,.05); }
+      .agree label { display: flex; gap: 10px; align-items: flex-start; cursor: pointer; }
+      button { margin-top: 12px; background: #14365c; color: #fff; border: 0; border-radius: 8px; padding: 12px 24px; font-weight: 700; cursor: pointer; }
+      button[disabled] { opacity: .5; cursor: not-allowed; }
+      .msg { margin-top: 10px; font-size: .9rem; color: #c0392b; }
+      .sub { color: #5b6b7b; font-size: .85rem; }
+      a { color: #14365c; }
+    </style>
+  </head>
+  <body>
+    <main class="wrap">
+      <h1>ご利用開始前に、以下の内容をご確認ください</h1>
+      <p class="sub">団体の管理者として、本サービスの利用条件・個人情報の取扱い・重要事項に同意のうえお進みください（版: {CONSENT_VERSION}）。</p>
+      {docs.map((d) => (
+        <section class="doc">
+          <h2>{d.h}</h2>
+          <pre>{d.body}</pre>
+        </section>
+      ))}
+      <div class="agree">
+        <label>
+          <input type="checkbox" id="ck" />
+          <span>上記の利用規約・プライバシーポリシー・重要事項をすべて読み、内容に同意します。</span>
+        </label>
+        <button id="go" disabled>同意して続行</button>
+        <button id="logout" type="button" style="background:#fff;color:#14365c;border:1px solid #dde3ea;">ログアウト</button>
+        <div class="msg" id="msg" role="status" aria-live="polite"></div>
+      </div>
+    </main>
+    <script is:inline nonce={nonce}>
+      const ck = document.getElementById("ck");
+      const go = document.getElementById("go");
+      const msg = document.getElementById("msg");
+      ck.addEventListener("change", () => { go.disabled = !ck.checked; });
+      go.addEventListener("click", async () => {
+        go.disabled = true;
+        try {
+          const r = await fetch("/api/consent", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
+          if (r.ok) { location.href = "/"; }
+          else { msg.textContent = "記録に失敗しました。再度お試しください。"; go.disabled = false; }
+        } catch { msg.textContent = "通信に失敗しました。"; go.disabled = false; }
+      });
+      document.getElementById("logout").addEventListener("click", async () => {
+        try { await fetch("/api/login", { method: "DELETE" }); } catch {}
+        location.href = "/login";
+      });
+    </script>
+  </body>
+</html>
