@@ -168,6 +168,54 @@
 - 記録は `recordAudit`（`host_audit` テーブル）で各操作 API から自動付与。記録失敗は本処理を止めない（best-effort）。
 - 前提：ホスト D1 に `0010_audit.sql` を適用。
 
+### A-8. 障害復旧 Runbook（マイグレーション失敗・ロールバック）
+
+> 前提：D1 に「下り（down）マイグレーション」は無い＝**前進のみ**。破壊的変更の巻き戻しは **D1 Time Travel**（過去最大30日の特定時点へ復元）が最終手段。本番DB操作は必ず `--remote` で、実行前に `--command "SELECT…"` で影響を下見する。
+
+**① client（自己ホスト・アプリ内ランナー `migrate.ts` の自動適用）が失敗した場合**
+
+症状：診断（`/diagnostics`・`logDiag`）に `migration <id> 失敗: …` または `ensureSchema 失敗: …`。該当機能が無言で動かない。
+
+1. **原因特定**：診断に残る失敗 `migration <id>` と SQL 断片を確認。
+2. **適用状況の確認**：
+   ```bash
+   npx wrangler d1 execute baku-office-app-db --remote --env production \
+     --command "SELECT id FROM schema_migrations ORDER BY id"
+   ```
+   `MIGRATIONS` 配列との差分が未適用分。部分適用が疑わしいテーブル/列は `PRAGMA table_info(<table>)` で確認。
+3. **ロック残留の解消**（稀）：適用中に異常終了し `schema_lock` が残ると次回がスキップされ続ける（60秒TTLで自然消滅するが、即時解消するなら削除）：
+   ```bash
+   npx wrangler kv key delete --binding=LICENSE schema_lock --env production
+   ```
+4. **再適用**：原因SQLを修正してコード反映（`migrations/00NN_*.sql` 修正＋`MIGRATIONS` 整合）。冪等エラー（`already exists`/`duplicate column`）は自動無視されるため、通常はデプロイ後の初回リクエストで未適用分が再適用される。`schema_version` ゲートで止まる場合はクリアして再走：
+   ```bash
+   npx wrangler kv key delete --binding=LICENSE schema_version --env production
+   ```
+5. **想定外失敗の隔離**（慎重）：特定 `<id>` を恒久的にスキップさせる必要があるときのみ、手動で該当SQLを是正実行し、`INSERT OR IGNORE INTO schema_migrations (id, applied_at) VALUES ('<id>', unixepoch())` で適用済みに記録。**データ不整合を隠蔽しないこと**（必ず実テーブルの状態を確認してから）。
+6. **巻き戻し（最終手段）**：破壊的変更でデータが壊れた場合は Time Travel：
+   ```bash
+   npx wrangler d1 time-travel info baku-office-app-db --env production       # 復元可能範囲の確認
+   npx wrangler d1 time-travel restore baku-office-app-db --env production --timestamp <ISO8601>
+   ```
+   復元はDB全体が当該時点へ戻る（以後の書き込みは失われる）。実行前に関係者へ周知。
+
+**② host（手動マイグレーション）が失敗した場合**
+
+host は `wrangler d1 execute --file` の手動適用（`schema_migrations` 管理なし）。0001→最新まで**順に適用**する前提。
+
+1. 失敗したファイルの SQL を確認・是正し、**そのファイルのみ**再実行：
+   ```bash
+   npx wrangler d1 execute baku-office-portal-db --remote --config apps/host/wrangler.jsonc \
+     --file apps/host/migrations/<n>.sql
+   ```
+2. 適用済み判定はスキーマ実体で確認（`PRAGMA table_info(<table>)` / 該当オブジェクトの存在）。冪等になるよう SQL は `IF NOT EXISTS`／`ADD COLUMN`（既定値付き）を用いる。
+3. 破壊的変更の巻き戻しは client と同様に Time Travel（`baku-office-portal-db`）。
+
+**③ 予防（推奨）**
+- マイグレーションは**DDL限定**（INSERT/UPDATE はアプリ層で冪等に）。WHY: 自動適用は初回同時リクエストで並行し得る（KV best-effort ロックはあるが結果整合）。
+- 破壊的変更の前に Time Travel の現在時刻を控える（復元の起点）。
+- 本番反映は必ず `npm run typecheck` ＋ 各 `test` 通過後に。client は `deploy:prod`、host は migration 適用 → deploy の順。
+
 ---
 
 ## B. ホスト側：テナント別配信（多数顧客・別アカウント運用）

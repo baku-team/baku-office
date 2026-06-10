@@ -22,6 +22,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
       if (b.id) await approveUser(env, b.id);
       return json({ ok: true });
     case "reject":
+    case "leave_approve": // 本人の脱退申請を承認＝アカウント無効化（rejectUser と同じ：disabled＋セッション失効＋申請フラグ解消）
       if (b.id) await rejectUser(env, b.id);
       return json({ ok: true });
     case "role":

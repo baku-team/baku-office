@@ -1,0 +1,50 @@
+---
+export const prerender = false;
+import App from "../layouts/App.astro";
+import { getSession } from "../lib/auth.ts";
+
+const env = Astro.locals.runtime.env;
+const ses = await getSession(env, Astro.request);
+if (!ses) return Astro.redirect("/login", 302);
+
+// 自分の脱退申請状態（org ユーザーのみ。個人ctxは対象外）。
+let leaveRequested = false;
+if (ses.ctx === "org" && ses.uid !== "org") {
+  const r = await env.DB.prepare("SELECT leave_requested_at AS t FROM users WHERE id=?").bind(ses.uid).first<{ t: number | null }>();
+  leaveRequested = !!r?.t;
+}
+const canLeave = ses.ctx === "org" && ses.uid !== "org";
+---
+<App title="アカウント" active="/account">
+  <h1>アカウント</h1>
+  <div class="card">
+    <p>{ses.name ?? ""}（{ses.role}）</p>
+  </div>
+
+  {canLeave && (
+    <div class="card" style="margin-top:1rem">
+      <h2 style="font-size:1.05rem">退会（アカウントの無効化）</h2>
+      <p class="muted">退会を申請すると管理者の承認後にアカウントが無効化されます。会計・名簿などの業務データは団体に帰属するため削除されません。</p>
+      {leaveRequested
+        ? (<><p>現在、脱退を申請中です（管理者の承認待ち）。</p><button class="btn btn-sm" id="cancelLeave">申請を取り消す</button></>)
+        : (<button class="btn btn-sm btn-danger" id="reqLeave">退会を申請する</button>)}
+      <div class="muted" id="leaveMsg" role="status" aria-live="polite" style="margin-top:8px"></div>
+    </div>
+  )}
+
+  <script slot="scripts" is:inline>
+    const req = document.getElementById("reqLeave");
+    const cancel = document.getElementById("cancelLeave");
+    const msg = document.getElementById("leaveMsg");
+    if (req) req.addEventListener("click", async (e) => {
+      if (!confirm("退会を申請します。よろしいですか？")) return;
+      const r = await window.bo.api("/api/me/leave-request", {}, { btn: e.currentTarget, successMsg: null });
+      if (r.ok) { window.bo.toast("退会を申請しました"); setTimeout(() => location.reload(), 600); }
+      else if (msg) msg.textContent = (r.data && r.data.error) || "申請に失敗しました。";
+    });
+    if (cancel) cancel.addEventListener("click", async (e) => {
+      const r = await window.bo.api("/api/me/leave-request", null, { method: "DELETE", btn: e.currentTarget, successMsg: null });
+      if (r.ok) { window.bo.toast("申請を取り消しました"); setTimeout(() => location.reload(), 600); }
+    });
+  </script>
+</App>

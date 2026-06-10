@@ -99,14 +99,15 @@
 - [ ] **P2-3 DNS リバインディング（低・任意）**：A2A 宛先にユーザー任意 URL を許す拡張を入れる場合のみ、解決IPの allowlist 検査を併設。現状は相互同意済み deploy_url 限定のため据え置き可。
 
 ### 3-2. 法務・コンプライアンス
-- [ ] **本番版の法務文書**：雛形生成（`disclosure.ts`/`legal-templates.ts`）から、プライバシーポリシー/利用規約/DPA の**実運用版**を確定。
-- [ ] **会員本人のセルフサービス開示・削除請求フロー**の整備（現状は管理者操作 `admin/data` 依存）。
+- [x] **導入時の規約同意ゲート（実装済み）**：団体管理者の初回ログイン時に当社規約・プライバシーポリシー・重要事項（鍵保管リスク含む）を全文表示し同意必須化（`/consent`・`needsConsent` ゲート・版管理）。**本文はドラフト＝弁護士確定版へ差し替え要**。
+- [ ] **本番版の法務文書**：上記ドラフト（`consent.ts`）＋雛形（`disclosure.ts`/`legal-templates.ts`）を弁護士レビューで実運用版に確定。
+- [x] **会員（`users`）のアカウント脱退フロー（実装済み）**：本人が `/account` から退会を申請→管理者が `/settings/members` で承認＝アカウント無効化（`status=disabled`＋セッション失効）。**業務データは団体帰属のため保持**（開示/エクスポートは方針により非提供）。最終管理者/ブートストラップ管理者は脱退不可ガード。`0026_user_leave` 自動適用。
 - [ ] Gemini 既定送信時の利用目的・保持の説明をテンプレ任せにせず明文化。
 
 ### 3-3. 運用・ドキュメント
-- [ ] **OPERATIONS.md にデプロイ前チェックリスト追記**：`--env production` 明示、Secret 投入（MASTER_KEY 必須）、`ENVIRONMENT` 確認。
-- [ ] **マイグレーション失敗時のロールバック/手動復旧手順**を OPERATIONS に明記。
-- [ ] host 側署名鍵（`RELEASE_SIGNING_JWK` 等）の鍵管理運用を文書化。
+- [x] **デプロイ前チェックリスト**：OPERATIONS（A-0/CFデプロイ）＋ROADMAP Phase 1 に整備済み（`--env production`／Secret／`ENVIRONMENT`）。
+- [x] **マイグレーション失敗時の復旧手順（実装済み）**：OPERATIONS **A-8 障害復旧Runbook**（client自動/host手動・KVロック解消・D1 Time Travel 巻き戻し）。
+- [x] host 側署名鍵（`RELEASE_SIGNING_JWK` 等）の鍵管理運用：OPERATIONS A-0/A-0b に文書化。
 
 ### 3-4. UI/UX
 - [ ] 高リスク設定（オートパイロット・Restricted scope・A2A）有効化時のリスク要約・一段確認の文言点検。
