@@ -4,7 +4,7 @@ import { randomId } from "@baku-office/shared";
 import { getApiKey } from "./client.ts";
 import { getFile, saveFile } from "./storage.ts";
 import { nowSec } from "./accounting.ts";
-import { recordUsage, recordTokens } from "./usage.ts";
+import { recordUsage, recordTokens, overBudget } from "./usage.ts";
 import { geminiModelId, claudeModelId } from "../core/models/config.ts";
 
 // --- Gemini Files API（resumable・大容量対応） ---
@@ -51,6 +51,8 @@ export async function transcribeAudio(env: Env, buf: ArrayBuffer, mime: string):
 export async function webSearch(env: Env, query: string): Promise<string | null> {
   const key = await getApiKey(env, "gemini");
   if (!key) return null;
+  // Web検索の従量上限（P3）。usage_limits.web_search.monthlyCap（回数）で hard cap。
+  if ((await overBudget(env, "web_search")) === "pause") return "（Web検索の今月の利用上限に達しました。設定 → API使用量 で変更できます）";
   await recordUsage(env, "web_search");
   const text = await geminiGenerate(env, key, [{ text: query }], [{ googleSearch: {} }]);
   return text || "（検索結果が得られませんでした）";

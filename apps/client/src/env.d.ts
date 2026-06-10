@@ -39,6 +39,8 @@ interface Env {
   GEMINI_MODEL?: string;
   CLAUDE_MODEL?: string;
   MODEL_PRICING?: string; // JSON: {"gemini":{"in":0.3,"out":2.5},"claude":{"in":3,"out":15}}
+  // 1回のAI処理（親+子+ツールループ全体）の推定USD上限。超過でhop打ち切り（未設定＝無制限・P3）。
+  AI_MAX_JOB_USD?: string;
 }
 
 type Runtime = import("@astrojs/cloudflare").Runtime<Env>;

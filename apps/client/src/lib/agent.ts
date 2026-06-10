@@ -20,7 +20,7 @@ import { listSkills, runSkill, generateSkill } from "./skills.ts";
 import { createDraft } from "./external-apps.ts";
 import { listCapabilities, invokeCapability, capabilitySummary, videoStatusText } from "./capabilities.ts";
 import { getAiEngine, getCustomPrompt } from "./settings.ts";
-import { recordUsage, recordTokens, overBudget } from "./usage.ts";
+import { recordUsage, recordTokens, overBudget, estimateUsd } from "./usage.ts";
 import { needsApproval, getApprovalMode, createApproval, previewFor, A2A_OUTWARD } from "./approvals.ts";
 
 const SYSTEM =
@@ -178,6 +178,15 @@ export async function runAgent(ctx: Ctx, owner: string, text: string, image?: { 
   const usageAcc: TokenUsage = { inputTokens: 0, outputTokens: 0 };
   const onUsage = (u: TokenUsage) => { usageAcc.inputTokens += u.inputTokens; usageAcc.outputTokens += u.outputTokens; };
 
+  // 1ジョブ単位のコストcap（P3）。env.AI_MAX_JOB_USD で設定（未設定＝無制限）。
+  // 親＋子エージェント＋ツールループ全体の累積推定USDが上限に達したら hop を打ち切る。
+  const jobUsdCap = Number(env.AI_MAX_JOB_USD ?? "");
+  const abort = jobUsdCap > 0
+    ? () => estimateUsd(env, provider, usageAcc.inputTokens, usageAcc.outputTokens) >= jobUsdCap
+        ? `1回の処理の費用上限（$${jobUsdCap}）に達したため停止しました。設定（高度なオプション）で上限を変更できます。`
+        : null
+    : undefined;
+
   // 子エージェント起動（同じモデルを使い回す）。役割の道具だけを見せ、ネスト委譲は不可。
   const subDeclsFor = (subTools: AgentTool[]) => [
     ...subTools.map((t) => ({ name: t.name, description: t.description, parameters: t.parameters })),
@@ -190,7 +199,7 @@ export async function runAgent(ctx: Ctx, owner: string, text: string, image?: { 
     const subTools = opts.unattended ? subToolsRaw.filter((t) => t.unattended !== false) : subToolsRaw;
     const subExec = (n: string, a: Record<string, unknown>) => execTool(ctx, owner, baseUrl, n, a, role, subTools);
     await recordUsage(env, provider); // 子エージェント分のコストも計上
-    return runToolLoop(model!, `${ROLES[roleKey].system}\n割り当てられたタスクのみを遂行し、結果を簡潔に返す。`, { text: task || "（タスク）" }, subDeclsFor(subTools), subExec, 3, [], onUsage);
+    return runToolLoop(model!, `${ROLES[roleKey].system}\n割り当てられたタスクのみを遂行し、結果を簡潔に返す。`, { text: task || "（タスク）" }, subDeclsFor(subTools), subExec, 3, [], onUsage, abort);
   }
 
   const cap = await maxParallelAgents(env);
@@ -227,7 +236,7 @@ export async function runAgent(ctx: Ctx, owner: string, text: string, image?: { 
   };
 
   const hops = await agentMaxHops(env);
-  const out = await runToolLoop(model, sys, first, decls as ToolDecl[], exec, hops, history, onUsage);
+  const out = await runToolLoop(model, sys, first, decls as ToolDecl[], exec, hops, history, onUsage, abort);
   await recordTokens(env, provider, usageAcc); // 実費（input/output token・推定USD）を記録（P0-2）
   return out;
 }
