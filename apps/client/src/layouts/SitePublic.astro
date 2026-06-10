@@ -1,24 +1,20 @@
 ---
 // 公開HP/LPの最小レイアウト（認証不要）。body は管理者入力HTML（自己ホスト）。
-// 管理者は半信頼: script/イベントハンドラ/javascript:URI を除去して公開閲覧者を守る。
-// 完全な対策ではない（regexベース）ため CSP を併用する。
+// 管理者は半信頼: allowlist サニタイザ（lib/sanitize）で許可タグ/属性/スキームだけを通す（P0-3）。
+// defense-in-depth として公開ページにも CSP を付与する。
+import { sanitizeHtml } from "../lib/sanitize.ts";
 interface Props { site: { title: string; body: string | null; show_join: number } }
 const { site } = Astro.props as Props;
-
-function sanitizeHtml(html: string): string {
-  return html
-    .replace(/<\s*script[\s\S]*?<\s*\/\s*script\s*>/gi, "")
-    .replace(/<\s*script\b[^>]*>/gi, "")
-    .replace(/<\s*\/?\s*(iframe|object|embed)\b[^>]*>/gi, "")
-    .replace(/\son\w+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, "")
-    .replace(/(href|src)\s*=\s*("\s*javascript:[^"]*"|'\s*javascript:[^']*'|javascript:[^\s>]+)/gi, '$1="#"');
-}
 const safeBody = sanitizeHtml(site.body ?? "");
+// 公開ページ用 CSP。インラインは申込フォーム script と本レイアウト style のみ（managed）。
+// 管理者HTMLからのスクリプトは sanitizer で除去済みのため script-src はインライン許容でも実害は最小化される。
+const CSP = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'";
 ---
 <!doctype html>
 <html lang="ja">
   <head>
     <meta charset="utf-8" />
+    <meta http-equiv="Content-Security-Policy" content={CSP} />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <title>{site.title}</title>
     <style>
