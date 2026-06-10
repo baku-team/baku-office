@@ -56,7 +56,7 @@ if (ses) { try { unreadNotif = await (await import("../lib/notifications.ts")).c
             {ses && (
               <a href="#" id="bo-bell" title="通知" style="position:relative;margin-right:14px;text-decoration:none">🔔{unreadNotif > 0 && <span id="bo-bell-badge" style="position:absolute;top:-8px;right:-10px;background:#e53935;color:#fff;border-radius:9px;font-size:.62rem;line-height:1;padding:2px 5px">{unreadNotif}</span>}</a>
             )}
-            {ses ? <>{ses.name ?? ses.role}・<a href="#" id="bo-logout">ログアウト</a></> : <a href="/login">ログイン</a>}
+            {ses ? <><a href="/account">{ses.name ?? ses.role}</a>・<a href="#" id="bo-logout">ログアウト</a></> : <a href="/login">ログイン</a>}
           </span>
         </div>
       </header>

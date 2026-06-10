@@ -4,7 +4,7 @@ import { masterKey } from "./client.ts";
 import { revokeSessions } from "./auth.ts";
 import { nowSec, createTx, currentPeriod } from "./accounting.ts";
 
-export type UserRow = { id: string; display_name: string | null; role: Role; status: string; created_at: number };
+export type UserRow = { id: string; display_name: string | null; role: Role; status: string; created_at: number; leave_requested_at?: number | null };
 
 // PII暗号化（display_name）。
 async function encName(env: Env, name: string): Promise<string> {
@@ -73,12 +73,26 @@ export async function approveUser(env: Env, id: string): Promise<void> {
   await env.DB.prepare("UPDATE users SET status='active' WHERE id=? AND status='pending'").bind(id).run();
 }
 export async function rejectUser(env: Env, id: string): Promise<void> {
-  await env.DB.prepare("UPDATE users SET status='disabled' WHERE id=?").bind(id).run();
-  await revokeSessions(env, id); // 除名・利用停止は既存セッションを即時失効（§3-3）。
+  // 除名・脱退承認＝アカウント無効化（業務データは団体帰属のため保持）。申請フラグも解消。
+  await env.DB.prepare("UPDATE users SET status='disabled', leave_requested_at=NULL WHERE id=?").bind(id).run();
+  await revokeSessions(env, id); // 既存セッションを即時失効（§3-3）。
 }
 export async function setRole(env: Env, id: string, role: Role): Promise<void> {
   await env.DB.prepare("UPDATE users SET role=? WHERE id=?").bind(role, id).run();
   await revokeSessions(env, id); // 権限変更は古いrole内包セッションを即時失効＝再ログインで新roleを反映（§3-3）。
+}
+
+// 本人による脱退申請（管理者が承認＝rejectUser で完了）。NULL=申請なし。
+export async function requestLeave(env: Env, uid: string): Promise<void> {
+  await env.DB.prepare("UPDATE users SET leave_requested_at=? WHERE id=? AND status='active'").bind(nowSec(), uid).run();
+}
+export async function cancelLeave(env: Env, uid: string): Promise<void> {
+  await env.DB.prepare("UPDATE users SET leave_requested_at=NULL WHERE id=?").bind(uid).run();
+}
+// 現在アクティブな管理者の人数（最後の1人の脱退でロックアウトするのを防ぐ）。
+export async function activeAdminCount(env: Env): Promise<number> {
+  const r = await env.DB.prepare("SELECT COUNT(*) AS n FROM users WHERE role='admin' AND status='active'").first<{ n: number }>();
+  return r?.n ?? 0;
 }
 
 // local 認証（個人ログイン・dev）。

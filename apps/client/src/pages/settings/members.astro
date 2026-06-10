@@ -22,10 +22,11 @@ const roles = ["admin", "accounting", "clerical", "other", "member"];
     {users.map((u)=>(<tr data-id={u.id}>
       <td>{u.name || "(未設定)"}</td>
       <td><select class="role btn-sm" disabled={u.id==="org"}>{roles.map((r)=>(<option value={r} selected={r===u.role}>{r}</option>))}</select></td>
-      <td>{u.status}</td>
+      <td>{u.status}{u.leave_requested_at ? <span class="muted">・脱退申請中</span> : null}</td>
       <td>
         {u.status==="pending" && (<><button class="btn btn-sm btn-ok act" data-a="approve">承認</button> <button class="btn btn-sm btn-danger act" data-a="reject">却下</button></>)}
-        {u.status==="active" && (<button class="btn btn-sm btn-danger act" data-a="reject">無効化</button>)}
+        {u.status==="active" && u.leave_requested_at && (<button class="btn btn-sm btn-danger act" data-a="leave_approve">脱退を承認</button>)}
+        {u.status==="active" && !u.leave_requested_at && (<button class="btn btn-sm btn-danger act" data-a="reject">無効化</button>)}
       </td></tr>))}
     {users.length===0 && (<tr><td colspan="4" class="muted">メンバーがいません。招待コードを発行してください。</td></tr>)}
   </tbody></table></div>
