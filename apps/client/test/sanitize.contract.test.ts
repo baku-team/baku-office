@@ -65,3 +65,29 @@ test("生の < > を含むテキストはエスケープされる", () => {
   const out = sanitizeHtml("5 < 10 かつ 20 > 15");
   assert.ok(has(out, "&lt;") && has(out, "&gt;"));
 });
+
+test("名前付き空白実体（&Tab;/&NewLine;）で javascript: をバイパスできない", () => {
+  assert.ok(!has(sanitizeHtml('<a href="java&Tab;script:alert(1)">x</a>'), "alert"));
+  assert.ok(!has(sanitizeHtml('<a href="java&NewLine;script:alert(1)">x</a>'), "alert"));
+});
+
+test("属性値内の実体エンコード引用符でブレイクアウトできない（& をエスケープ）", () => {
+  const out = sanitizeHtml('<span title="&#34; onmouseover=alert(1) //">x</span>');
+  // onmouseover は title 値内のテキストとして残る（無害）が、独立属性には昇格しない。
+  // 要点：& がエスケープされ、ブラウザ復号で " にならない＝属性ブレイクアウト不能。
+  assert.ok(has(out, "&amp;#34;"));
+  assert.ok(!has(out, '" onmouseover')); // 閉じ引用符直後に新属性が生えていない
+});
+
+test("srcset は各候補のスキームを検査（後続候補の不正スキームを弾く）", () => {
+  const out = sanitizeHtml('<source srcset="/ok.png 1x, javascript:alert(1) 2x">');
+  assert.ok(!has(out, "srcset")); // 不正候補を含む srcset 属性ごと落ちる
+  const ok = sanitizeHtml('<source srcset="/a.png 1x, /b.png 2x">');
+  assert.ok(has(ok, "srcset")); // 全候補が安全なら通る
+});
+
+test("未閉じの除去対象タグでも後続コンテンツを消さない", () => {
+  const out = sanitizeHtml("<p>前</p><style>body{}<p>後</p>"); // style 閉じ忘れ
+  assert.ok(has(out, "前") && has(out, "後"));
+  assert.ok(!has(out, "<style"));
+});

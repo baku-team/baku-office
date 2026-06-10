@@ -39,7 +39,13 @@ const TAG_ATTRS: Record<string, Set<string>> = {
 const URL_ATTRS = new Set(["href", "src", "srcset"]);
 const ALLOWED_SCHEMES = new Set(["http", "https", "mailto", "tel"]);
 
-const NAMED = new Map<string, string>([["amp", "&"], ["lt", "<"], ["gt", ">"], ["quot", '"'], ["apos", "'"], ["colon", ":"], ["#x3a", ":"], ["#58", ":"]]);
+// スキーム偽装に使われ得る名前付き実体を判定用に展開。空白系（Tab/NewLine/CR）も含める
+// （ブラウザは URL スキーム中の Tab/改行を除去するため `java&Tab;script:` を見抜く必要がある）。
+const NAMED = new Map<string, string>([
+  ["amp", "&"], ["lt", "<"], ["gt", ">"], ["quot", '"'], ["apos", "'"],
+  ["colon", ":"], ["#x3a", ":"], ["#58", ":"],
+  ["tab", "\t"], ["newline", "\n"],
+]);
 
 // 実体参照を素朴に展開（スキーム偽装 `javascript&#58;` 等を見抜くため）。表示用ではなく判定用。
 function decodeEntities(s: string): string {
@@ -53,7 +59,7 @@ function decodeEntities(s: string): string {
   });
 }
 
-// URL 属性値が安全か（許可スキーム or 相対参照）。制御文字・空白を除去してから判定。
+// 単一URLが安全か（許可スキーム or 相対参照）。制御文字・空白を除去してから判定。
 function safeUrl(raw: string): boolean {
   const v = decodeEntities(raw).replace(/[\x00-\x20]/g, "").toLowerCase();
   if (v === "") return true;
@@ -61,6 +67,15 @@ function safeUrl(raw: string): boolean {
   const m = /^([a-z][a-z0-9+.-]*):/.exec(v);
   if (!m) return true; // スキームなし＝相対パス
   return ALLOWED_SCHEMES.has(m[1]); // data:/javascript:/vbscript: 等は全拒否（data:image svg は XSS 源）
+}
+
+// URL属性値の検査。srcset は `url 1x, url 2x` のカンマ区切り候補リストなので各候補のURL部を個別に検査。
+function safeUrlAttr(key: string, raw: string): boolean {
+  if (key !== "srcset") return safeUrl(raw);
+  return raw.split(",").every((cand) => {
+    const url = cand.trim().split(/\s+/)[0] ?? "";
+    return safeUrl(url);
+  });
 }
 
 const esc = (s: string) => s.replace(/&(?![a-z#0-9]+;)/gi, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -109,9 +124,11 @@ function rebuildAttrs(name: string, attrs: [string, string | null][]): string {
     if (k.startsWith("on")) continue;           // イベントハンドラ全拒否
     if (k === "style") continue;                // インラインCSS拒否
     if (!GLOBAL_ATTRS.has(k) && !(allow && allow.has(k))) continue;
-    if (URL_ATTRS.has(k) && v != null && !safeUrl(v)) continue;
+    if (URL_ATTRS.has(k) && v != null && !safeUrlAttr(k, v)) continue;
     if (v == null) { out.push(k); continue; }
-    out.push(`${k}="${v.replace(/"/g, "&quot;").replace(/</g, "&lt;")}"`);
+    // & を先頭でエスケープ。WHY: `&#34;` 等の実体を素通しすると属性値内でブラウザが復号し
+    // 引用符ブレイクアウト（title="&#34; onmouseover=...）を許す。
+    out.push(`${k}="${v.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;")}"`);
   }
   // a[target=_blank] には rel を補完（タブナビング対策）。
   if (name === "a" && out.some((a) => /^target=/.test(a)) && !out.some((a) => /^rel=/.test(a))) out.push('rel="noopener noreferrer"');
@@ -133,24 +150,28 @@ export function sanitizeHtml(html: string): string {
     if (gt === -1) { out += esc(html.slice(lt)); break; } // 閉じない `<` は文字として扱う
     const closing = html[lt + 1] === "/";
     const inner = html.slice(lt + 1 + (closing ? 1 : 0), gt);
-    const { name, attrs, selfClose } = parseTag(closing ? inner.replace(/^\/?/, "") : inner);
+    const { name, attrs } = parseTag(closing ? inner.replace(/^\/?/, "") : inner);
     // タグ名でない `<`（例 `5 < 10`）は文字として扱う（タグ誤認で内容を食わない）。
     if (!name) { out += "&lt;"; i = lt + 1; continue; }
     i = gt + 1;
     if (DROP_SUBTREE.has(name)) {
-      if (closing || selfClose || VOID.has(name)) continue;
-      // 対応する閉じタグまで内容ごとスキップ（同名ネストは深さで対応）。
-      let depth = 1, j = i;
-      const open = new RegExp(`<${name}\\b`, "i");
-      const close = new RegExp(`</${name}\\s*>`, "i");
-      while (depth > 0 && j < n) {
-        const c = html.slice(j).search(close);
-        if (c === -1) { j = n; break; }
-        const o = html.slice(j, j + c).search(open);
-        if (o !== -1) { depth++; j += o + name.length + 1; continue; }
-        depth--; j += c + close.exec(html.slice(j))![0].length;
+      if (closing) continue; // 閉じタグ単体は破棄
+      // 対応する閉じタグまで内容ごと破棄（同名ネストは深さで対応）。原文に lastIndex で走査＝O(n)。
+      // 閉じタグが無ければ「このタグだけ破棄」して後続は通常処理（EOFまで巻き込まない）。
+      const open = new RegExp(`<${name}\\b`, "ig");
+      const close = new RegExp(`</${name}\\s*>`, "ig");
+      let depth = 1, pos = i;
+      while (depth > 0) {
+        close.lastIndex = pos;
+        const cm = close.exec(html);
+        if (!cm) { pos = -1; break; }
+        open.lastIndex = pos;
+        const om = open.exec(html);
+        if (om && om.index < cm.index) { depth++; pos = om.index + name.length + 1; continue; }
+        depth--; pos = cm.index + cm[0].length;
       }
-      i = j;
+      if (pos === -1) continue; // 閉じタグ無し＝当該タグのみ破棄（i は gt+1 のまま）
+      i = pos;
       continue;
     }
     if (!ALLOWED.has(name)) continue; // 未知/非許可タグはマークアップのみ破棄（内容は残す）
