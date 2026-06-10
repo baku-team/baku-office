@@ -58,7 +58,7 @@ const allScopes = (Object.keys(SCOPE_GROUPS) as (keyof typeof SCOPE_GROUPS)[]).f
             <thead><tr><th>スコープ</th><th>用途</th><th>区分</th></tr></thead>
             <tbody>
               {allScopes.map((s) => (
-                <tr><td><code style="font-size:.78rem">{s.scope}</code></td><td>{s.label}</td><td>{s.restricted ? <span class="pill" style="background:#fee2e2;color:#b91c1c">Restricted（審査対象）</span> : "通常"}</td></tr>
+                <tr><td><code style="font-size:.78rem">{s.scope}</code></td><td>{s.label}</td><td>{s.restricted ? <span class="pill" style="background:#fee2e2;color:#b91c1c" aria-label="Restricted（Google審査対象）">⚠ Restricted（審査対象）</span> : "通常"}</td></tr>
               ))}
             </tbody>
           </table></div>
