@@ -1,6 +1,7 @@
 // ユーザー・招待・個人アイテム（設計書§6/8.2/9）。名簿PIIは MASTER_KEY で暗号化（§10）。
 import { randomId, encryptField, decryptField, type Role } from "@baku-office/shared";
 import { masterKey } from "./client.ts";
+import { revokeSessions } from "./auth.ts";
 import { nowSec, createTx, currentPeriod } from "./accounting.ts";
 
 export type UserRow = { id: string; display_name: string | null; role: Role; status: string; created_at: number };
@@ -73,9 +74,11 @@ export async function approveUser(env: Env, id: string): Promise<void> {
 }
 export async function rejectUser(env: Env, id: string): Promise<void> {
   await env.DB.prepare("UPDATE users SET status='disabled' WHERE id=?").bind(id).run();
+  await revokeSessions(env, id); // 除名・利用停止は既存セッションを即時失効（§3-3）。
 }
 export async function setRole(env: Env, id: string, role: Role): Promise<void> {
   await env.DB.prepare("UPDATE users SET role=? WHERE id=?").bind(role, id).run();
+  await revokeSessions(env, id); // 権限変更は古いrole内包セッションを即時失効＝再ログインで新roleを反映（§3-3）。
 }
 
 // local 認証（個人ログイン・dev）。

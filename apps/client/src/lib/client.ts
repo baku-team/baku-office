@@ -32,12 +32,13 @@ export const APP_VERSION = "0.2.0";
 export async function pollHost(env: Env, deployUrl?: string, apps?: { id: string; version: string }[]): Promise<CheckResponse | null> {
   const token = await getToken(env);
   if (!token) return null;
-  const qs = new URLSearchParams({ token, version: APP_VERSION });
+  // トークンはヘッダで送る（クエリだと host の observability ログに残るため・§5）。残りはPIIなしのメタ情報。
+  const qs = new URLSearchParams({ version: APP_VERSION });
   if (deployUrl) qs.set("deploy_url", deployUrl);
   // 導入アプリを中枢へ申告（id:version・PIIなし）。ホストが「どのアプリがどこで使われているか」を集計。
   if (apps?.length) qs.set("apps", apps.map((a) => `${a.id}:${a.version}`).join(","));
   try {
-    const r = await hostFetch(env, "/api/check?" + qs.toString());
+    const r = await hostFetch(env, "/api/check?" + qs.toString(), { headers: { "x-bo-license": token } });
     if (!r.ok) return null;
     const data = (await r.json()) as CheckResponse;
     await env.LICENSE.put(KV_ENTITLEMENT, data.entitlement);

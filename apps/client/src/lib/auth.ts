@@ -4,7 +4,8 @@ import { masterKey } from "./client.ts";
 import type { Role } from "@baku-office/shared";
 
 export type Ctx = "org" | "personal";
-export type Session = { uid: string; role: Role; ctx: Ctx; name?: string; exp: number };
+// iat=発行時刻（失効判定用・§3-3）。旧Cookie互換のため optional（無ければ失効チェックをスキップ＝7日で自然失効）。
+export type Session = { uid: string; role: Role; ctx: Ctx; name?: string; exp: number; iat?: number };
 
 const COOKIE = "bo_session";
 const ENC = new TextEncoder();
@@ -29,7 +30,9 @@ async function hmacKey(env: Env): Promise<CryptoKey> {
 }
 
 export async function makeSessionCookie(env: Env, s: Session): Promise<string> {
-  const payload = b64url(ENC.encode(JSON.stringify(s)));
+  // 発行時刻 iat を必ず埋める（失効エポックとの比較に使う・§3-3）。呼び出し側は意識しなくてよい。
+  const full: Session = { ...s, iat: s.iat ?? Math.floor(Date.now() / 1000) };
+  const payload = b64url(ENC.encode(JSON.stringify(full)));
   const sig = b64url(await crypto.subtle.sign("HMAC", await hmacKey(env), ENC.encode(payload)));
   const value = `${payload}.${sig}`;
   return `${COOKIE}=${value}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=604800`;
@@ -67,9 +70,42 @@ export async function getSession(env: Env, request: Request): Promise<Session | 
   try {
     const s = JSON.parse(new TextDecoder().decode(b64urlToBytes(payload))) as Session;
     if (s.exp < Math.floor(Date.now() / 1000)) return null;
+    // 即時失効（§3-3）：除名・権限降格・admin解任時に revoke エポックを更新する。
+    // セッション発行(iat)が失効時刻より前なら無効＝再ログインを強制（ステートレスCookieの7日ラグを解消）。
+    if (typeof s.iat === "number") {
+      const cut = await env.LICENSE.get(`${REVOKE_PREFIX}${s.uid}`);
+      if (cut && s.iat < Number(cut)) return null;
+    }
     return s;
   } catch {
     return null;
+  }
+}
+
+// セッション失効エポックの KV キー接頭辞。値=失効時刻(epoch秒)。これ以前に発行されたセッションを無効化。
+const REVOKE_PREFIX = "revoke:";
+
+// 指定ユーザーの既存セッションを即時失効させる（次アクセスで再ログイン）。§3-3。
+// WHY: role を内包するステートレスCookieは個別失効手段が無く、権限変更が最大7日反映されない穴があった。
+// TTL はセッション最大寿命と同じ＝それ以降は自然失効するため失効レコードも不要になる。
+export async function revokeSessions(env: Env, uid: string): Promise<void> {
+  await env.LICENSE.put(`${REVOKE_PREFIX}${uid}`, String(Math.floor(Date.now() / 1000)), {
+    expirationTtl: SESSION_DAYS * 86400,
+  });
+}
+
+// CSRF 多層防御（P1-1）：状態変更リクエストが同一オリジン由来かを軽量判定する。
+// SameSite=Lax Cookie だけに依存せず Origin / Sec-Fetch-Site を併用（CFの有料WAFや外部依存なし）。
+// 判定優先: Sec-Fetch-Site（モダンブラウザは必ず付与）→ Origin。どちらも無い変更系は安全側で拒否。
+export function sameOrigin(request: Request): boolean {
+  const sfs = request.headers.get("sec-fetch-site"); // same-origin / same-site / cross-site / none
+  if (sfs) return sfs === "same-origin" || sfs === "none";
+  const o = request.headers.get("origin");
+  if (!o) return false;
+  try {
+    return new URL(o).origin === new URL(request.url).origin;
+  } catch {
+    return false;
   }
 }
 

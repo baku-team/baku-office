@@ -18,19 +18,19 @@
 
 ## CFデプロイ（手動・CIには無い）
 
-- **client（最大の落とし穴）**：
+- **client（最大の落とし穴）**：本番は **`npm -w apps/client run deploy:prod`** を使う（`astro build && wrangler deploy --env production` を内包＝`--env` 付け忘れの footgun を排除）。
   ```bash
-  npm -w apps/client run build
-  cd apps/client && npx wrangler deploy --env production
+  npm -w apps/client run deploy:prod
   ```
-  `npm -w apps/client run deploy` は `--env` を付けない＝top-level（amber-links想定・実体は別アカウントDB）に向くため**必ず `--env production` を明示**する。
+  ⚠️ `npm -w apps/client run deploy`（`:prod` 無し）は `--env` を付けない＝top-level（amber-links想定・実体は別アカウントDB）に向く。本番では使わない。
 - **host**：`npm -w apps/host run deploy`（単一env）。
 - **secret 投入**も本番は `--env production`：`npx wrangler secret put <NAME> --env production`（client）。`GOOGLE_CLIENT_ID/SECRET` は組織ログイン＋Google Workspace連携で使用。
 - 反映前に必ず：`npm run typecheck`（全パッケージ）／`npm -w apps/client test`／`npm -w apps/host test`。
 
 ## D1マイグレーション（独自方式・wrangler migrations は使わない）
 
-- client は**アプリ内ランナー** `apps/client/src/lib/migrate.ts`：`schema_migrations` テーブル＋KV `schema_version` ゲートで管理。新規 SQL を `migrations/00NN_*.sql` に置き `migrate.ts` の `MIGRATIONS` 配列に追記すれば、**初回リクエストで `ensureSchema` が未適用分のみ自動適用**（冪等）。現 `SCHEMA_VERSION = 20`。
+- client は**アプリ内ランナー** `apps/client/src/lib/migrate.ts`：`schema_migrations` テーブル＋KV `schema_version` ゲートで管理。新規 SQL を `migrations/00NN_*.sql` に置き `migrate.ts` の `MIGRATIONS` 配列に追記すれば、**初回リクエストで `ensureSchema` が未適用分のみ自動適用**（冪等）。`SCHEMA_VERSION = MIGRATIONS.length`（動的・`migrations/` の本数と一致。固定値を本書に書かない＝ドリフト防止）。
+- **マイグレーションは DDL 限定**（CREATE/ALTER 等）。データ投入（INSERT/UPDATE）はアプリ層で冪等に行う。WHY: `ensureSchema` は初回同時リクエストで並行適用され得る（KV best-effort ロックはあるが結果整合で完全排他ではない）ため、INSERT 系は二重適用のおそれ。
 - **`wrangler d1 migrations apply` は使わない**（別系統の `d1_migrations` テーブルを作り不整合の原因になる）。
 - 状態確認：`npx wrangler d1 execute baku-office-app-db --remote --env production --command "SELECT id FROM schema_migrations ORDER BY id"`。
 - host の D1 マイグレーションは手動：`npx wrangler d1 execute baku-office-portal-db --remote --file apps/host/migrations/<n>.sql`。

@@ -7,9 +7,11 @@ export const prerender = false;
 
 // 統合チェック（§13.1）：トークン検証 → {entitlement, latestVersion, notices}。
 // 検証は署名鍵の公開部分（importVerifyKey が x のみ使用）。最新エンタイトルメントはD1から再取得。
-export const GET: APIRoute = async ({ url, locals }) => {
+export const GET: APIRoute = async ({ request, url, locals }) => {
   const env = locals.runtime.env;
-  const token = url.searchParams.get("token");
+  // トークンはヘッダ優先（GETクエリだと observability ログにライセンストークンが残るため）。
+  // 旧クライアント互換のためクエリも受理（前方/後方互換）。
+  const token = request.headers.get("x-bo-license") ?? url.searchParams.get("token");
   const deployUrl = url.searchParams.get("deploy_url");
   const version = url.searchParams.get("version");
   if (!token) return json({ error: "token が必要" }, 400);
