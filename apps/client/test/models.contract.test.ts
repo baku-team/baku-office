@@ -91,11 +91,20 @@ test("runToolLoop：onUsage が全hopの token を受け取り合算できる（
 });
 
 test("estimateUsd（P0-2）：参考単価で推定USDを算出（gemini/claude・未登録は0）", () => {
+  const env = {} as Env; // env未設定＝既定単価
   // gemini: 1M in×$0.30 + 1M out×$2.50 = $2.80
-  assert.equal(Math.round(estimateUsd("gemini", 1_000_000, 1_000_000) * 100) / 100, 2.8);
+  assert.equal(Math.round(estimateUsd(env, "gemini", 1_000_000, 1_000_000) * 100) / 100, 2.8);
   // claude: 1M in×$3 + 1M out×$15 = $18
-  assert.equal(estimateUsd("claude", 1_000_000, 1_000_000), 18);
-  assert.equal(estimateUsd("local", 1_000_000, 1_000_000), 0);
+  assert.equal(estimateUsd(env, "claude", 1_000_000, 1_000_000), 18);
+  assert.equal(estimateUsd(env, "local", 1_000_000, 1_000_000), 0);
+});
+
+test("estimateUsd：MODEL_PRICING(env)で単価を上書きできる", () => {
+  const env = { MODEL_PRICING: JSON.stringify({ claude: { in: 1, out: 5 } }) } as unknown as Env;
+  // 上書き後 claude: 1M in×$1 + 1M out×$5 = $6
+  assert.equal(estimateUsd(env, "claude", 1_000_000, 1_000_000), 6);
+  // 未指定の gemini は既定値のまま
+  assert.equal(Math.round(estimateUsd(env, "gemini", 1_000_000, 1_000_000) * 100) / 100, 2.8);
 });
 
 test("runToolLoop×geminiModel：道具→次ターンで確定（一本化された経路）", async () => {

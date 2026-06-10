@@ -35,6 +35,10 @@ interface Env {
   INTERNAL_KEY?: string;
   // オートパイロット：GitHub OAuth App（device flow でトークン自動取得）。公開 client_id（秘密ではない）。
   GITHUB_OAUTH_CLIENT_ID?: string;
+  // モデルID/単価の上書き（未設定＝既定値）。価格改定・モデル移行・廃止にコード変更なしで追随（core/models/config.ts）。
+  GEMINI_MODEL?: string;
+  CLAUDE_MODEL?: string;
+  MODEL_PRICING?: string; // JSON: {"gemini":{"in":0.3,"out":2.5},"claude":{"in":3,"out":15}}
 }
 
 type Runtime = import("@astrojs/cloudflare").Runtime<Env>;

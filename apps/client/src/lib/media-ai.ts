@@ -5,8 +5,7 @@ import { getApiKey } from "./client.ts";
 import { getFile, saveFile } from "./storage.ts";
 import { nowSec } from "./accounting.ts";
 import { recordUsage, recordTokens } from "./usage.ts";
-
-const GEMINI = "gemini-2.5-flash";
+import { geminiModelId, claudeModelId } from "../core/models/config.ts";
 
 // --- Gemini Files API（resumable・大容量対応） ---
 async function geminiUpload(key: string, buf: ArrayBuffer, mime: string): Promise<string | null> {
@@ -22,7 +21,7 @@ async function geminiUpload(key: string, buf: ArrayBuffer, mime: string): Promis
   return ((await up.json()) as { file?: { uri?: string } }).file?.uri ?? null;
 }
 async function geminiGenerate(env: Env, key: string, parts: unknown[], tools?: unknown[]): Promise<string> {
-  const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI}:generateContent?key=${encodeURIComponent(key)}`, {
+  const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(geminiModelId(env))}:generateContent?key=${encodeURIComponent(key)}`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ contents: [{ role: "user", parts }], ...(tools ? { tools } : {}), generationConfig: { maxOutputTokens: 1200 } }),
@@ -94,7 +93,7 @@ export async function makeDocument(env: Env, owner: string, baseUrl: string, a: 
   const r = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
-    body: JSON.stringify({ model: "claude-sonnet-4-6", max_tokens: 4000, system: sys, messages: [{ role: "user", content: `タイトル:${a.title}\n要件:${a.content}` }] }),
+    body: JSON.stringify({ model: claudeModelId(env), max_tokens: 4000, system: sys, messages: [{ role: "user", content: `タイトル:${a.title}\n要件:${a.content}` }] }),
   });
   if (!r.ok) { console.log("[claude-doc]", r.status, (await r.text()).slice(0, 150)); return "資料生成に失敗しました。"; }
   const data = (await r.json()) as { content?: { text?: string }[]; usage?: { input_tokens?: number; output_tokens?: number } };
@@ -129,7 +128,7 @@ export async function extractInvoiceData(env: Env, file: { buf: ArrayBuffer; mim
   const r = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
-    body: JSON.stringify({ model: "claude-sonnet-4-6", max_tokens: 500, messages: [{ role: "user", content: [block, { type: "text", text: prompt }] }] }),
+    body: JSON.stringify({ model: claudeModelId(env), max_tokens: 500, messages: [{ role: "user", content: [block, { type: "text", text: prompt }] }] }),
   });
   await recordUsage(env, "claude");
   if (!r.ok) { console.log("[invoice-extract]", r.status, (await r.text()).slice(0, 150)); return {}; }

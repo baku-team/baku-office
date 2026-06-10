@@ -13,6 +13,7 @@ import { autonomyReady, AUTONOMY_TOOLS, AUTONOMY_POLICY, runAutonomyTool } from 
 import { localChatModel } from "../core/models/local.ts";
 import { geminiModel } from "../core/models/gemini.ts";
 import { claudeModel } from "../core/models/claude.ts";
+import { geminiModelId, claudeModelId } from "../core/models/config.ts";
 import "../parts/index.ts"; // 組み込みパーツを登録（副作用・移植性アーキ §4）
 import { webSearch, makeDocument } from "./media-ai.ts";
 import { listSkills, runSkill, generateSkill } from "./skills.ts";
@@ -161,14 +162,14 @@ export async function runAgent(ctx: Ctx, owner: string, text: string, image?: { 
     if (useClaude) {
       const b = await overBudget(env, "claude");
       if (b === "pause") return "Claudeの今月の利用上限に達しました（設定 → API使用量 で変更できます）。";
-      if (b !== "switch_free") { await recordUsage(env, "claude"); model = claudeModel(claudeKey!); provider = "claude"; }
+      if (b !== "switch_free") { await recordUsage(env, "claude"); model = claudeModel(claudeKey!, claudeModelId(env)); provider = "claude"; }
       else if (!geminiKey) return "Claudeの上限に達しました（Gemini未設定のため停止）。設定で上限を変更してください。";
     }
     if (!model) {
       if (!geminiKey) return "選択中のエンジンが未設定です。『設定 → 連携設定』で Gemini APIキーを登録するか、エンジンを Claude に切り替えてください。";
       const gb = await overBudget(env, "gemini");
       if (gb !== "ok") return "Geminiの今月の利用上限に達しました（設定 → API使用量 で変更できます）。";
-      await recordUsage(env, "gemini"); model = geminiModel(geminiKey); provider = "gemini";
+      await recordUsage(env, "gemini"); model = geminiModel(geminiKey, geminiModelId(env)); provider = "gemini";
     }
   }
   const first = { text: text || "（依頼）", image: provider === "claude" ? undefined : image };

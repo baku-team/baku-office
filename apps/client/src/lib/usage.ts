@@ -1,5 +1,7 @@
 // API使用量（回数ベース）の記録・集計・上限。AI機能や各APIの利用を日次でカウントし、
 // 「API使用量」画面で可視化＋無料枠アラート＋従量上限を制御する（§使用量画面）。
+import { resolvePricing } from "../core/models/config.ts";
+
 export const USAGE_PROVIDERS = ["gemini", "claude", "web_search", "image_gen", "tts", "video_gen", "custom"] as const;
 export type UsageProvider = string;
 
@@ -10,16 +12,10 @@ export const PROVIDER_LABEL: Record<string, string> = {
 const todayUtc = (): string => new Date().toISOString().slice(0, 10);
 const monthUtc = (): string => new Date().toISOString().slice(0, 7);
 
-// プロバイダ別の参考単価（USD / 100万token・2026-06 公式価格／レビュー§7.1）。
-// 回数だけでは実費とズレるため、応答 usage から推定USDを算出して蓄積する。
-const PRICING: Record<string, { in: number; out: number }> = {
-  gemini: { in: 0.30, out: 2.50 }, // gemini-2.5-flash（Paid Standard）
-  claude: { in: 3.0, out: 15.0 },  // claude-sonnet-4-6（通常API）
-};
 export type TokenUsage = { inputTokens: number; outputTokens: number };
-// 入出力token から推定USDを算出（単価未登録のproviderは0）。
-export function estimateUsd(provider: string, inputTokens: number, outputTokens: number): number {
-  const p = PRICING[provider];
+// 入出力token から推定USDを算出（単価未登録のproviderは0）。単価は env で上書き可能（config.ts）。
+export function estimateUsd(env: Env, provider: string, inputTokens: number, outputTokens: number): number {
+  const p = resolvePricing(env)[provider];
   if (!p) return 0;
   return (inputTokens / 1e6) * p.in + (outputTokens / 1e6) * p.out;
 }
@@ -38,7 +34,7 @@ export async function recordTokens(env: Env, provider: string, u: TokenUsage): P
   const i = Math.max(0, Math.round(u?.inputTokens ?? 0));
   const o = Math.max(0, Math.round(u?.outputTokens ?? 0));
   if (i === 0 && o === 0) return;
-  const usd = estimateUsd(provider, i, o);
+  const usd = estimateUsd(env, provider, i, o);
   try {
     await env.DB.prepare(
       "INSERT INTO api_usage (provider, day, count, input_tokens, output_tokens, est_usd) VALUES (?,?,0,?,?,?) ON CONFLICT(provider, day) DO UPDATE SET input_tokens = input_tokens + excluded.input_tokens, output_tokens = output_tokens + excluded.output_tokens, est_usd = est_usd + excluded.est_usd",

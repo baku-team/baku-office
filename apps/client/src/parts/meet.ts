@@ -5,6 +5,7 @@ import type { Part } from "../core/parts.ts";
 import type { Ctx } from "../core/ports.ts";
 import { googleFetch } from "../lib/google.ts";
 import { getApiKey } from "../lib/client.ts";
+import { claudeModelId } from "../core/models/config.ts";
 import { nowSec } from "../lib/accounting.ts";
 import { saveKnowledge } from "./knowledge.ts";
 import { setReminder } from "./reminders.ts";
@@ -70,7 +71,7 @@ async function summarizeWithClaude(env: Env, transcript: string): Promise<{ summ
   const r = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
-    body: JSON.stringify({ model: "claude-sonnet-4-6", max_tokens: 2000, system: sys, messages: [{ role: "user", content: transcript }] }),
+    body: JSON.stringify({ model: claudeModelId(env), max_tokens: 2000, system: sys, messages: [{ role: "user", content: transcript }] }),
   });
   if (!r.ok) { console.log("[meet-claude]", r.status, (await r.text()).slice(0, 150)); return null; }
   const data = (await r.json()) as { content?: { text?: string }[] };
