@@ -85,8 +85,14 @@ export async function googleAuthUrl(env: Env, origin: string, state: string, gro
   return u.toString();
 }
 
+// 実際に付与済みのグループ（保存値）。WHY: 読取は normalizeGroups を通さない。
+// normalizeGroups は「要求時の既定補完（空→calendar/meet）」用であり、付与状態の読取に使うと
+// 空配列の連携で calendar/meet を付与済みと捏造し、開示/UI表示が実態と乖離する。
 async function grantedGroups(env: Env): Promise<ScopeGroupId[]> {
-  try { return normalizeGroups(JSON.parse((await env.LICENSE.get(SCOPES_KEY)) ?? "[]")); } catch { return []; }
+  try {
+    const arr = JSON.parse((await env.LICENSE.get(SCOPES_KEY)) ?? "[]");
+    return (Array.isArray(arr) ? arr : []).filter((g): g is ScopeGroupId => g in SCOPE_GROUPS);
+  } catch { return []; }
 }
 export async function exchangeGoogleCode(env: Env, origin: string, code: string, groups?: ScopeGroupId[]): Promise<boolean> {
   const cid = await clientId(env); const cs = await clientSecret(env);

@@ -6,7 +6,8 @@ import { newState } from "../../../lib/oauth.ts";
 export const prerender = false;
 
 // Google Workspace 連携の開始（管理者・org）。?groups=calendar,gmail_read,gmail_send,meet で
-// 用途別 scope を選んで段階同意（incremental auth・P0-3）。groups 未指定は全グループ（後方互換）。
+// 用途別 scope を選んで段階同意（incremental auth・P0-3）。
+// groups 未指定は非Restrictedの既定（calendar/meet）のみ＝Gmail等は明示指定したときだけ要求（P1-1）。
 export const GET: APIRoute = async ({ request, locals, url, cookies, redirect }) => {
   const env = locals.runtime.env;
   const ses = await getSession(env, request);

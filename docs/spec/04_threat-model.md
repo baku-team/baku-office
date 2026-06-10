@@ -77,7 +77,7 @@ OAuth（gmail/calendar/meet を1同意で接続）の追加で生じる攻撃面
 | 攻撃 | 成功 | 損害 | 防御 |
 |---|---|---|---|
 | **`google_refresh` 窃取（KV/api_key ストア漏洩）** | MASTER_KEY も漏れれば可能 | Gmail全文・Calendar・Meet録画・Drive への永続アクセス＝**クラウンジュエル級** | MASTER_KEY を素のWorker Secret ではなく Secrets Store へ（L3）／暗号化保管・access token は非永続／失効API・再同意。L3 未了の間は KV+MASTER_KEY 同居が残存リスク |
-| **過剰スコープの悪用** | スコープ次第で可能 | 必要以上の Gmail 書込/送信・Calendar 改変 | 現状 `gmail.modify`+`gmail.send`+`calendar.events`+`meetings` を**一括要求**。閲覧系で足りる用途は `*.readonly` への分割を検討・同意画面でスコープ説明 |
+| **過剰スコープの悪用** | スコープ次第で可能 | 必要以上の Gmail 書込/送信・Calendar 改変 | 用途別グループに分割し最小権限化（P1-1）。Gmail閲覧は `gmail.readonly`（modifyは未使用）、送信は `gmail.send` を別同意。既定付与は非Restricted（`calendar.events`/`meetings`）のみで、Gmail(Restricted)は明示同意時だけ要求。同意画面・連携画面でスコープ/リスク/Limited Useを説明 |
 | 外部API経由のデータ流入/流出（本文・PII） | 一部可能 | Gmail本文・Meet録画・請求書PIIがアプリ側D1/ナレッジへ滞留 | 取込テキストのPIIマスキング（9-0/16-1）・保持期間/暗号化・学習不使用エンドポイント。⑤のインジェクション欄と連動 |
 
 ### ⑦ A2A（F）
