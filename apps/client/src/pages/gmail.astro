@@ -57,8 +57,8 @@ const fmtTs = (s: number | null) => (s ? new Date(s * 1000).toISOString().slice(
 
         {isAdmin && configured && (
           <div class="row">
-            <a class="btn btn-primary" href="/api/google/start?groups=gmail_read">閲覧のみ連携</a>
-            <a class="btn btn-primary" href="/api/google/start?groups=gmail_read,gmail_send">閲覧＋送信を連携</a>
+            <a class="btn btn-primary" id="glnk-read" href="/api/google/start?groups=gmail_read">閲覧のみ連携</a>
+            <a class="btn btn-primary" id="glnk-send" href="/api/google/start?groups=gmail_read,gmail_send">閲覧＋送信を連携</a>
             {connected && (<button class="btn" id="gdisc">連携を全解除</button>)}
           </div>
         )}
@@ -78,6 +78,15 @@ const fmtTs = (s: number | null) => (s ? new Date(s * 1000).toISOString().slice(
     </Fragment>
   )}
   <script slot="scripts" is:inline>
+    // Restricted scope（Google審査対象）の付与前に一段の確認＋リスク要約を表示（§高リスク設定）。
+    const gl = [
+      ["glnk-read", "Gmail の閲覧（Restricted scope・Google審査対象）を有効化します。AIがメール本文・添付を読み取れるようになります。よろしいですか？"],
+      ["glnk-send", "Gmail の閲覧と送信（Restricted scope・Google審査対象）を有効化します。AIがあなたの団体の代わりにメールを送信できるようになります。よろしいですか？"],
+    ];
+    for (const [id, msg] of gl) {
+      const a = document.getElementById(id);
+      if (a) a.addEventListener("click", async (e) => { e.preventDefault(); if (await window.bo.confirm(msg, { confirmLabel: "有効にする", danger: true, auditHref: "/legal" })) location.href = a.getAttribute("href"); });
+    }
     const d = document.getElementById("gdisc");
     if (d) d.addEventListener("click", async (e) => {
       const r = await window.bo.api("/api/google", { _action: "disconnect" }, { btn: e.currentTarget, successMsg: "連携を解除しました" });
