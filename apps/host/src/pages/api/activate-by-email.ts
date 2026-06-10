@@ -34,7 +34,9 @@ export const POST: APIRoute = async ({ request, locals }) => {
   if (!lic) return json({ error: "このGoogleアカウント（メール）に対応する申込が見つかりません" }, 404);
 
   if (b.deployUrl && isSafeDeployUrl(b.deployUrl)) {
-    await env.DB.prepare("UPDATE licenses SET deploy_url = ?, last_seen = ? WHERE license_id = ?").bind(b.deployUrl, nowSec(), lic.id).run();
+    // Googleログイン突合で確定（§4-3）：deploy_url を【確定】として上書きし verified=1。
+    // 仮登録（unauth な deploy-report）で攻撃者が先に書いた値があっても、ここで正規URLに是正される。
+    await env.DB.prepare("UPDATE licenses SET deploy_url = ?, deploy_url_verified = 1, last_seen = ? WHERE license_id = ?").bind(b.deployUrl, nowSec(), lic.id).run();
     // deploy 完了＝公開 throwaway リポ（app-<licenseId>・report.json に deploy_code 平文）は役目終了。
     // 即削除して公開露出を最小化（private 化は他者CFが Deploy で clone 不可になるため採らない）。
     if (env.GITHUB_TOKEN && env.GITHUB_OWNER) {
