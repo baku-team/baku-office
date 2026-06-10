@@ -97,13 +97,22 @@ export async function applyMigrations(env: Env): Promise<{ applied: string[] }> 
 
 // 軽量ガード：KVのスキーマ版が最新なら即return（1リクエスト1 KV read）。
 const KV_VER = "schema_version";
+const KV_LOCK = "schema_lock"; // 初回同時リクエストの並行適用を抑える best-effort ロック（§4-1）。
 export async function ensureSchema(env: Env): Promise<void> {
   try {
     if ((await env.LICENSE.get(KV_VER)) === String(SCHEMA_VERSION)) return;
-    await applyMigrations(env);
-    await env.LICENSE.put(KV_VER, String(SCHEMA_VERSION));
+    // best-effort ロック：他リクエストが適用中なら今回はスキップ（次リクエストが KV_VER で収束）。
+    // KV は結果整合のため完全排他ではない＝DDL は冪等エラー無視で救済、INSERT 系は使わない規約で補完。
+    if ((await env.LICENSE.get(KV_LOCK)) === "1") return;
+    await env.LICENSE.put(KV_LOCK, "1", { expirationTtl: 60 });
+    try {
+      await applyMigrations(env);
+      await env.LICENSE.put(KV_VER, String(SCHEMA_VERSION));
+    } finally {
+      await env.LICENSE.delete(KV_LOCK).catch(() => {});
+    }
   } catch (e) {
-    // 失敗時も次リクエストで再試行（フラグは立てない）。原因は診断に残す（無言の全停止を避ける）。
+    // 失敗時も次リクエストで再試行（KV_VER は立てない）。原因は診断に残す（無言の全停止を避ける）。
     await logDiag(env, "error", "migration", `ensureSchema 失敗: ${(e as Error).message ?? String(e)}`);
   }
 }

@@ -4,7 +4,15 @@
 
 const ENC = new TextEncoder();
 const DEC = new TextDecoder();
-const toB64 = (buf: ArrayBuffer): string => btoa(String.fromCharCode(...new Uint8Array(buf)));
+// WHY: String.fromCharCode(...spread) は要素数が多いと RangeError(Maximum call stack) を起こす。
+// 大きな値を encryptField に渡す将来用途でも安全なよう 0x8000 バイト単位でチャンク化する（P2-2）。
+const toB64 = (buf: ArrayBuffer): string => {
+  const bytes = new Uint8Array(buf);
+  let s = "";
+  const CH = 0x8000;
+  for (let i = 0; i < bytes.length; i += CH) s += String.fromCharCode(...bytes.subarray(i, i + CH));
+  return btoa(s);
+};
 const fromB64 = (s: string): Uint8Array<ArrayBuffer> => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
 
 // ---------- AES-256-GCM（MASTER_KEY・用途別サブ鍵をHKDFで派生） ----------

@@ -7,6 +7,7 @@
     "build": "astro build",
     "preview": "astro build && wrangler dev",
     "deploy": "astro build && wrangler deploy",
+    "deploy:prod": "astro build && wrangler deploy --env production",
     "release": "node scripts/build-release.mjs",
     "typecheck": "astro check",
     "test": "node --experimental-strip-types --disable-warning=ExperimentalWarning --test test/*.test.ts"
