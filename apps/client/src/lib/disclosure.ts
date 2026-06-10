@@ -48,8 +48,10 @@ export async function buildDisclosure(env: Env): Promise<Disclosure> {
   const has = async (k: string) => !!(await getApiKey(env, k));
 
   if (await has("gemini")) dest.push({
-    name: "Google（Gemini API）", purpose: "AIによる応答・要約・検索の生成", dataKinds: "チャット入力・要約対象テキスト/ファイル・Web検索クエリ",
-    region: "Google（米国等・越境の可能性）", note: "有料APIのプロンプトはモデル学習に使用されない旨を提供元規約で確認のこと。",
+    name: "Google（Gemini API）", purpose: "AIによる応答・要約・検索の生成（応答生成の目的に限定。広告・プロファイリングには利用しない）",
+    dataKinds: "チャット入力・要約対象テキスト/ファイル・Web検索クエリ",
+    region: "Google（米国等・越境の可能性）",
+    note: "利用目的は応答生成に限定。API経由（有料）のプロンプトはモデル学習に使用されません。提供元が不正使用検知等の目的で定める期間のみ一時保持し、その後削除されます（具体的な保持期間は Google の最新の API データ利用規約に従います）。団体が BYOK で有効化した既定のテキストAIです。",
   });
   if (await has("claude")) dest.push({
     name: "Anthropic（Claude API）", purpose: "AIによる資料生成・抽出・スキル実行", dataKinds: "チャット入力・資料要件・請求書/領収書の画像/PDF",

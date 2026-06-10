@@ -94,7 +94,9 @@
 > 「条件付き可」を「無条件可」にするための残課題。順不同・並行可。
 
 ### 3-1. 依存・コード（中）
-- [ ] **P2-1 Astro 更新**：`astro@6.4.x`（破壊的）へステージング更新 → `sanitize`/`ui-customize` contract と `is:inline`/`set:html` の回帰確認のうえ採用（moderate XSS 勧告 GHSA-j687-52p2-xcff / GHSA-xr5h-phrj-8vxv の解消）。
+- [ ] **P2-1 Astro 更新（検証済み・保留）**：`astro@6.4.5`＋`@astrojs/cloudflare@13.7.0` への更新を3アプリで検証した結果、**クリーンビルドが失敗**（cloudflare アダプタ13が統合する `@cloudflare/vite-plugin` が config 解決時に wrangler の `main`（`dist/_worker.js/index.js`）の存在を要求し、ビルド前提では未生成のため）。型/テストは通るがビルド不可＝**非自明な設定移行が必要**なため**保留**。
+  - **interim 受容判断**：勧告は (a) `astro define:vars` XSS＝本コードでは `billing.astro` の1箇所のみ＋CSP（`script-src 'self' 'unsafe-inline'`）と sanitizer で緩和、(b) `@astrojs/cloudflare` の image-binding-transform SSRF＝**当該画像変換エンドポイントは未使用**。いずれも実害確度は低く、moderate を受容。
+  - **採用条件**：cloudflare アダプタ13 の vite-plugin と wrangler `main` の整合（dev/build 用 wrangler 設定の分離 or adapter 設定）を解決できた時点で再挑戦。`npm audit`（informational）で継続監視。
 - [ ] **コスト単価既定値の最新化**：主要 provider 単価を更新し、未登録時は UI で「推定不可」を明示（0 と誤認させない）。
 - [ ] **P2-3 DNS リバインディング（低・任意）**：A2A 宛先にユーザー任意 URL を許す拡張を入れる場合のみ、解決IPの allowlist 検査を併設。現状は相互同意済み deploy_url 限定のため据え置き可。
 
@@ -102,7 +104,7 @@
 - [x] **導入時の規約同意ゲート（実装済み）**：団体管理者の初回ログイン時に当社規約・プライバシーポリシー・重要事項（鍵保管リスク含む）を全文表示し同意必須化（`/consent`・`needsConsent` ゲート・版管理）。**本文はドラフト＝弁護士確定版へ差し替え要**。
 - [ ] **本番版の法務文書**：上記ドラフト（`consent.ts`）＋雛形（`disclosure.ts`/`legal-templates.ts`）を弁護士レビューで実運用版に確定。
 - [x] **会員（`users`）のアカウント脱退フロー（実装済み）**：本人が `/account` から退会を申請→管理者が `/settings/members` で承認＝アカウント無効化（`status=disabled`＋セッション失効）。**業務データは団体帰属のため保持**（開示/エクスポートは方針により非提供）。最終管理者/ブートストラップ管理者は脱退不可ガード。`0026_user_leave` 自動適用。
-- [ ] Gemini 既定送信時の利用目的・保持の説明をテンプレ任せにせず明文化。
+- [x] **Gemini 既定送信の利用目的・保持の明文化（実装済み）**：`disclosure.ts`／`legal-templates.ts` に、利用目的（応答生成限定・広告/プロファイリング不使用）と保持（API経由はモデル学習に不使用・不正使用検知等の目的で一時保持後削除）を明記。
 
 ### 3-3. 運用・ドキュメント
 - [x] **デプロイ前チェックリスト**：OPERATIONS（A-0/CFデプロイ）＋ROADMAP Phase 1 に整備済み（`--env production`／Secret／`ENVIRONMENT`）。
@@ -110,7 +112,7 @@
 - [x] host 側署名鍵（`RELEASE_SIGNING_JWK` 等）の鍵管理運用：OPERATIONS A-0/A-0b に文書化。
 
 ### 3-4. UI/UX
-- [ ] 高リスク設定（オートパイロット・Restricted scope・A2A）有効化時のリスク要約・一段確認の文言点検。
+- [x] **高リスク設定の有効化時リスク提示（実装済み）**：オートパイロット（既存確認）＋A2A（公開アクション有効化・接続参加・グループ参加に `bo.confirm`＋リスク要約）＋Gmail Restricted scope（リスク要約ボックス＋付与クリック時の確認）。
 
 **GA 判定（Go/No-Go）**
 - [ ] P0/P1（004）すべて解消（コード✓）＋本番で動的 PoC 合格。
