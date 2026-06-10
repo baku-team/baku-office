@@ -91,6 +91,7 @@
    - `npm -w apps/host run deploy`（`astro build && wrangler deploy`）。
 2. シークレット登録（`wrangler secret put -c apps/host/wrangler.jsonc`）：
    - `SIGNING_JWK`（ライセンス署名鍵・Ed25519。将来KMS）
+   - `RELEASE_PUBLIC_JWK`（リリース署名鍵の**公開**部分）／CI側に `RELEASE_SIGNING_JWK`（**秘密**鍵）。**§3-2：クライアントの検証鍵は配布バンドル同梱の `apps/client/deploy/release-pubkey.json` にピン留め**しており、ホストの `/api/release/pubkey` には依存しない（ホストから鍵を取らない＝TOFU排除）。
    - `ADMIN_KEY`（管理者セッション署名鍵）。**本番（`ENV≠development`）は必須＝未設定なら fail-closed で管理者ログイン不可**。`ENV=development` のときのみ dev フォールバック鍵を許可。
    - `ENV`（任意）：`development` を設定した環境でのみ dev 管理者ログインと鍵フォールバックが有効。本番は未設定＝厳格側（設定漏れでも安全）。
    - 🟢 `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`（スタッフGoogleログイン）
@@ -100,6 +101,14 @@
 3. D1 作成＋スキーマ適用：`apps/host/migrations/` を **0001 から最新（0012_governance.sql）まで順に適用**（`wrangler d1 execute baku-office-portal-db --remote --file apps/host/migrations/<f>.sql --config apps/host/wrangler.jsonc`）。スキーマ変更を伴う更新時は新規ファイルを忘れず remote へ適用（未適用だと該当機能が無言で失敗）。
 4. クライアント配布鍵：ホストの署名鍵に対応する**公開検証鍵**を取得し、クライアント側に渡す（`GET /admin/pubkey`）。
 5. 自己修復の定期巡回（任意・自社運用）：集積先リポ `baku-team/baku-office-logs` を作成 → スケジューラを配備 `npm -w apps/scheduler run deploy` → `CRON_TARGETS`（host `/api/cron/sweep`・client `/api/cron/drain` の `{binding,path,key}` JSON・key は各 `INTERNAL_KEY` と同値）を secret 投入。Cron `*/5` で自動巡回。Service Binding（`T_HOST`/`T_CLIENT`）経由＝同一 workers.dev 直fetch遮断(1042)を回避。
+
+### A-0b. リリース署名鍵のローテーション（§3-2）
+配布バンドル更新の検証鍵は**ピン留め**（`apps/client/deploy/release-pubkey.json`）。CI（`release.yml`）が「同梱鍵＝署名鍵の公開部分」かつ「署名が同梱鍵で検証できる」ことを公開前に必ず検査し、不一致なら**公開を中止**する（顧客側の全更新停止を防ぐ）。鍵を交換する手順：
+
+1. 新しい Ed25519 鍵ペアを生成し、**秘密鍵**を CI secret `RELEASE_SIGNING_JWK` に更新。ホストの `RELEASE_PUBLIC_JWK`（公開部分）も合わせて更新。
+2. `apps/client/deploy/release-pubkey.json` を**新しい公開鍵**に更新してコミット。
+3. **重要：この新鍵を同梱したバンドルは、まだ各顧客が持つ「旧鍵」で署名して配る必要がある**（顧客は旧鍵で検証→OK後に同梱鍵を新鍵へ置換＝次回から新鍵）。移行期は**新旧両方の署名を許容（クロス署名）**するか、更新を2段階に分ける。一度の交換で旧鍵署名を省くと、旧鍵を持つ顧客が検証に失敗し更新が止まる。
+4. 緊急時（鍵漏洩で旧鍵が使えない）は、顧客に Deploy ボタンからの再取得を案内し、配布リポの最新（新鍵同梱）を取り直してもらう。
 
 ### A-1. スタッフログイン
 - `/login` → 🟢「Googleでログイン」（`HOST_ADMIN_EMAILS` の管理者のみ操作可）／🧪「管理者としてログイン（dev）」は **`ENV=development` かつ Google 未設定時のみ**有効（本番は無効）。

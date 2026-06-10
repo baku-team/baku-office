@@ -51,6 +51,9 @@ writeFileSync(
 );
 copyFileSync(join(root, "deploy", "prebuild-update.mjs"), join(out, "prebuild-update.mjs"));
 copyFileSync(join(root, "deploy", "postdeploy.mjs"), join(out, "postdeploy.mjs"));
+// リリース署名の検証鍵をピン留めとして同梱（§3-2）。prebuild-update が tarball 検証にこの鍵だけを使う。
+// WHY: 鍵をホストから取らない＝ホスト侵害で署名鍵を差し替えられない。CI で署名鍵との一致を担保する。
+copyFileSync(join(root, "deploy", "release-pubkey.json"), join(out, "release-pubkey.json"));
 // CI チェック（GitHub Actions）を同梱＝全配布リポに自動で「チェック」が付き、オートパイロットの
 // マージ（CI成功時のみ）が機能する。テンプレ /generate での複製には GITHUB_TOKEN の workflow スコープが必要。
 mkdirSync(join(out, ".github", "workflows"), { recursive: true });
