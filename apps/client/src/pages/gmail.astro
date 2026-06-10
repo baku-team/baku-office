@@ -36,9 +36,25 @@ const fmtTs = (s: number | null) => (s ? new Date(s * 1000).toISOString().slice(
     <Fragment>
       {!configured && (<div class="banner banner-warn">Google OAuth が未設定のため連携できません。{isAdmin ? <Fragment>管理者は <a href="/settings/google-setup">Google 連携セットアップ</a> から設定できます。</Fragment> : "管理者にご確認ください。"}</div>)}
       <div class="card">
-        <p>Gmail 連携：<span class="pill">{granted.includes("gmail_read") || granted.includes("gmail_send") ? "連携済み" : "未連携"}</span></p>
-        <p class="muted" style="font-size:.85rem">Gmail の <strong>閲覧/整理（modify）</strong>と<strong>送信</strong>は Google の Restricted scope（審査対象）です。必要な権限だけを有効化してください。{connected && <span>　最終利用：{fmtTs(lastUsed)}</span>}</p>
+        {(() => { const linked = granted.includes("gmail_read") || granted.includes("gmail_send"); return (
+          <p>Gmail 連携：<span class="pill" aria-label={linked ? "連携済み" : "未連携"}>{linked ? "連携済み" : "未連携"}</span></p>
+        ); })()}
+        <p class="muted" style="font-size:.85rem">Gmail の <strong>閲覧</strong>と<strong>送信</strong>は Google の Restricted scope（審査対象）です。既定では付与されず、下のボタンで明示的に有効化したときのみ要求します。{connected && <span>　最終利用：{fmtTs(lastUsed)}</span>}</p>
         {connected && (<p class="muted" style="font-size:.8rem">付与済み：{granted.length ? granted.map((g) => SCOPE_GROUPS[g as keyof typeof SCOPE_GROUPS]?.label).join(" / ") : "（不明）"}</p>)}
+
+        {/* 何にアクセスし・どこに送るか・費用を同一画面で明示（§9）。 */}
+        <div class="banner banner-warn" style="margin-top:.5rem">
+          <strong>連携前にご確認ください</strong>
+          <ul style="margin:.4rem 0 0;padding-left:1.2rem;font-size:.85rem">
+            <li>アクセス範囲：{SCOPE_GROUPS.gmail_read.risk}</li>
+            <li>送信を含める場合：{SCOPE_GROUPS.gmail_send.risk}</li>
+            <li>外部送信：閲覧/送信の操作時、対象メール本文・添付・メタデータが Google API（米国等・越境の可能性）へ送信されます。AIに依頼した場合は要約等のためAI提供元（Gemini/Claude）にも送信され得ます。</li>
+            <li>費用：Gmail API 自体は無料枠内。AI処理を伴う場合は <a href="/usage">使用量・上限</a> の従量・上限が適用されます。</li>
+            <li>保存・削除：取得データの扱いは <a href="/legal">外部送信・AI利用の開示</a> を参照。連携は下の「全解除」でいつでも失効できます。</li>
+          </ul>
+          <p class="muted" style="font-size:.8rem;margin:.4rem 0 0">Google ユーザーデータの利用は Google API Services User Data Policy（Limited Use 要件含む）に準拠します。</p>
+        </div>
+
         {isAdmin && configured && (
           <div class="row">
             <a class="btn btn-primary" href="/api/google/start?groups=gmail_read">閲覧のみ連携</a>

@@ -6,10 +6,25 @@ const env = Astro.locals.runtime.env;
 const { getSession } = await import("../../lib/auth.ts");
 const ses = await getSession(env, Astro.request);
 if (!ses) return Astro.redirect("/login", 302);
-const { cachedEntitlement } = await import("../../lib/client.ts");
+const { cachedEntitlement, getApiKey } = await import("../../lib/client.ts");
 const entitlement = await cachedEntitlement(env).catch(() => "free" as const);
 const isAdminOrg = ses.role === "admin" && ses.ctx === "org";
 const hasPlus = atLeast(entitlement, "plus");
+
+// 初期設定チェックリスト（§9 段階化）：確実に検出できる未設定項目だけを管理者に提示する。
+type Step = { label: string; href: string; done: boolean; hint: string };
+let steps: Step[] = [];
+if (isAdminOrg) {
+  const { googleConfigured } = await import("../../lib/google.ts");
+  const aiReady = !!(await getApiKey(env, "gemini")) || !!(await getApiKey(env, "claude")) || !!env.LOCAL_AI_BASE_URL;
+  const googleReady = await googleConfigured(env).catch(() => false);
+  steps = [
+    { label: "AIエンジンの接続", href: "/settings/keys", done: aiReady, hint: "Gemini / Claude のキー、またはローカルLLM" },
+    { label: "プランの確認", href: "/billing", done: entitlement !== "free", hint: "Plus/Pro でAI・連携機能が解放" },
+    { label: "Google 連携（任意）", href: "/settings/google-setup", done: googleReady, hint: "Calendar/Gmail/Meet。Gmailは明示同意のみ" },
+  ];
+}
+const pendingSteps = steps.filter((s) => !s.done);
 
 type Link = { href: string; label: string; desc: string; show: boolean };
 type Group = { title: string; items: Link[] };
@@ -41,6 +56,22 @@ const groups: Group[] = [
 <App title="設定" active="/settings">
   <h1>設定</h1>
   <p class="muted">このシステムの設定・オプションをまとめています。項目を選んでください。</p>
+
+  {isAdminOrg && pendingSteps.length > 0 && (
+    <div class="card" style="border-left:3px solid #14365c">
+      <strong>初期設定（あと {pendingSteps.length} 項目）</strong>
+      <p class="muted" style="font-size:.85rem;margin:.2rem 0 .6rem">まず必須項目から段階的に設定すると、AI・連携機能を安全に有効化できます。</p>
+      <ul style="margin:0;padding-left:1.2rem">
+        {steps.map((s) => (
+          <li style="margin:.2rem 0">
+            <span aria-label={s.done ? "設定済み" : "未設定"}>{s.done ? "✅" : "⬜"}</span>{" "}
+            {s.done ? <span>{s.label}</span> : <a href={s.href}>{s.label}</a>}
+            <span class="muted" style="font-size:.8rem"> — {s.hint}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  )}
   {groups.map((g) => {
     const items = g.items.filter((i) => i.show);
     return items.length === 0 ? null : (

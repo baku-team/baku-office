@@ -19,7 +19,20 @@ export type Disclosure = {
   retentionDays: number;       // ファイル保持期限（0=無期限）
   encryptedAtRest: boolean;    // 保存時暗号化（本実装では常に true）
   generatedNote: string;
+  googleConnected: boolean;    // Google Workspace 連携の有無（Limited Use 表示の出し分け）
+  limitedUse?: string;         // Google API Limited Use Disclosure（Restricted scope 連携時に表示）
+  responsibilityNote: string;  // 責任分界（ホスト/顧客/BYOK）
 };
+
+// Google API Services User Data Policy の Limited Use 開示（Restricted scope を使う場合に必須）。
+// 参照: https://developers.google.com/terms/api-services-user-data-policy
+const LIMITED_USE = [
+  "本アプリの Google ユーザーデータの利用は、Google API Services User Data Policy（Limited Use 要件を含む）に準拠します。具体的には：",
+  "・取得した Gmail 等のデータは、ユーザーが要求した機能の提供のみに利用します。",
+  "・人による閲覧は、ユーザーの明示的同意、セキュリティ・不正対策・法令遵守、または集計・匿名化された場合を除き行いません。",
+  "・第三者への譲渡・販売は行わず、広告目的には利用しません。",
+  "・データはユーザーの Cloudflare アカウント内に保存時暗号化（AES-GCM）で保持し、連携解除でアクセスを失効します。",
+].join("\n");
 
 export async function buildDisclosure(env: Env): Promise<Disclosure> {
   const dest: Destination[] = [];
@@ -44,7 +57,10 @@ export async function buildDisclosure(env: Env): Promise<Disclosure> {
   });
 
   const g = await googleStatus(env);
-  if (g.connected && g.groups.length) {
+  const googleConnected = g.connected && g.groups.length > 0;
+  // Restricted scope（Gmail）を付与しているか＝Limited Use 開示の要否。
+  const usesRestricted = g.groups.some((gr: ScopeGroupId) => SCOPE_GROUPS[gr]?.restricted);
+  if (googleConnected) {
     const labels = g.groups.map((gr: ScopeGroupId) => SCOPE_GROUPS[gr]?.label).filter(Boolean).join(" / ");
     dest.push({
       name: "Google Workspace（Calendar / Gmail / Meet）", purpose: `連携機能（付与: ${labels}）`,
@@ -76,6 +92,13 @@ export async function buildDisclosure(env: Env): Promise<Disclosure> {
     destinations: dest,
     retentionDays: await getRetentionDays(env).catch(() => 0),
     encryptedAtRest: true,
-    generatedNote: "本一覧は現在の連携設定から自動生成されています。連携の追加・解除で内容は変わります。",
+    generatedNote: "本一覧は現在の連携設定から自動生成されています。連携の追加・解除で内容は変わります。上記の各送信先は、個人情報の取扱いを委託する「サブプロセッサ（委託先）」一覧としても利用できます。",
+    googleConnected,
+    limitedUse: usesRestricted ? LIMITED_USE : undefined,
+    responsibilityNote: [
+      "・業務データ（会員名簿・会計・ファイル等）は顧客（団体）自身の Cloudflare アカウント内に保存され、ホスト（baku-office 提供者）は通常これを閲覧しません。ホストはライセンス・配信・課金・通知のみを担います。",
+      "・外部AI/外部API（BYOK で団体が有効化したもの）に送信されるデータの取扱いは各提供元の規約に従い、その有効化判断と費用負担は団体に帰属します。",
+      "・Cloudflare/外部API の実費（Workers/D1/KV/R2、AIトークン等）は顧客負担です。アプリ内の上限は推定であり、実請求は各プロバイダの計上が正です。",
+    ].join("\n"),
   };
 }
