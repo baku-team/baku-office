@@ -2,6 +2,8 @@
 // 入金確認まではプロビジョナル（free相当）。Stripe未設定のdevでは dev-confirm で昇格をシミュレート。
 import { nowSec } from "./host.ts";
 import type { Plan, Entitlement } from "@baku-office/shared";
+// §5：Stripe 署名検証は shared に一本化（host/client の重複を排除）。既存 import 互換のため再エクスポート。
+export { verifyStripeSig } from "@baku-office/shared";
 
 export function stripeEnabled(env: Env): boolean {
   return !!env.STRIPE_SECRET_KEY;
@@ -55,23 +57,3 @@ export async function activateEntitlement(env: Env, licenseId: string, plan: Pla
 
 // Stripe Webhook 署名検証（HMAC-SHA256・t=タイムスタンプ,v1=署名）。
 // t の鮮度（既定±5分）も検証してリプレイを防ぐ。比較は定数時間。
-export async function verifyStripeSig(secret: string, payload: string, header: string, toleranceSec = 300): Promise<boolean> {
-  const parts = Object.fromEntries(header.split(",").map((kv) => kv.split("=")));
-  const t = parts["t"];
-  const v1 = parts["v1"];
-  if (!t || !v1) return false;
-  const ts = Number(t);
-  if (!Number.isFinite(ts) || Math.abs(nowSec() - ts) > toleranceSec) return false;
-  const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
-  const mac = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(`${t}.${payload}`));
-  const hex = Array.from(new Uint8Array(mac), (b) => b.toString(16).padStart(2, "0")).join("");
-  return timingSafeEqualHex(hex, v1);
-}
-
-// 定数時間のhex比較（タイミング攻撃対策）。
-function timingSafeEqualHex(a: string, b: string): boolean {
-  if (a.length !== b.length) return false;
-  let r = 0;
-  for (let i = 0; i < a.length; i++) r |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  return r === 0;
-}
