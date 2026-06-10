@@ -1,7 +1,19 @@
 ---
-// 公開HP/LPの最小レイアウト（認証不要）。body は管理者入力HTML（自己ホスト・信頼）。
+// 公開HP/LPの最小レイアウト（認証不要）。body は管理者入力HTML（自己ホスト）。
+// 管理者は半信頼: script/イベントハンドラ/javascript:URI を除去して公開閲覧者を守る。
+// 完全な対策ではない（regexベース）ため CSP を併用する。
 interface Props { site: { title: string; body: string | null; show_join: number } }
 const { site } = Astro.props as Props;
+
+function sanitizeHtml(html: string): string {
+  return html
+    .replace(/<\s*script[\s\S]*?<\s*\/\s*script\s*>/gi, "")
+    .replace(/<\s*script\b[^>]*>/gi, "")
+    .replace(/<\s*\/?\s*(iframe|object|embed)\b[^>]*>/gi, "")
+    .replace(/\son\w+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, "")
+    .replace(/(href|src)\s*=\s*("\s*javascript:[^"]*"|'\s*javascript:[^']*'|javascript:[^\s>]+)/gi, '$1="#"');
+}
+const safeBody = sanitizeHtml(site.body ?? "");
 ---
 <!doctype html>
 <html lang="ja">
@@ -25,7 +37,7 @@ const { site } = Astro.props as Props;
   </head>
   <body>
     <main class="site">
-      <article set:html={site.body ?? ""}></article>
+      <article set:html={safeBody}></article>
 
       {site.show_join === 1 && (
         <section class="join">

@@ -37,7 +37,9 @@
       ],
       "vars": {
         "HOST_BASE_URL": "https://baku-office-portal.baku-027.workers.dev",
-        "ENVIRONMENT": "production"
+        "ENVIRONMENT": "production",
+        // 1回のAI処理の推定USD上限。暴走ループ防止の二次ガード（月次USD capが一次）。調整可（レビューv2 §3.2）。
+        "AI_MAX_JOB_USD": "1.00"
       },
       "services": [
         { "binding": "HOST", "service": "baku-office-portal" }

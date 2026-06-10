@@ -1,6 +1,7 @@
 // Gemini アダプタ（移植性アーキ §2.3）。既存の generateContent function-calling を ChatModel 契約へ移植。
 // wire 形式（systemInstruction / contents / functionCall / functionResponse / generationConfig）は従来どおり。
 import type { ChatModel, Turn, ToolDecl, ToolCall } from "../ai.ts";
+import { DEFAULT_MODELS } from "./config.ts";
 
 type GPart = { text?: string; functionCall?: { name: string; args: Record<string, unknown> }; functionResponse?: { name: string; response: unknown }; inlineData?: { mimeType: string; data: string } };
 type GContent = { role: string; parts: GPart[] };
@@ -25,11 +26,11 @@ function toContents(history: Turn[]): GContent[] {
   return out;
 }
 
-export function geminiModel(key: string): ChatModel {
+export function geminiModel(key: string, modelId: string = DEFAULT_MODELS.gemini): ChatModel {
   return {
-    name: "gemini-2.5-flash",
+    name: modelId,
     async turn(system, history, tools) {
-      const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(key)}`, {
+      const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelId)}:generateContent?key=${encodeURIComponent(key)}`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ systemInstruction: { parts: [{ text: system }] }, contents: toContents(history), tools: [{ functionDeclarations: tools as ToolDecl[] }], generationConfig: { temperature: 0.3, maxOutputTokens: 800 } }),

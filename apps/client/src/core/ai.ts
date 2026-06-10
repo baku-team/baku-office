@@ -30,9 +30,13 @@ export async function runToolLoop(
   priorHistory: Turn[] = [],
   // 各ターンの消費tokenを受け取るシンク（実費計測・P0-2）。複数hop/子エージェント分も合算できる。
   onUsage?: (u: TokenUsage) => void,
+  // 1ジョブ単位の打ち切り判定（コストcap・P3）。非nullを返したらその文言で即終了する。
+  abort?: () => string | null,
 ): Promise<string> {
   const history: Turn[] = [...priorHistory, { role: "user", text: first.text, image: first.image }];
   for (let h = 0; h < maxHops; h++) {
+    const stop = abort?.();
+    if (stop) return stop;
     const res = await model.turn(system, history, tools);
     if (res.usage && onUsage) onUsage(res.usage);
     if (!res.toolCalls?.length) return (res.text ?? "").trim() || "（応答が空でした）";

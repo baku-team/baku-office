@@ -1,6 +1,7 @@
 // Claude アダプタ（移植性アーキ §2.3）。Anthropic Messages API のツールループを ChatModel 契約へ移植。
 // wire 形式（tools=input_schema / tool_use / tool_result / model claude-sonnet-4-6）は従来どおり。画像は非対応（Geminiパス）。
 import type { ChatModel, Turn, ToolDecl, ToolCall } from "../ai.ts";
+import { DEFAULT_MODELS } from "./config.ts";
 
 type CBlock = { type: string; text?: string; id?: string; name?: string; input?: Record<string, unknown>; tool_use_id?: string; content?: string };
 
@@ -21,15 +22,15 @@ function toMessages(history: Turn[]): { role: string; content: unknown }[] {
   return msgs;
 }
 
-export function claudeModel(key: string): ChatModel {
+export function claudeModel(key: string, modelId: string = DEFAULT_MODELS.claude): ChatModel {
   return {
-    name: "claude-sonnet-4-6",
+    name: modelId,
     async turn(system, history, tools) {
       const t = (tools as ToolDecl[]).map((d) => ({ name: d.name, description: d.description, input_schema: d.parameters }));
       const r = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
         headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
-        body: JSON.stringify({ model: "claude-sonnet-4-6", max_tokens: 1500, system, tools: t, messages: toMessages(history) }),
+        body: JSON.stringify({ model: modelId, max_tokens: 1500, system, tools: t, messages: toMessages(history) }),
       });
       if (!r.ok) { console.log("[claude]", r.status, (await r.text()).slice(0, 200)); return { text: "（Claudeの応答に失敗しました）" }; }
       const data = (await r.json()) as { content?: CBlock[]; stop_reason?: string; usage?: { input_tokens?: number; output_tokens?: number } };

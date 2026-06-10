@@ -7,6 +7,7 @@ import { getApiKey } from "./client.ts";
 import { saveFile } from "./storage.ts";
 import { nowSec } from "./accounting.ts";
 import { recordUsage, recordTokens } from "./usage.ts";
+import { geminiModelId, claudeModelId } from "../core/models/config.ts";
 
 export type Skill = { id: string; name: string; description: string | null; skill_md: string; mode: string; enabled: number; created_at: number };
 
@@ -44,7 +45,7 @@ function parseSkillJSON(raw: string): SkillDraft | null {
   } catch { return null; }
 }
 async function geminiJSON(env: Env, key: string, sys: string, prompt: string): Promise<string> {
-  const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(key)}`, {
+  const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(geminiModelId(env))}:generateContent?key=${encodeURIComponent(key)}`, {
     method: "POST", headers: { "content-type": "application/json" },
     body: JSON.stringify({ systemInstruction: { parts: [{ text: sys }] }, contents: [{ role: "user", parts: [{ text: prompt }] }], generationConfig: { temperature: 0.4, maxOutputTokens: 1500 } }),
   });
@@ -56,7 +57,7 @@ async function geminiJSON(env: Env, key: string, sys: string, prompt: string): P
 async function claudeJSON(env: Env, key: string, sys: string, prompt: string): Promise<string> {
   const r = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST", headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
-    body: JSON.stringify({ model: "claude-sonnet-4-6", max_tokens: 1500, system: sys, messages: [{ role: "user", content: prompt }] }),
+    body: JSON.stringify({ model: claudeModelId(env), max_tokens: 1500, system: sys, messages: [{ role: "user", content: prompt }] }),
   });
   if (!r.ok) return "";
   const d = (await r.json()) as { content?: { text?: string }[]; usage?: { input_tokens?: number; output_tokens?: number } };
@@ -93,7 +94,7 @@ export async function runSkill(env: Env, owner: string, baseUrl: string, name: s
       method: "POST",
       headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "anthropic-beta": "code-execution-2025-05-22", "content-type": "application/json" },
       body: JSON.stringify({
-        model: "claude-sonnet-4-6", max_tokens: 4000,
+        model: claudeModelId(env), max_tokens: 4000,
         tools: [{ type: "code_execution_20250522", name: "code_execution" }],
         messages: [{ role: "user", content: `次のスキル手順に従って処理してください。\n\n# SKILL\n${skill.skill_md}\n\n# 入力\n${input}` }],
       }),
@@ -109,7 +110,7 @@ export async function runSkill(env: Env, owner: string, baseUrl: string, name: s
   const r = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
-    body: JSON.stringify({ model: "claude-sonnet-4-6", max_tokens: 4000, system: `あなたは次のスキル手順に従う作成アシスタント。本文(Markdown)のみ出力。\n\n${skill.skill_md}`, messages: [{ role: "user", content: input }] }),
+    body: JSON.stringify({ model: claudeModelId(env), max_tokens: 4000, system: `あなたは次のスキル手順に従う作成アシスタント。本文(Markdown)のみ出力。\n\n${skill.skill_md}`, messages: [{ role: "user", content: input }] }),
   });
   if (!r.ok) return "スキル実行に失敗しました。";
   const data = (await r.json()) as { content?: { text?: string }[]; usage?: { input_tokens?: number; output_tokens?: number } };

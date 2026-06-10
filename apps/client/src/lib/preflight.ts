@@ -4,7 +4,7 @@
 import type { Ctx } from "../core/ports.ts";
 import { getApiKey } from "./client.ts";
 import { getStorageUsage } from "./storage-usage.ts";
-import { monthTotals, getLimits } from "./usage.ts";
+import { monthUsd, getLimits, estimateUsd } from "./usage.ts";
 
 export type CheckKey = "env" | "permission" | "safety" | "cost";
 export type Check = { key: CheckKey; label: string; status: "ok" | "warn" | "fail"; detail: string };
@@ -45,21 +45,25 @@ export async function preflight(ctx: Ctx, d: DraftLike): Promise<PreflightResult
   else if (perms.includes("net")) checks.push({ key: "safety", label: "安全確認", status: "warn", detail: "外部送信（net）を含みます。送信先 allowlist と内容を要確認。" });
   else checks.push({ key: "safety", label: "安全確認", status: "ok", detail: "DB/ストレージへの破壊的操作なし（スコープ済み ctx・owner 限定で動作）。" });
 
-  // ④ コスト計算：推定消費トークンと当月予算の照合。
+  // ④ コスト計算：推定消費トークン→推定USDと、当月の推定費用予算（monthlyUsdCap）を照合。
+  // 旧実装は monthlyCap(回数) と token を混在表示していたため、USDベースに統一（レビューv2 §3.2/§7.3）。
   const tokens = d.estTokens && d.estTokens > 0 ? d.estTokens : Math.min(20000, Math.ceil(defStr.length / 3) + 2000);
-  const limits = await getLimits(env).catch(() => ({} as Record<string, { monthlyCap?: number }>));
-  const month = await monthTotals(env).catch(() => ({} as Record<string, number>));
-  const cap = (limits.gemini?.monthlyCap ?? limits.claude?.monthlyCap) as number | undefined;
-  const used = (month.gemini ?? 0) + (month.claude ?? 0);
+  const limits = await getLimits(env).catch(() => ({} as Record<string, { monthlyUsdCap?: number }>));
+  const month = await monthUsd(env).catch(() => ({} as Record<string, number>));
+  // 草案段階ではモデル未確定のため、保守的に高い方（claude）の単価で 1実行分を見積もる。
+  const estJobUsd = Math.max(estimateUsd(env, "claude", tokens, tokens), estimateUsd(env, "gemini", tokens, tokens));
+  const usdCap = (limits.gemini?.monthlyUsdCap ?? limits.claude?.monthlyUsdCap) as number | undefined;
+  const usedUsd = (month.gemini ?? 0) + (month.claude ?? 0);
+  const fmtUsd = (n: number) => "$" + n.toFixed(n < 1 ? 4 : 2);
   let costStatus: Check["status"] = "ok";
-  let costDetail = `推定消費 ~${tokens.toLocaleString()} tokens/実行。`;
-  if (cap && cap > 0) {
-    const remain = cap - used;
-    costDetail += ` 当月予算 残り ~${Math.max(0, remain).toLocaleString()}/${cap.toLocaleString()} tokens。`;
+  let costDetail = `推定消費 ~${tokens.toLocaleString()} tokens/実行（推定 ~${fmtUsd(estJobUsd)}）。`;
+  if (usdCap && usdCap > 0) {
+    const remain = usdCap - usedUsd;
+    costDetail += ` 当月予算 残り ~${fmtUsd(Math.max(0, remain))}/${fmtUsd(usdCap)}。`;
     if (remain <= 0) { costStatus = "fail"; costDetail += " 予算超過のため実行不可。"; }
-    else if (tokens > remain) { costStatus = "warn"; costDetail += " 1実行で予算を超える可能性。"; }
+    else if (estJobUsd > remain) { costStatus = "warn"; costDetail += " 1実行で予算を超える可能性。"; }
   } else {
-    costDetail += " 月次予算は［高度なオプション → API使用量］で設定・確認できます。";
+    costDetail += " 月次の費用上限は［高度なオプション → API使用量］で設定・確認できます。";
   }
   checks.push({ key: "cost", label: "コスト計算", status: costStatus, detail: costDetail });
 

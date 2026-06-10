@@ -13,13 +13,14 @@ import { autonomyReady, AUTONOMY_TOOLS, AUTONOMY_POLICY, runAutonomyTool } from 
 import { localChatModel } from "../core/models/local.ts";
 import { geminiModel } from "../core/models/gemini.ts";
 import { claudeModel } from "../core/models/claude.ts";
+import { geminiModelId, claudeModelId } from "../core/models/config.ts";
 import "../parts/index.ts"; // 組み込みパーツを登録（副作用・移植性アーキ §4）
 import { webSearch, makeDocument } from "./media-ai.ts";
 import { listSkills, runSkill, generateSkill } from "./skills.ts";
 import { createDraft } from "./external-apps.ts";
 import { listCapabilities, invokeCapability, capabilitySummary, videoStatusText } from "./capabilities.ts";
 import { getAiEngine, getCustomPrompt } from "./settings.ts";
-import { recordUsage, recordTokens, overBudget } from "./usage.ts";
+import { recordUsage, recordTokens, overBudget, estimateUsd } from "./usage.ts";
 import { needsApproval, getApprovalMode, createApproval, previewFor, A2A_OUTWARD } from "./approvals.ts";
 
 const SYSTEM =
@@ -161,14 +162,14 @@ export async function runAgent(ctx: Ctx, owner: string, text: string, image?: { 
     if (useClaude) {
       const b = await overBudget(env, "claude");
       if (b === "pause") return "Claudeの今月の利用上限に達しました（設定 → API使用量 で変更できます）。";
-      if (b !== "switch_free") { await recordUsage(env, "claude"); model = claudeModel(claudeKey!); provider = "claude"; }
+      if (b !== "switch_free") { await recordUsage(env, "claude"); model = claudeModel(claudeKey!, claudeModelId(env)); provider = "claude"; }
       else if (!geminiKey) return "Claudeの上限に達しました（Gemini未設定のため停止）。設定で上限を変更してください。";
     }
     if (!model) {
       if (!geminiKey) return "選択中のエンジンが未設定です。『設定 → 連携設定』で Gemini APIキーを登録するか、エンジンを Claude に切り替えてください。";
       const gb = await overBudget(env, "gemini");
       if (gb !== "ok") return "Geminiの今月の利用上限に達しました（設定 → API使用量 で変更できます）。";
-      await recordUsage(env, "gemini"); model = geminiModel(geminiKey); provider = "gemini";
+      await recordUsage(env, "gemini"); model = geminiModel(geminiKey, geminiModelId(env)); provider = "gemini";
     }
   }
   const first = { text: text || "（依頼）", image: provider === "claude" ? undefined : image };
@@ -176,6 +177,15 @@ export async function runAgent(ctx: Ctx, owner: string, text: string, image?: { 
   // 実費計測（P0-2）：本体＋子エージェントの全hopの消費tokenを合算し、ループ後にまとめて記録する。
   const usageAcc: TokenUsage = { inputTokens: 0, outputTokens: 0 };
   const onUsage = (u: TokenUsage) => { usageAcc.inputTokens += u.inputTokens; usageAcc.outputTokens += u.outputTokens; };
+
+  // 1ジョブ単位のコストcap（P3）。env.AI_MAX_JOB_USD で設定（未設定＝無制限）。
+  // 親＋子エージェント＋ツールループ全体の累積推定USDが上限に達したら hop を打ち切る。
+  const jobUsdCap = Number(env.AI_MAX_JOB_USD ?? "");
+  const abort = jobUsdCap > 0
+    ? () => estimateUsd(env, provider, usageAcc.inputTokens, usageAcc.outputTokens) >= jobUsdCap
+        ? `1回の処理の費用上限（$${jobUsdCap}）に達したため停止しました。設定（高度なオプション）で上限を変更できます。`
+        : null
+    : undefined;
 
   // 子エージェント起動（同じモデルを使い回す）。役割の道具だけを見せ、ネスト委譲は不可。
   const subDeclsFor = (subTools: AgentTool[]) => [
@@ -189,7 +199,7 @@ export async function runAgent(ctx: Ctx, owner: string, text: string, image?: { 
     const subTools = opts.unattended ? subToolsRaw.filter((t) => t.unattended !== false) : subToolsRaw;
     const subExec = (n: string, a: Record<string, unknown>) => execTool(ctx, owner, baseUrl, n, a, role, subTools);
     await recordUsage(env, provider); // 子エージェント分のコストも計上
-    return runToolLoop(model!, `${ROLES[roleKey].system}\n割り当てられたタスクのみを遂行し、結果を簡潔に返す。`, { text: task || "（タスク）" }, subDeclsFor(subTools), subExec, 3, [], onUsage);
+    return runToolLoop(model!, `${ROLES[roleKey].system}\n割り当てられたタスクのみを遂行し、結果を簡潔に返す。`, { text: task || "（タスク）" }, subDeclsFor(subTools), subExec, 3, [], onUsage, abort);
   }
 
   const cap = await maxParallelAgents(env);
@@ -226,7 +236,7 @@ export async function runAgent(ctx: Ctx, owner: string, text: string, image?: { 
   };
 
   const hops = await agentMaxHops(env);
-  const out = await runToolLoop(model, sys, first, decls as ToolDecl[], exec, hops, history, onUsage);
+  const out = await runToolLoop(model, sys, first, decls as ToolDecl[], exec, hops, history, onUsage, abort);
   await recordTokens(env, provider, usageAcc); // 実費（input/output token・推定USD）を記録（P0-2）
   return out;
 }
