@@ -1,6 +1,7 @@
 import { defineMiddleware } from "astro:middleware";
 import { getToken } from "./lib/client.ts";
 import { ensureSchema } from "./lib/migrate.ts";
+import { bootCheck } from "./lib/boot-check.ts";
 import { buildCtx } from "./core/ctx.ts";
 
 // XSS の最終防衛線。is:inline スクリプト多数のため script/style は 'unsafe-inline' 許容（nonce移行は別課題）。
@@ -35,6 +36,8 @@ export const onRequest = defineMiddleware(async (context, next) => {
 
   // DBスキーマを最新へ自動適用（自己ホスト・upstream更新で増えた分を初回に反映）。
   await ensureSchema(env);
+  // 本番の env 設定漏れを初回1回だけ点検し診断へ（§7・action#7）。
+  await bootCheck(env);
 
   const exempt = pathname.startsWith("/activate") || pathname.startsWith("/api/") || pathname.includes(".");
   if (exempt) return withSec(await next());
