@@ -1,6 +1,6 @@
 import type { APIRoute } from "astro";
 import { getSession } from "../../lib/auth.ts";
-import { saveFile, softDeleteFile, audit } from "../../lib/storage.ts";
+import { saveFile, softDeleteFileForSession, audit } from "../../lib/storage.ts";
 
 export const prerender = false;
 const json = (o: unknown, s = 200) => new Response(JSON.stringify(o), { status: s, headers: { "content-type": "application/json" } });
@@ -15,8 +15,10 @@ export const POST: APIRoute = async ({ request, locals }) => {
   if (ct.includes("application/json")) {
     const b = (await request.json().catch(() => ({}))) as { _action?: string; id?: string };
     if (b._action === "delete" && b.id) {
-      await softDeleteFile(env, b.id);
-      await audit(env, ses.uid, "file.delete", b.id);
+      // 所有者/ロール検査つき削除（P0-1）。スコープ外なら未変更＝404＋拒否を監査に残す。
+      const ok = await softDeleteFileForSession(env, b.id, ses);
+      await audit(env, ses.uid, ok ? "file.delete" : "file.delete.denied", b.id);
+      if (!ok) return json({ error: "not found" }, 404);
       return json({ ok: true });
     }
     return json({ error: "不明な操作" }, 400);
@@ -26,7 +28,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
   const file = form.get("file");
   if (!(file instanceof File)) return json({ error: "file がありません" }, 400);
   try {
-    const r = await saveFile(env, file, ses.uid);
+    const r = await saveFile(env, file, ses.uid, ses.ctx);
     await audit(env, ses.uid, "file.upload", r.id);
     return json({ ok: true, id: r.id, mode: r.mode });
   } catch (e) {

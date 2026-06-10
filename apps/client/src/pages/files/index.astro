@@ -5,8 +5,8 @@ const env = Astro.locals.runtime.env;
 const { getSession } = await import("../../lib/auth.ts");
 const ses = await getSession(env, Astro.request);
 if (!ses) return Astro.redirect("/login", 302);
-const { listFiles, storageMode } = await import("../../lib/storage.ts");
-const files = await listFiles(env);
+const { listFilesForSession, storageMode } = await import("../../lib/storage.ts");
+const files = await listFilesForSession(env, ses);
 const mode = storageMode(env);
 const kb = (n: number) => (n < 1024 ? n + " B" : (n / 1024).toFixed(1) + " KB");
 ---

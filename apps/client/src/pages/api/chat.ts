@@ -27,7 +27,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
       const bin = atob(b.image.dataB64);
       const ext = b.image.mimeType.includes("pdf") ? "pdf" : (b.image.mimeType.split("/")[1] || "bin");
       const file = new File([Uint8Array.from(bin, (c) => c.charCodeAt(0))], `upload-${nowSec()}.${ext}`, { type: b.image.mimeType });
-      const saved = await saveFile(env, file, ses.uid);
+      const saved = await saveFile(env, file, ses.uid, ses.ctx);
       prompt = `${prompt}\n\n（添付ファイルを保存しました: file_id=${saved.id}。請求書/領収書なら register_invoice に file_id を渡して登録してください。）`;
     } catch { /* 保存失敗時は通常処理を続ける */ }
   }
