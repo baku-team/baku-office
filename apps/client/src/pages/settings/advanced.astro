@@ -207,9 +207,11 @@ const curMax = hasPlus ? await maxUploadMb(env) : 5;
       if (ghBtn) ghBtn.addEventListener("click", async (e) => {
         const s = await window.bo.api("/api/autopilot", { _action: "gh_start" }, { btn: e.currentTarget, successMsg: null });
         if (!s.ok || !s.data.ok) { window.bo.toast(s.data?.error || "開始に失敗", "err"); return; }
+        const esc = (v) => String(v == null ? "" : v).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
         const box = document.getElementById("ghCode");
         box.hidden = false;
-        box.innerHTML = 'GitHubで <a href="' + s.data.verification_uri + '" target="_blank" rel="noopener"><strong>認証ページ</strong></a> を開き、コード <strong style="font-size:1.1rem">' + s.data.user_code + '</strong> を入力して許可してください。<div class="muted" style="margin-top:4px">承認を待っています…</div>';
+        const vuri = /^https:\/\//.test(s.data.verification_uri || "") ? s.data.verification_uri : "#";
+        box.innerHTML = 'GitHubで <a href="' + esc(vuri) + '" target="_blank" rel="noopener"><strong>認証ページ</strong></a> を開き、コード <strong style="font-size:1.1rem">' + esc(s.data.user_code) + '</strong> を入力して許可してください。<div class="muted" style="margin-top:4px">承認を待っています…</div>';
         const interval = (s.data.interval || 5) * 1000;
         const deviceCode = s.data.device_code;
         const poll = async () => {
@@ -220,12 +222,12 @@ const curMax = hasPlus ? await maxUploadMb(env) : 5;
             const rr = await window.bo.api("/api/autopilot", { _action: "gh_repos" }, { successMsg: null });
             const repos = (rr.ok && rr.data.repos) || [];
             const rb = document.getElementById("ghRepoBox"); const sel = document.getElementById("ghRepoSel");
-            sel.innerHTML = repos.map((x) => '<option value="' + x + '">' + x + "</option>").join("") || '<option value="">（リポが見つかりません）</option>';
+            sel.innerHTML = repos.map((x) => '<option value="' + esc(x) + '">' + esc(x) + "</option>").join("") || '<option value="">（リポが見つかりません）</option>';
             rb.hidden = false;
             return;
           }
           if (p.ok && p.data.pending) { setTimeout(poll, interval); return; }
-          box.innerHTML = '<span style="color:#c0392b">接続に失敗：' + (p.data?.error || "") + "</span>";
+          box.innerHTML = '<span style="color:#c0392b">接続に失敗：' + esc(p.data?.error) + "</span>";
         };
         setTimeout(poll, interval);
       });

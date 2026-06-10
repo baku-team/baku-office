@@ -118,9 +118,23 @@ if (ses) { try { unreadNotif = await (await import("../lib/notifications.ts")).c
           if (!panel.hidden) { panel.hidden = true; return; }
           const r = await api("/api/notifications", undefined, { method: "GET", successMsg: null });
           const items = (r.ok && r.data.items) || [];
-          panel.innerHTML = items.length
-            ? items.map((n: any) => `<a href="${n.link || "#"}" style="display:block;padding:8px;border-bottom:1px solid #f0f0f0;color:#222;text-decoration:none;${n.read_at ? "opacity:.55" : "font-weight:600"}">${String(n.body || "").replace(/</g, "&lt;")}</a>`).join("")
-            : '<p style="padding:10px;color:#888;font-size:.85rem;margin:0">通知はありません</p>';
+          panel.replaceChildren();
+          if (items.length) {
+            for (const n of items as any[]) {
+              const a = document.createElement("a");
+              const link = String(n.link || "#");
+              // javascript: 等のスキーム注入を排除し、相対/http(s)/#のみ許可。
+              a.href = /^(https?:|\/|#)/.test(link) ? link : "#";
+              a.style.cssText = "display:block;padding:8px;border-bottom:1px solid #f0f0f0;color:#222;text-decoration:none;" + (n.read_at ? "opacity:.55" : "font-weight:600");
+              a.textContent = String(n.body || "");
+              panel.appendChild(a);
+            }
+          } else {
+            const p = document.createElement("p");
+            p.style.cssText = "padding:10px;color:#888;font-size:.85rem;margin:0";
+            p.textContent = "通知はありません";
+            panel.appendChild(p);
+          }
           panel.hidden = false;
           if (items.some((n: any) => !n.read_at)) {
             await api("/api/notifications", { _action: "read" }, { successMsg: null });
