@@ -49,8 +49,8 @@
 |----|------|------|------|
 | **3-1（決着）** | ゼロ設定とSecret必須の衝突 | **方針確定：ゼロ設定（KV鍵保管）を正式許容＋法務開示で文書化**。顧客は非エンジニアのWeb専用運用で Secret 手投入が非現実的なため。`disclosure.ts`/`legal-templates.ts`（プライバシーポリシー/規約/DPA）に「暗号鍵は団体のCFアカウント内で管理＝アカウント保護が前提」を明記。顧客環境の警告は抑制し自社本番のみ Secret 必須に。自社本番はSecret投入済み・KV残骸なし（確認済み） | ✅ 完了 |
 | **3-2（実装済み）** | 更新チェーンのトラストアンカーが TOFU（公開鍵をホストから取得） | **✅ 完了**：検証鍵を配布バンドルに**ピン留め同梱**（`deploy/release-pubkey.json`）。`prebuild-update.mjs` から `/api/release/pubkey`・`/api/pubkey` フォールバックを**廃止**（fail-closed）。更新時は鍵も置換＝ローテーション運搬。`release.yml` に「同梱鍵＝署名鍵」整合＋署名ラウンドトリップの**CIガード**（不一致なら公開中止）。ローテーション手順は OPERATIONS A-0b | ✅ |
-| **4-2** | 公開LP XSS が自作サニタイザ一枚 | 公開LPページを nonce ベース CSP へ移行し多層化 | 中 |
-| **4-3** | deploy_code 先勝ちDoS（host `/api/deploy-report`） | Google ログイン突合(§2.7)を正とし deploy-report は仮登録扱いに | 中 |
+| **4-2（実装済み）** | 公開LP XSS が自作サニタイザ一枚 | **✅ 完了**：公開LP（`SitePublic.astro`）を **nonce ベース CSP** へ移行。script-src から `'unsafe-inline'` を外し、申込フォームのインライン script のみ nonce 許可（サニタイザのバイパスに備えた多層化） | ✅ |
+| **4-3（実装済み）** | deploy_code 先勝ちDoS（host `/api/deploy-report`） | **✅ 完了**：`deploy_url_verified` 列を追加し、deploy-report は**仮登録**（未確定時のみ）＋IPレート制限、`activate-by-email`（Googleログイン突合）が**確定**（verified=1・上書き）。攻撃者の仮登録は認証経路で是正される | ✅ |
 | **5** | `verifyStripeSig` が host/client で重複 | セキュリティクリティカルなので `packages/shared` へ一本化 | 低〜中 |
 | **5** | 静的認可テストの限界 | files の IDOR ランタイムテスト方式を他ルートへ展開 | 低 |
 

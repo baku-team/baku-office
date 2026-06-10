@@ -6,9 +6,12 @@ import { sanitizeHtml } from "../lib/sanitize.ts";
 interface Props { site: { title: string; body: string | null; show_join: number } }
 const { site } = Astro.props as Props;
 const safeBody = sanitizeHtml(site.body ?? "");
-// 公開ページ用 CSP。インラインは申込フォーム script と本レイアウト style のみ（managed）。
-// 管理者HTMLからのスクリプトは sanitizer で除去済みのため script-src はインライン許容でも実害は最小化される。
-const CSP = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'";
+// 公開ページ用 CSP（§4-2：多層化）。script は【nonce ベース】で本レイアウト由来の申込フォームのみ許可し、
+// 'unsafe-inline' を外す。WHY: 管理者HTMLからのスクリプトは sanitizer で除去済みだが、自作サニタイザの
+// バイパス（mXSS等）に備え、nonce の無いインライン script は CSP 段でも実行させない（防御の二重化）。
+// style はリクエストごとに変わらないため 'unsafe-inline' を維持（管理者HTMLの style 属性を壊さないため）。
+const nonce = Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, "0")).join("");
+const CSP = `default-src 'self'; script-src 'self' 'nonce-${nonce}'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'`;
 ---
 <!doctype html>
 <html lang="ja">
@@ -48,7 +51,7 @@ const CSP = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 's
       )}
     </main>
 
-    <script is:inline>
+    <script is:inline nonce={nonce}>
       const f = document.getElementById("joinForm");
       if (f) f.addEventListener("submit", async (e) => {
         e.preventDefault();
