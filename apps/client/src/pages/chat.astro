@@ -6,10 +6,13 @@ const env = Astro.locals.runtime.env;
 const { getSession } = await import("../lib/auth.ts");
 const ses = await getSession(env, Astro.request);
 if (!ses) return Astro.redirect("/login", 302);
-const { cachedEntitlement } = await import("../lib/client.ts");
+const { cachedEntitlement, hasApiKey } = await import("../lib/client.ts");
 const entitlement = await cachedEntitlement(env).catch(() => "free" as const);
 const hasPlus = atLeast(entitlement, "plus");
 const hasPro = atLeast(entitlement, "pro");
+// API未登録（Gemini/Claudeキー無し）なら Workers AI（CF稼働）を既定に。
+const [hasGemini, hasClaude] = await Promise.all([hasApiKey(env, "gemini").catch(() => false), hasApiKey(env, "claude").catch(() => false)]);
+const defaultModel = (!hasGemini && !hasClaude && env.AI) ? "local" : (hasGemini ? "gemini" : hasClaude ? "claude" : "gemini");
 // claude はキー登録時のみ実用。選択肢は出すが、未設定なら gemini にフォールバックする（サーバ側）。
 const { listSessions } = await import("../lib/chat-sessions.ts");
 const sessions = hasPlus ? await listSessions(Astro.locals.ctx, ses.uid).catch(() => []) : [];
@@ -45,15 +48,15 @@ const skills = hasPlus && isOrgAdmin ? await listSkills(env).catch(() => []) : [
         <section class="pane">
           <div class="cbar">
             <div class="model-seg" id="model-seg" role="group" aria-label="モデル選択">
-              <button class="model-opt on" type="button" data-m="gemini">Gemini<small>標準・無料</small></button>
-              <button class="model-opt" type="button" data-m="claude">Claude<small>高精度・要キー</small></button>
-              <button class="model-opt" type="button" data-m="local">クラウドAI<small>Workers AI・無料枠</small></button>
+              <button class={"model-opt" + (defaultModel === "gemini" ? " on" : "")} type="button" data-m="gemini">Gemini<small>標準・無料</small></button>
+              <button class={"model-opt" + (defaultModel === "claude" ? " on" : "")} type="button" data-m="claude">Claude<small>高精度・要キー</small></button>
+              <button class={"model-opt" + (defaultModel === "local" ? " on" : "")} type="button" data-m="local">クラウドAI<small>Workers AI・無料枠</small></button>
             </div>
             {/* スクリプト互換のため hidden で値を保持 */}
             <select id="model" hidden>
-              <option value="gemini">Gemini（標準・無料枠）</option>
-              <option value="claude">Claude（高精度・要キー）</option>
-              <option value="local">クラウドAI（Workers AI・無料枠）</option>
+              <option value="gemini" selected={defaultModel === "gemini"}>Gemini（標準・無料枠）</option>
+              <option value="claude" selected={defaultModel === "claude"}>Claude（高精度・要キー）</option>
+              <option value="local" selected={defaultModel === "local"}>クラウドAI（Workers AI・無料枠）</option>
             </select>
             <button class="btn btn-sm ses-toggle" type="button" id="ses-toggle">会話履歴</button>
           </div>

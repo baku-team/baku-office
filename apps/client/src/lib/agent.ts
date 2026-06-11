@@ -12,6 +12,7 @@ import { callPartner, groupRelayCall } from "./a2a.ts";
 import { autonomyReady, AUTONOMY_TOOLS, AUTONOMY_POLICY, runAutonomyTool } from "./autonomy.ts";
 import { localChatModel } from "../core/models/local.ts";
 import { workersAiChatModel } from "../core/models/workers-ai.ts";
+import { fallbackChatModel } from "../core/models/fallback.ts";
 import { geminiModel } from "../core/models/gemini.ts";
 import { claudeModel } from "../core/models/claude.ts";
 import { geminiModelId, claudeModelId, workersAiModelId } from "../core/models/config.ts";
@@ -184,6 +185,11 @@ export async function runAgent(ctx: Ctx, owner: string, text: string, image?: { 
       await recordUsage(env, "gemini"); model = geminiModel(geminiKey, geminiModelId(env)); provider = "gemini";
     }
   }
+  // Gemini/Claude が通信制限/障害になったら Workers AI へ自動切替し事情を説明（CF稼働時のみ）。
+  let fellBack = false;
+  if (model && (provider === "gemini" || provider === "claude") && env.AI) {
+    model = fallbackChatModel(model, workersAiChatModel(env.AI, workersAiModelId(env)), () => { fellBack = true; });
+  }
   const first = { text: text || "（依頼）", image: provider === "claude" ? undefined : image };
 
   // 実費計測（P0-2）：本体＋子エージェントの全hopの消費tokenを合算し、ループ後にまとめて記録する。
@@ -249,7 +255,12 @@ export async function runAgent(ctx: Ctx, owner: string, text: string, image?: { 
 
   const hops = await agentMaxHops(env);
   const out = await runToolLoop(model, sys, first, decls as ToolDecl[], exec, hops, history, onUsage, abort);
-  await recordTokens(env, provider, usageAcc); // 実費（input/output token・推定USD）を記録（P0-2）
+  // フォールバック発生時は Workers AI 分の消費を workers_ai 側に計上（実費の取り違え防止）。
+  await recordTokens(env, fellBack ? "workers_ai" : provider, usageAcc);
+  if (fellBack) {
+    await recordUsage(env, "workers_ai");
+    return "⚠️ 通常のAI（Gemini/Claude）が一時的に利用できないため、Cloudflare Workers AI に切り替えて対応しました。会計登録・検索などのツール操作は一時的に行えません。\n\n" + out;
+  }
   return out;
 }
 

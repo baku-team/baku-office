@@ -30,12 +30,15 @@ export function geminiModel(key: string, modelId: string = DEFAULT_MODELS.gemini
   return {
     name: modelId,
     async turn(system, history, tools) {
-      const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelId)}:generateContent?key=${encodeURIComponent(key)}`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ systemInstruction: { parts: [{ text: system }] }, contents: toContents(history), tools: [{ functionDeclarations: tools as ToolDecl[] }], generationConfig: { temperature: 0.3, maxOutputTokens: 800 } }),
-      });
-      if (!r.ok) { console.log("[gemini]", r.status, (await r.text()).slice(0, 200)); return { text: "（AIの応答に失敗しました）" }; }
+      let r: Response;
+      try {
+        r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelId)}:generateContent?key=${encodeURIComponent(key)}`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ systemInstruction: { parts: [{ text: system }] }, contents: toContents(history), tools: [{ functionDeclarations: tools as ToolDecl[] }], generationConfig: { temperature: 0.3, maxOutputTokens: 800 } }),
+        });
+      } catch (e) { return { error: { message: "gemini network: " + ((e as Error).message ?? String(e)) } }; }
+      if (!r.ok) { const body = (await r.text()).slice(0, 200); console.log("[gemini]", r.status, body); return { error: { status: r.status, message: `gemini ${r.status}: ${body}` } }; }
       const data = (await r.json()) as { candidates?: { content?: GContent }[]; usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number } };
       const usage = { inputTokens: data.usageMetadata?.promptTokenCount ?? 0, outputTokens: data.usageMetadata?.candidatesTokenCount ?? 0 };
       const parts = data.candidates?.[0]?.content?.parts ?? [];

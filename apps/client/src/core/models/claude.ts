@@ -27,12 +27,15 @@ export function claudeModel(key: string, modelId: string = DEFAULT_MODELS.claude
     name: modelId,
     async turn(system, history, tools) {
       const t = (tools as ToolDecl[]).map((d) => ({ name: d.name, description: d.description, input_schema: d.parameters }));
-      const r = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
-        body: JSON.stringify({ model: modelId, max_tokens: 1500, system, tools: t, messages: toMessages(history) }),
-      });
-      if (!r.ok) { console.log("[claude]", r.status, (await r.text()).slice(0, 200)); return { text: "（Claudeの応答に失敗しました）" }; }
+      let r: Response;
+      try {
+        r = await fetch("https://api.anthropic.com/v1/messages", {
+          method: "POST",
+          headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+          body: JSON.stringify({ model: modelId, max_tokens: 1500, system, tools: t, messages: toMessages(history) }),
+        });
+      } catch (e) { return { error: { message: "claude network: " + ((e as Error).message ?? String(e)) } }; }
+      if (!r.ok) { const body = (await r.text()).slice(0, 200); console.log("[claude]", r.status, body); return { error: { status: r.status, message: `claude ${r.status}: ${body}` } }; }
       const data = (await r.json()) as { content?: CBlock[]; stop_reason?: string; usage?: { input_tokens?: number; output_tokens?: number } };
       const usage = { inputTokens: data.usage?.input_tokens ?? 0, outputTokens: data.usage?.output_tokens ?? 0 };
       const content = data.content ?? [];
