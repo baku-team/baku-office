@@ -18,12 +18,13 @@ export const POST: APIRoute = async ({ request, locals }) => {
   const incoming = b.limits ?? {};
   const clean: Limits = {};
   for (const [prov, v] of Object.entries(incoming)) {
-    const fq = Number(v?.freeQuota); const mc = Number(v?.monthlyCap); const uc = Number(v?.monthlyUsdCap);
+    const fq = Number(v?.freeQuota); const mc = Number(v?.monthlyCap); const uc = Number(v?.monthlyUsdCap); const nc = Number(v?.monthlyNeuronCap);
     const onExceed = v?.onExceed === "switch_free" ? "switch_free" : "pause";
     clean[prov] = {
       ...(Number.isFinite(fq) && fq > 0 ? { freeQuota: Math.round(fq) } : {}),
       ...(Number.isFinite(mc) && mc > 0 ? { monthlyCap: Math.round(mc) } : {}),
       ...(Number.isFinite(uc) && uc > 0 ? { monthlyUsdCap: Math.round(uc * 100) / 100 } : {}),
+      ...(Number.isFinite(nc) && nc > 0 ? { monthlyNeuronCap: Math.round(nc) } : {}),
       onExceed,
     };
   }

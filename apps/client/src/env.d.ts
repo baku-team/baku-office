@@ -40,6 +40,7 @@ interface Env {
   // モデルID/単価の上書き（未設定＝既定値）。価格改定・モデル移行・廃止にコード変更なしで追随（core/models/config.ts）。
   GEMINI_MODEL?: string;
   CLAUDE_MODEL?: string;
+  WORKERS_AI_MODEL?: string; // Workers AI のテキストモデルID（既定 @cf/meta/llama-3.1-8b-instruct）
   MODEL_PRICING?: string; // JSON: {"gemini":{"in":0.3,"out":2.5},"claude":{"in":3,"out":15}}
   // 1回のAI処理（親+子+ツールループ全体）の推定USD上限。超過でhop打ち切り（未設定＝無制限・P3）。
   AI_MAX_JOB_USD?: string;
