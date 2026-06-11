@@ -44,13 +44,18 @@ const skills = hasPlus && isOrgAdmin ? await listSkills(env).catch(() => []) : [
         </aside>
         <section class="pane">
           <div class="cbar">
-            <label class="muted" style="font-size:.82rem">モデル：
-              <select id="model">
-                <option value="gemini">Gemini（標準・無料枠）</option>
-                <option value="claude">Claude（高精度・要キー）</option>
-                <option value="local">ローカル（簡易）</option>
-              </select>
-            </label>
+            <div class="model-seg" id="model-seg" role="group" aria-label="モデル選択">
+              <button class="model-opt on" type="button" data-m="gemini">Gemini<small>標準・無料</small></button>
+              <button class="model-opt" type="button" data-m="claude">Claude<small>高精度・要キー</small></button>
+              <button class="model-opt" type="button" data-m="local">ローカル<small>簡易</small></button>
+            </div>
+            {/* スクリプト互換のため hidden で値を保持 */}
+            <select id="model" hidden>
+              <option value="gemini">Gemini（標準・無料枠）</option>
+              <option value="claude">Claude（高精度・要キー）</option>
+              <option value="local">ローカル（簡易）</option>
+            </select>
+            <button class="btn btn-sm ses-toggle" type="button" id="ses-toggle">会話履歴</button>
           </div>
           <div id="log"></div>
           {hasPro && (
@@ -98,6 +103,16 @@ const skills = hasPlus && isOrgAdmin ? await listSkills(env).catch(() => []) : [
         const sel = document.getElementById("model");
         // ホームの相棒プロンプトからの ?q= を入力欄に反映。
         try { const q = new URLSearchParams(location.search).get("q"); if (q) { const m = document.getElementById("msg"); if (m) { m.value = q; m.focus(); } } } catch (e) { /* noop */ }
+        // モデルセグメント：選択を hidden select(#model) に同期（既存ロジック互換）。
+        const mseg = document.getElementById("model-seg");
+        if (mseg && sel) mseg.querySelectorAll(".model-opt").forEach((b) => b.addEventListener("click", () => {
+          mseg.querySelectorAll(".model-opt").forEach((x) => x.classList.toggle("on", x === b));
+          sel.value = b.dataset.m;
+        }));
+        // 会話履歴トグル（モバイル）。
+        const sesToggle = document.getElementById("ses-toggle");
+        const chatBox = document.querySelector(".chat");
+        if (sesToggle && chatBox) sesToggle.addEventListener("click", () => chatBox.classList.toggle("show-ses"));
         let sessionId = "";
         const esc = (s) => s.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
         function dload(text, ext, mime) {
@@ -118,15 +133,20 @@ const skills = hasPlus && isOrgAdmin ? await listSkills(env).catch(() => []) : [
         function addMsg(role, text) {
           const d = document.createElement("div");
           d.className = "cmsg " + role;
-          d.innerHTML = '<div class="cbub">' + esc(text).replace(/\n/g, "<br>") + "</div>";
+          const bub = '<div class="cbub">' + esc(text).replace(/\n/g, "<br>") + "</div>";
           if (role === "a") {
+            // 相棒オーブ＋本文（DLリンクは本文側に付ける）。
+            d.innerHTML = '<span class="orb cmsg-orb" aria-hidden="true"></span><div class="cmsg-body">' + bub + "</div>";
+            const body = d.querySelector(".cmsg-body");
             const dl = document.createElement("div"); dl.className = "cdl"; dl.append("DL：");
             [["txt", "text/plain"], ["md", "text/markdown"], ["html", "text/html"], ["csv", "text/csv"], ["pdf", ""]].forEach(([ext, mime]) => {
               const a = document.createElement("a"); a.href = "#"; a.textContent = ext.toUpperCase();
               a.addEventListener("click", (e) => { e.preventDefault(); dload(text, ext, mime); });
               dl.appendChild(a);
             });
-            d.appendChild(dl);
+            body.appendChild(dl);
+          } else {
+            d.innerHTML = bub;
           }
           log.appendChild(d); log.scrollTop = log.scrollHeight;
         }
@@ -236,7 +256,12 @@ const skills = hasPlus && isOrgAdmin ? await listSkills(env).catch(() => []) : [
 
 <style>
   .chat { display: grid; grid-template-columns: 248px 1fr; gap: 18px; align-items: start; }
-  @media (max-width: 720px) { .chat { grid-template-columns: 1fr; } }
+  @media (max-width: 720px) {
+    .chat { grid-template-columns: 1fr; }
+    .sbar { display: none; }
+    .chat.show-ses .sbar { display: flex; }
+    .ses-toggle { display: inline-flex; }
+  }
   .sbar { display: flex; flex-direction: column; gap: 12px; position: sticky; top: 84px; }
   .ses-list { display: flex; flex-direction: column; gap: 3px; max-height: 56vh; overflow-y: auto; }
   .ses-row { display: flex; align-items: center; gap: 9px; border-radius: var(--r-sm); padding: 2px 4px; transition: background .15s; }
@@ -247,12 +272,19 @@ const skills = hasPlus && isOrgAdmin ? await listSkills(env).catch(() => []) : [
   .ses-del { border: none; background: none; color: var(--faint); cursor: pointer; font-size: 1rem; line-height: 1; padding: 2px 8px; border-radius: var(--r-xs); }
   .ses-del:hover { color: var(--danger); }
   .pane { min-width: 0; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md); padding: 16px; box-shadow: var(--shadow-sm); }
-  .cbar { display: flex; gap: 12px; align-items: center; justify-content: space-between; margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
-  .cbar select { font: inherit; padding: 7px 12px; border: 1px solid var(--line-strong); border-radius: var(--r-sm); background: var(--surface); color: var(--ink); }
+  .cbar { display: flex; gap: 12px; align-items: center; justify-content: space-between; margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+  .model-seg { display: inline-flex; gap: 3px; background: var(--surface-3); padding: 4px; border-radius: var(--r-pill); }
+  .model-opt { display: inline-flex; align-items: center; gap: 6px; border: 0; background: transparent; padding: 7px 13px; border-radius: var(--r-pill); font-size: .82rem; font-weight: 600; color: var(--muted); cursor: pointer; }
+  .model-opt small { font-weight: 500; font-size: .7rem; color: var(--faint); }
+  .model-opt.on { background: var(--surface); color: var(--brand-strong); box-shadow: var(--shadow-sm); }
+  .model-opt.on small { color: var(--muted); }
+  .ses-toggle { display: none; }
   #log { border: 1px solid var(--line); border-radius: var(--r); padding: 18px; min-height: 240px; max-height: 52vh; overflow-y: auto; background: var(--surface-2); display: flex; flex-direction: column; gap: 16px; }
-  .cmsg { max-width: 86%; }
+  .cmsg { max-width: 86%; display: flex; gap: 10px; }
   .cmsg.u { align-self: flex-end; }
   .cmsg.a { align-self: flex-start; }
+  .cmsg-orb { width: 26px; height: 26px; flex: 0 0 auto; margin-top: 2px; }
+  .cmsg-body { min-width: 0; display: flex; flex-direction: column; gap: 6px; }
   .cbub { padding: 12px 16px; border-radius: 16px; font-size: .92rem; line-height: 1.6; }
   .cmsg.u .cbub { background: var(--primary-bg); color: var(--primary-ink); border-top-right-radius: 4px; }
   .cmsg.a .cbub { background: var(--surface); color: var(--ink); border: 1px solid var(--line); border-top-left-radius: 4px; }

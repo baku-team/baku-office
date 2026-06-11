@@ -105,6 +105,28 @@ code, kbd, samp, pre { font-family: var(--mono); }
   main.wrap { padding-bottom: 96px; }
 }
 
+/* ナビ3形態（上部/サイド/下部）。html[data-nav=top|side|bottom] で切替（pref=localStorage bo_nav・既定top）。 */
+.app { min-height: 100vh; }
+.shell { min-width: 0; }
+[data-nav="side"] .app { display: flex; flex-direction: row; align-items: flex-start; }
+[data-nav="side"] .shell { flex: 1; min-width: 0; }
+.sidebar { display: none; }
+[data-nav="side"] .sidebar { display: flex; flex-direction: column; gap: 6px; width: 240px; flex: 0 0 240px; position: sticky; top: 0; height: 100vh; padding: 16px 12px; background: var(--surface); border-right: 1px solid var(--line); }
+.sidebar .sb-brand { display: flex; align-items: center; gap: .5rem; padding: 6px 10px 14px; font-weight: 800; color: var(--ink); text-decoration: none; }
+.sidebar .sb-brand .mark { width: 28px; height: 28px; }
+.sidebar .sb-nav { display: flex; flex-direction: column; gap: 4px; }
+.sidebar .sb-nav a { display: flex; align-items: center; gap: 10px; padding: 11px 14px; border-radius: 12px; color: var(--muted); font-weight: 600; font-size: .95rem; text-decoration: none; }
+.sidebar .sb-nav a svg { width: 19px; height: 19px; }
+.sidebar .sb-nav a:hover { background: var(--surface-3); color: var(--ink); }
+.sidebar .sb-nav a[aria-current="page"] { background: var(--brand-soft); color: var(--brand-strong); }
+/* 形態ごとの表示切替 */
+[data-nav="side"] .appbar .nav, [data-nav="bottom"] .appbar .nav { display: none; }
+[data-nav="bottom"] .tabbar { display: flex; }
+@media (max-width: 720px) {
+  [data-nav="side"] .app { flex-direction: column; }
+  [data-nav="side"] .sidebar { display: none; }
+}
+
 /* Layout */
 main.wrap { max-width: var(--maxw); margin: 0 auto; padding: 1.5rem 1.1rem 4rem; }
 h1 { font-size: clamp(1.5rem, 3vw, 1.95rem); margin: .2rem 0 1.2rem; font-weight: 800; letter-spacing: -.01em; }
