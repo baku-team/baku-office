@@ -37,7 +37,7 @@ const roles = ["admin", "accounting", "clerical", "other", "member"];
     });
     document.querySelectorAll("tr[data-id]").forEach(tr=>{const id=tr.dataset.id;
       tr.querySelectorAll(".act").forEach(b=>b.addEventListener("click",async(e)=>{const r=await window.bo.api("/api/members",{_action:e.target.dataset.a,id},{btn:e.target,successMsg:"更新しました"});if(r.ok)setTimeout(()=>location.reload(),500);}));
-      const sel=tr.querySelector(".role");if(sel&&!sel.disabled)sel.addEventListener("change",async()=>{await window.bo.api("/api/members",{_action:"role",id,role:sel.value},{successMsg:"ロールを変更しました"});});
+      const sel=tr.querySelector(".role");if(sel&&!sel.disabled){let prev=sel.value;sel.addEventListener("change",async()=>{if(!(await window.bo.confirm("このメンバーのロールを「"+sel.value+"」に変更しますか？",{confirmLabel:"変更",danger:true,auditHref:"/diagnostics"}))){sel.value=prev;return;}const r=await window.bo.api("/api/members",{_action:"role",id,role:sel.value},{successMsg:"ロールを変更しました"});if(r.ok)prev=sel.value;else sel.value=prev;});}
     });
   </script>
 </App>

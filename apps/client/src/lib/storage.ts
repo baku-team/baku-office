@@ -155,6 +155,19 @@ async function deleteBlob(env: Env, ref: string): Promise<void> {
   await mediaKv(env).delete(ref.replace(/^kv:/, ""));
 }
 
+// バックアップ/復元用（P0-5）：実体を復号せずそのまま読み書きする。
+// 暗号化のままのバックアップ取得（raw）と、アーカイブからの実体書き戻し（restore）に使う。
+export async function readRawBlob(env: Env, ref: string): Promise<ArrayBuffer | null> {
+  return readBlob(env, ref, 0);
+}
+export async function putRawBlob(env: Env, ref: string, buf: ArrayBuffer): Promise<void> {
+  if (ref.startsWith("r2:") && env.MEDIA_R2) {
+    await env.MEDIA_R2.put(ref.slice(3), buf, { httpMetadata: { contentType: "application/octet-stream" } });
+    return;
+  }
+  await mediaKv(env).put(ref.replace(/^kv:/, ""), buf, { metadata: { contentType: "application/octet-stream" } });
+}
+
 // 削除ジョブ（drain から定期実行・P0-5）：
 //   1) 保持期限切れ（expires_at < now・未削除）を物理削除＋ソフトデリート印。
 //   2) ソフトデリート済みで猶予(graceDays)を過ぎたものの実体を物理削除（行は監査用に残す）。

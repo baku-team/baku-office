@@ -23,6 +23,6 @@ const { results } = await env.DB.prepare("SELECT id,title,start_at FROM schedule
   <script slot="scripts" is:inline>
     const P=(b,btn)=>window.bo.api("/api/docs",{kind:"schedule",...b},{btn});
     document.getElementById("add").addEventListener("click",async(e)=>{const t=document.getElementById("title").value,s=document.getElementById("start").value;if(!t||!s){window.bo.toast("件名と開始日時を入力","err");return;}const r=await P({title:t,start_at:s},e.currentTarget);if(r.ok)setTimeout(()=>location.reload(),500);});
-    document.querySelectorAll("tr[data-id] .del").forEach(b=>b.addEventListener("click",async(e)=>{const r=await P({_action:"delete",id:e.target.closest("tr").dataset.id},e.target);if(r.ok)setTimeout(()=>location.reload(),400);}));
+    document.querySelectorAll("tr[data-id] .del").forEach(b=>b.addEventListener("click",async(e)=>{if(!(await window.bo.confirm("この予定を削除しますか？",{confirmLabel:"削除",danger:true,irreversible:true})))return;const r=await P({_action:"delete",id:e.target.closest("tr").dataset.id},e.target);if(r.ok)setTimeout(()=>location.reload(),400);}));
   </script>
 </App>
