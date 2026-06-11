@@ -18,6 +18,8 @@
     { "binding": "MEDIA", "id": "e4a71bef0d99446a97df9d771a7d9768" },
     { "binding": "SESSION", "id": "bd3d1d9642514b30ad5d79bdd4baf9ff" }
   ],
+  // Workers AI（マスコット画像生成・将来のローカルAI）。アカウント単位のため id 不要。
+  "ai": { "binding": "AI" },
   "vars": {
     "HOST_BASE_URL": "https://baku-office-portal.baku-027.workers.dev"
   },
@@ -35,6 +37,7 @@
         { "binding": "MEDIA", "id": "133aed1a4230406f9fae9759c7d77bd8" },
         { "binding": "SESSION", "id": "ad1e0e280aef41fcaa4280158b141037" }
       ],
+      "ai": { "binding": "AI" },
       "vars": {
         "HOST_BASE_URL": "https://baku-office-portal.baku-027.workers.dev",
         "ENVIRONMENT": "production",

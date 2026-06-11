@@ -28,6 +28,8 @@ interface Env {
   DISCORD_CLIENT_SECRET?: string;
   // R2 高度モード（任意）
   MEDIA_R2?: R2Bucket;
+  // Workers AI（CF上で稼働）。マスコット画像生成、将来のローカルAI推論に使用。
+  AI?: { run: (model: string, inputs: unknown, options?: unknown) => Promise<unknown> };
   // Profile C：ローカルLLM（OpenAI互換エンドポイント。例 Ollama=http://localhost:11434）。
   LOCAL_AI_BASE_URL?: string;
   LOCAL_AI_MODEL?: string;
