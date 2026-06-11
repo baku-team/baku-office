@@ -8,6 +8,8 @@ export default defineConfig({
     // ローカルdevで wrangler.jsonc のバインディングをエミュレート。
     platformProxy: { enabled: true, configPath: "wrangler.jsonc" },
   }),
+  // 体感速度：リンクにホバー/タップした時点で次ページを先読み（フル遷移のままなのでスクリプト互換）。
+  prefetch: { prefetchAll: true, defaultStrategy: "hover" },
   // 共有パッケージ(raw TS)をViteでトランスパイルさせる。
   vite: {
     ssr: { noExternal: ["@baku-office/shared"] },
