@@ -12,7 +12,8 @@ const activated = Astro.url.searchParams.get("activated");
 const emsg: Record<string, string> = { state: "セッションが切れました。再度お試しください。", oauth: "認証に失敗しました。", notorg: "この組織のGoogleアカウントではありません。", pending: "登録は管理者の承認待ちです。", noapply: "このGoogleアカウント（メール）に対応する申込が見つかりません。申込時のメールのGoogleアカウントでログインしてください。" };
 ---
 <App title="ログイン" auth={false}>
-  <h1 style="margin-top:1rem">ログイン</h1>
+  <h1 style="margin-top:1rem;display:flex;align-items:center;gap:.5rem">ログイン<span class="beta-badge" title="本サービスは現在ベータ（試験提供）版です">β版</span></h1>
+  <div class="banner banner-warn">🧪 本サービスは現在<strong>ベータ（試験提供）版</strong>です。現在ログインできるのは<strong>Test ユーザーのみ</strong>です。</div>
   {activated && <div class="banner banner-info">✅ アクティベーションが完了しました。続けて Google でログインしてください。</div>}
   {e && <div class="banner banner-danger">{emsg[e] ?? "エラー"}</div>}
   <div class="card">

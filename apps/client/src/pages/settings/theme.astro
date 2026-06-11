@@ -27,9 +27,9 @@ const theme = hasPlus ? await getTheme(Astro.locals.ctx) : {};
         <div class="field"><label>ブランド名<input id="th-brand" value={theme.brand ?? ""} placeholder="baku-office" /></label></div>
         <div class="field"><label>ロゴURL<input id="th-logo" value={theme.logoUrl ?? ""} placeholder="https://…/logo.png" /></label></div>
         <div class="row">
-          <label style="flex:1">ブランド色<input id="th-brand-color" value={theme.colors?.brand ?? ""} placeholder="#2563eb" /></label>
-          <label style="flex:1">背景色<input id="th-bg" value={theme.colors?.bg ?? ""} placeholder="#f5f7fb" /></label>
-          <label style="flex:1">文字色<input id="th-ink" value={theme.colors?.ink ?? ""} placeholder="#1b2430" /></label>
+          <label style="flex:1">ブランド色<input id="th-brand-color" value={theme.colors?.brand ?? ""} placeholder="#C9A86A" /></label>
+          <label style="flex:1">背景色<input id="th-bg" value={theme.colors?.bg ?? ""} placeholder="#EFE9DC" /></label>
+          <label style="flex:1">文字色<input id="th-ink" value={theme.colors?.ink ?? ""} placeholder="#0E1A2B" /></label>
         </div>
         <button class="btn btn-primary" id="saveTheme">テーマを保存</button>
       </div>

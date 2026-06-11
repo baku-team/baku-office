@@ -46,7 +46,7 @@ if (ses) { try { unreadNotif = await (await import("../lib/notifications.ts")).c
     {auth && (
       <header class="appbar">
         <div class="appbar-inner">
-          <a class="brand" href="/">{logoUrl ? <img src={logoUrl} alt={brand} style="height:24px;vertical-align:middle" /> : brand}</a>
+          <span class="brand-wrap"><a class="brand" href="/">{logoUrl ? <img src={logoUrl} alt={brand} style="height:24px;vertical-align:middle" /> : brand}</a><span class="beta-badge" title="本サービスは現在ベータ（試験提供）版です。現在は Test ユーザーのみ利用できます。">β版</span></span>
           <nav class="nav">
             {navItems.map((i) => (
               <a href={i.href} aria-current={active === i.href ? "page" : undefined}>{i.label}</a>
