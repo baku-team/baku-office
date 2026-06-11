@@ -70,6 +70,10 @@ code, kbd, samp, pre { font-family: var(--mono); }
 .appbar .user a { color: var(--muted); }
 .appbar .user a:hover { color: var(--ink); }
 
+/* トップ進捗バー（ホスト/API通信中・画面遷移中の表示） */
+#bo-progress { position: fixed; top: 0; left: 0; height: 3px; width: 0; background: var(--brand); z-index: 200; opacity: 0; pointer-events: none; transition: width .2s ease, opacity .25s ease; box-shadow: 0 0 8px var(--brand), 0 0 3px var(--brand); }
+#bo-progress.on { opacity: 1; }
+
 /* 丸アイコンボタン（ダーク切替・通知） */
 .iconbtn { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; cursor: pointer; border: 1px solid var(--line); background: var(--surface); color: var(--ink-2); transition: background .18s, border-color .18s, transform .1s; position: relative; text-decoration: none; }
 .iconbtn:hover { background: var(--surface-3); }
