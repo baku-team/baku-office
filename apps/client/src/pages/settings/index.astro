@@ -67,6 +67,23 @@ const visGroups = groups.map((g) => ({ ...g, items: g.items.filter((i) => i.show
   <h1>設定</h1>
   <p class="muted">このシステムの設定・オプションをまとめています。項目を選んでください。</p>
 
+  <div class="card" style="margin-top:1rem">
+    <h2 class="h2" style="margin:0 0 .7rem">表示</h2>
+    <div class="spread" style="flex-wrap:wrap;gap:14px">
+      <div><strong>ダークモード</strong><div class="muted" style="font-size:.82rem">画面全体の配色を切り替えます。</div></div>
+      <label class="switch"><input type="checkbox" id="set-dark" aria-label="ダークモード" /><span class="track"></span><span class="knob"></span></label>
+    </div>
+    <div class="hr"></div>
+    <div class="spread" style="flex-wrap:wrap;gap:14px">
+      <div><strong>ナビの形</strong><div class="muted" style="font-size:.82rem">メニューの配置（スマホ画面では自動で下部タブになります）。</div></div>
+      <div class="seg" id="set-nav" role="group" aria-label="ナビの形">
+        <button class="seg-opt" type="button" data-nav="top">上部</button>
+        <button class="seg-opt" type="button" data-nav="side">サイド</button>
+        <button class="seg-opt" type="button" data-nav="bottom">下部</button>
+      </div>
+    </div>
+  </div>
+
   {isAdminOrg && pendingSteps.length > 0 && (
     <div class="card" style="border-left:3px solid #14365c">
       <strong>初期設定（あと {pendingSteps.length} 項目）</strong>
@@ -126,6 +143,30 @@ const visGroups = groups.map((g) => ({ ...g, items: g.items.filter((i) => i.show
     }
   </style>
   <script slot="scripts" is:inline>
+    // 表示設定（ダークモード・ナビ形態）。localStorage に保存し即時反映（App.astro の起動スクリプトと同じキー）。
+    (function () {
+      const root = document.documentElement;
+      const dark = document.getElementById("set-dark");
+      if (dark) {
+        dark.checked = root.getAttribute("data-theme") === "dark";
+        dark.addEventListener("change", () => {
+          root.classList.add("theme-switching");
+          root.setAttribute("data-theme", dark.checked ? "dark" : "light");
+          try { localStorage.setItem("bo_theme", dark.checked ? "dark" : "light"); } catch (e) { /* noop */ }
+          requestAnimationFrame(() => requestAnimationFrame(() => root.classList.remove("theme-switching")));
+        });
+      }
+      const seg = document.getElementById("set-nav");
+      if (seg) {
+        const cur = root.getAttribute("data-nav") || "top";
+        seg.querySelectorAll(".seg-opt").forEach((b) => { b.classList.toggle("on", b.dataset.nav === cur); });
+        seg.querySelectorAll(".seg-opt").forEach((b) => b.addEventListener("click", () => {
+          root.setAttribute("data-nav", b.dataset.nav);
+          try { localStorage.setItem("bo_nav", b.dataset.nav); } catch (e) { /* noop */ }
+          seg.querySelectorAll(".seg-opt").forEach((x) => x.classList.toggle("on", x === b));
+        }));
+      }
+    })();
     // スクロールスパイ：表示中セクションに応じて左ナビをハイライト。
     (function () {
       const btns = [...document.querySelectorAll(".set-nav-btn")];

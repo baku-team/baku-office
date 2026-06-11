@@ -32,7 +32,16 @@ const mine = isAdminOrg ? await myApps(env).catch(() => []) : [];
 const ENT_OPTS = ["free", "plus", "pro", "nonprofit", "enterprise"];
 ---
 <App title="アプリ" active="/apps">
-  <h1>アプリ</h1>
+  <div class="spread" style="flex-wrap:wrap;gap:12px">
+    <h1 style="margin:0">アプリ</h1>
+    {isAdminOrg && (
+      <div class="seg" id="apps-seg" role="group" aria-label="表示切替">
+        <button class="seg-opt on" type="button" data-tab="store">ストア</button>
+        <button class="seg-opt" type="button" data-tab="manage">アプリ管理</button>
+        <button class="seg-opt" type="button" data-tab="develop">AIで作る</button>
+      </div>
+    )}
+  </div>
 
   <h2>使う（導入済み）</h2>
   <div class="grid g-auto">
@@ -44,6 +53,7 @@ const ENT_OPTS = ["free", "plus", "pro", "nonprofit", "enterprise"];
     {launch.length === 0 && (<p class="muted">{isAdminOrg ? "起動できるアプリがありません。下の「アプリ管理」や「ストア」から追加してください。" : "起動できるアプリがありません。管理者にアプリの追加を依頼してください。"}</p>)}
   </div>
 
+  <div class="apps-panel" data-panel="store">
   <h2>ストア</h2>
   <p class="muted">ホストが配信する公開アプリ。お使いのプランで入手できるものが表示されます（DL数・評価順）。</p>
   <div class="grid">
@@ -83,8 +93,11 @@ const ENT_OPTS = ["free", "plus", "pro", "nonprofit", "enterprise"];
     </>
   )}
 
+  </div>
+
   {isAdminOrg && (
     <>
+    <div class="apps-panel" data-panel="manage" hidden>
       <h2>アプリ管理（導入・削除）</h2>
       <div class="card">
         <p class="muted">使うアプリを選びます。外すと画面・道具とも消えます。<strong>AIチャットは Plus 以上で必須</strong>。</p>
@@ -110,6 +123,8 @@ const ENT_OPTS = ["free", "plus", "pro", "nonprofit", "enterprise"];
         )}
       </div>
 
+    </div>
+    <div class="apps-panel" data-panel="develop" hidden>
       <h2>アプリ開発（草案 → レビュー → 公開申請）</h2>
       <div class="card">
         <p class="muted">AIチャットで「〜するアプリを作って」と頼むと草案ができます。要求権限と事前確認（環境/権限/安全/コスト）をレビューし、公開申請できます。</p>
@@ -125,10 +140,21 @@ const ENT_OPTS = ["free", "plus", "pro", "nonprofit", "enterprise"];
           </div>
         ))}
       </div>
+    </div>
     </>
   )}
 
   <script slot="scripts" is:inline>
+    // セグメント切替（ストア/アプリ管理/AIで作る）。
+    (function () {
+      const seg = document.getElementById("apps-seg");
+      if (!seg) return;
+      const panels = [...document.querySelectorAll(".apps-panel")];
+      seg.querySelectorAll(".seg-opt").forEach((b) => b.addEventListener("click", () => {
+        seg.querySelectorAll(".seg-opt").forEach((x) => x.classList.toggle("on", x === b));
+        panels.forEach((p) => { p.hidden = p.dataset.panel !== b.dataset.tab; });
+      }));
+    })();
     document.getElementById("saveApps")?.addEventListener("click", async (e) => {
       const parts = [...document.querySelectorAll(".app-chk")].filter((c) => c.checked).map((c) => c.value);
       const r = await window.bo.api("/api/settings", { _action: "enabled_parts", parts }, { btn: e.currentTarget, successMsg: "導入アプリを保存しました" });

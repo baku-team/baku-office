@@ -59,13 +59,31 @@ const firstName = ses?.name ?? (ses?.role ?? "ユーザー");
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="color-scheme" content="light dark" />
     <script is:inline>
-      // テーマ初期適用（描画前に data-theme を確定＝ちらつき防止）。
-      (function () { try { var t = localStorage.getItem("bo_theme"); document.documentElement.setAttribute("data-theme", t === "dark" ? "dark" : "light"); } catch (e) {} })();
+      // テーマ・ナビ形態の初期適用（描画前に data-theme / data-nav を確定＝ちらつき防止）。
+      (function () { try {
+        var t = localStorage.getItem("bo_theme"); document.documentElement.setAttribute("data-theme", t === "dark" ? "dark" : "light");
+        var n = localStorage.getItem("bo_nav"); document.documentElement.setAttribute("data-nav", (n === "side" || n === "bottom") ? n : "top");
+      } catch (e) {} })();
     </script>
     <title>{title} — {brand}</title>
     {themeStyle && <style set:html={themeStyle}></style>}
   </head>
   <body>
+    <div class="app">
+    {auth && ses && (
+      <aside class="sidebar">
+        <a class="sb-brand" href="/"><span class="mark"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d={ICONS.spark} /></svg></span>{brand}</a>
+        <nav class="sb-nav" aria-label="サイドナビ">
+          {navItems.map((i) => (
+            <a href={i.href} aria-current={active === i.href ? "page" : undefined}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d={iconFor(i.href)} /></svg>
+              {i.label}
+            </a>
+          ))}
+        </nav>
+      </aside>
+    )}
+    <div class="shell">
     {auth && (
       <header class="appbar">
         <div class="appbar-inner">
@@ -128,6 +146,7 @@ const firstName = ses?.name ?? (ses?.role ?? "ユーザー");
         <slot />
       </main>
     )}
+    </div>
     {auth && ses && (
       <nav class="tabbar" aria-label="メインナビ">
         {navItems.map((i) => (
@@ -138,6 +157,7 @@ const firstName = ses?.name ?? (ses?.role ?? "ユーザー");
         ))}
       </nav>
     )}
+    </div>
     <div id="toasts" aria-live="polite"></div>
     <div id="bo-notif" hidden style="position:fixed;top:52px;right:12px;width:320px;max-height:70vh;overflow:auto;background:var(--surface);border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow-lg);z-index:50;padding:8px"></div>
 
