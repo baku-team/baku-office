@@ -1,13 +1,28 @@
 ---
 import "../styles/app.css";
 const env = Astro.locals.runtime.env;
-interface Props { title: string; active?: string; auth?: boolean }
-const { title, active = "", auth = true } = Astro.props as Props;
+interface Props { title: string; active?: string; auth?: boolean; bare?: boolean }
+const { title, active = "", auth = true, bare = false } = Astro.props as Props;
 
 const { getSession } = await import("../lib/auth.ts");
 const ses = await getSession(env, Astro.request).catch(() => null);
 let limitErr = false;
 try { limitErr = await (await import("../lib/diag.ts")).hasRecentLimitError(env); } catch { /* noop */ }
+
+// ストロークアイコン（24x24・README icons.jsx 由来）。
+const ICONS: Record<string, string> = {
+  home: "M3 11.2 12 4l9 7.2M5 9.6V20h5v-5.5h4V20h5V9.6",
+  spark: "M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z",
+  grid: "M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z",
+  gear: "M12 9.2a2.8 2.8 0 100 5.6 2.8 2.8 0 000-5.6M19.4 12c0-.5 0-1-.1-1.4l2-1.5-2-3.4-2.3 1a7 7 0 00-2.4-1.4L14.2 2H9.8l-.4 2.3a7 7 0 00-2.4 1.4l-2.3-1-2 3.4 2 1.5c-.1.4-.1.9-.1 1.4s0 1 .1 1.4l-2 1.5 2 3.4 2.3-1a7 7 0 002.4 1.4l.4 2.3h4.4l.4-2.3a7 7 0 002.4-1.4l2.3 1 2-3.4-2-1.5c.1-.4.1-.9.1-1.4",
+  bell: "M6 16V11a6 6 0 0112 0v5l2 2H4zM9.5 20a2.5 2.5 0 005 0",
+  moon: "M20 13.5A8 8 0 119.5 4 6.5 6.5 0 0020 13.5z",
+  sun: "M12 6.5V3M12 21v-3.5M6.5 12H3M21 12h-3.5M7 7 4.8 4.8M19.2 19.2 17 17M17 7l2.2-2.2M4.8 19.2 7 17M12 8.5a3.5 3.5 0 100 7 3.5 3.5 0 000-7z",
+  card: "M3 6h18v12H3zM3 10h18",
+  logout: "M9 5H5v14h4M14 8l4 4-4 4M18 12H9",
+};
+const navIcon: Record<string, string> = { "/": "home", "/chat": "spark", "/apps": "grid", "/settings": "gear" };
+const iconFor = (href: string) => ICONS[navIcon[href] ?? "home"] ?? ICONS.home;
 
 // 4項目ナビ（ホーム/AI/アプリ/設定）。業務画面は「アプリ」からランチャー起動、各種設定は「設定」に集約。
 type Item = { href: string; label: string; show: boolean };
@@ -32,13 +47,21 @@ const navItems = buildNav(items, [], navOv);
 // アプリ内通知の未読数（自動取込の期日通知など。ヘッダのベルに表示）。
 let unreadNotif = 0;
 if (ses) { try { unreadNotif = await (await import("../lib/notifications.ts")).countUnread(ctx, ses.uid); } catch { /* noop */ } }
+// ユーザーチップ表示用。
+const uname = ses?.name ?? ses?.role ?? "";
+const initial = (uname || "B").slice(0, 1).toUpperCase();
+const firstName = ses?.name ?? (ses?.role ?? "ユーザー");
 ---
 <!doctype html>
 <html lang="ja">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <meta name="color-scheme" content="light" />
+    <meta name="color-scheme" content="light dark" />
+    <script is:inline>
+      // テーマ初期適用（描画前に data-theme を確定＝ちらつき防止）。
+      (function () { try { var t = localStorage.getItem("bo_theme"); document.documentElement.setAttribute("data-theme", t === "dark" ? "dark" : "light"); } catch (e) {} })();
+    </script>
     <title>{title} — {brand}</title>
     {themeStyle && <style set:html={themeStyle}></style>}
   </head>
@@ -46,32 +69,77 @@ if (ses) { try { unreadNotif = await (await import("../lib/notifications.ts")).c
     {auth && (
       <header class="appbar">
         <div class="appbar-inner">
-          <span class="brand-wrap"><a class="brand" href="/">{logoUrl ? <img src={logoUrl} alt={brand} style="height:24px;vertical-align:middle" /> : brand}</a><span class="beta-badge" title="本サービスは現在ベータ（試験提供）版です。現在は Test ユーザーのみ利用できます。">β版</span></span>
+          <span class="brand-wrap">
+            <a class="brand" href="/">
+              {logoUrl
+                ? <img src={logoUrl} alt={brand} style="height:24px;vertical-align:middle" />
+                : <><span class="mark"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d={ICONS.spark} /></svg></span>{brand}</>}
+            </a>
+            <span class="beta-badge" title="本サービスは現在ベータ（試験提供）版です。現在は Test ユーザーのみ利用できます。">β版</span>
+          </span>
           <nav class="nav">
             {navItems.map((i) => (
-              <a href={i.href} aria-current={active === i.href ? "page" : undefined}>{i.label}</a>
+              <a href={i.href} aria-current={active === i.href ? "page" : undefined}>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d={iconFor(i.href)} /></svg>
+                {i.label}
+              </a>
             ))}
           </nav>
           <span class="user">
+            <button class="iconbtn" id="bo-theme" type="button" title="ダーク" aria-label="テーマを切り替え">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path id="bo-theme-ico" d={ICONS.moon} /></svg>
+            </button>
             {ses && (
-              <a href="#" id="bo-bell" title="通知" style="position:relative;margin-right:14px;text-decoration:none">🔔{unreadNotif > 0 && <span id="bo-bell-badge" style="position:absolute;top:-8px;right:-10px;background:#e53935;color:#fff;border-radius:9px;font-size:.62rem;line-height:1;padding:2px 5px">{unreadNotif}</span>}</a>
+              <a href="#" class="iconbtn" id="bo-bell" title="通知" aria-label="通知">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d={ICONS.bell} /></svg>
+                {unreadNotif > 0 && <span id="bo-bell-badge" class="badge-num">{unreadNotif}</span>}
+              </a>
             )}
-            {ses ? <><a href="/account">{ses.name ?? ses.role}</a>・<a href="#" id="bo-logout">ログアウト</a></> : <a href="/login">ログイン</a>}
+            {ses
+              ? (
+                <span style="position:relative">
+                  <button class="userchip" id="bo-user" type="button" aria-haspopup="menu" aria-expanded="false">
+                    <span class="avatar">{initial}</span>
+                    <span class="nm">{firstName}<small>{ses.role}</small></span>
+                  </button>
+                  <div class="menu-ov" id="bo-user-ov" hidden></div>
+                  <div class="usermenu fade-up" id="bo-user-menu" role="menu" hidden>
+                    <div class="um-head"><span class="avatar" style="width:38px;height:38px;font-size:.95rem">{initial}</span><div><strong>{firstName}</strong><div class="muted" style="font-size:.8rem">{ses.ctx === "org" ? "組織" : "個人"}・{ses.role}</div></div></div>
+                    <a class="um-item" href="/settings" role="menuitem"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d={ICONS.gear} /></svg> 設定</a>
+                    <a class="um-item" href="/billing" role="menuitem"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d={ICONS.card} /></svg> プラン・課金</a>
+                    <div class="hr" style="margin:6px 0"></div>
+                    <button class="um-item danger" id="bo-logout" type="button" role="menuitem"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d={ICONS.logout} /></svg> ログアウト</button>
+                  </div>
+                </span>
+              )
+              : <a class="btn btn-sm" href="/login">ログイン</a>}
           </span>
         </div>
       </header>
     )}
-    <main class="wrap">
-      {limitErr && (
-        <div class="banner banner-danger">
-          ⚠️ 直近に Cloudflare 無料枠の制限に達した可能性があります。重い処理を安定させるには
-          <a href="/settings/advanced">高度なオプション → Workers Paid</a> をご検討ください（<a href="/diagnostics">診断</a>）。
-        </div>
-      )}
-      <slot />
-    </main>
+    {bare ? <slot /> : (
+      <main class="wrap">
+        {limitErr && (
+          <div class="banner banner-danger">
+            ⚠️ 直近に Cloudflare 無料枠の制限に達した可能性があります。重い処理を安定させるには
+            <a href="/settings/advanced">高度なオプション → Workers Paid</a> をご検討ください（<a href="/diagnostics">診断</a>）。
+          </div>
+        )}
+        <slot />
+      </main>
+    )}
+    {auth && ses && (
+      <nav class="tabbar" aria-label="メインナビ">
+        {navItems.map((i) => (
+          <a href={i.href} aria-current={active === i.href ? "page" : undefined}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width={active === i.href ? "2.2" : "1.8"} stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d={iconFor(i.href)} /></svg>
+            {i.label}
+          </a>
+        ))}
+      </nav>
+    )}
     <div id="toasts" aria-live="polite"></div>
-    <div id="bo-notif" hidden style="position:fixed;top:52px;right:12px;width:320px;max-height:70vh;overflow:auto;background:#fff;border:1px solid #ddd;border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.12);z-index:50;padding:8px"></div>
+    <div id="bo-notif" hidden style="position:fixed;top:52px;right:12px;width:320px;max-height:70vh;overflow:auto;background:var(--surface);border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow-lg);z-index:50;padding:8px"></div>
 
     <script>
       // 共通フィードバック：トースト＋fetchラッパ。全操作で必ず成否を可視化する。
@@ -179,6 +247,43 @@ if (ses) { try { unreadNotif = await (await import("../lib/notifications.ts")).c
         });
       }
       (window as any).bo = { toast, busy, api, confirm: confirmDialog };
+
+      // テーマ切替（ダーク/ライト）。切替の一瞬だけ theme-switching でトランジション抑制。
+      const MOON = "M20 13.5A8 8 0 119.5 4 6.5 6.5 0 0020 13.5z";
+      const SUN = "M12 6.5V3M12 21v-3.5M6.5 12H3M21 12h-3.5M7 7 4.8 4.8M19.2 19.2 17 17M17 7l2.2-2.2M4.8 19.2 7 17M12 8.5a3.5 3.5 0 100 7 3.5 3.5 0 000-7z";
+      const rootEl = document.documentElement;
+      const themeBtn = document.getElementById("bo-theme");
+      function syncThemeIco() {
+        const dark = rootEl.getAttribute("data-theme") === "dark";
+        const ico = document.getElementById("bo-theme-ico");
+        if (ico) ico.setAttribute("d", dark ? SUN : MOON);
+        if (themeBtn) themeBtn.title = dark ? "ライト" : "ダーク";
+      }
+      syncThemeIco();
+      themeBtn?.addEventListener("click", () => {
+        const dark = rootEl.getAttribute("data-theme") !== "dark";
+        rootEl.classList.add("theme-switching");
+        rootEl.setAttribute("data-theme", dark ? "dark" : "light");
+        try { localStorage.setItem("bo_theme", dark ? "dark" : "light"); } catch (e) { /* noop */ }
+        requestAnimationFrame(() => requestAnimationFrame(() => rootEl.classList.remove("theme-switching")));
+        syncThemeIco();
+      });
+
+      // ユーザーメニュー（設定/課金/ログアウト）。
+      const uBtn = document.getElementById("bo-user");
+      const uMenu = document.getElementById("bo-user-menu");
+      const uOv = document.getElementById("bo-user-ov");
+      function closeUser() { if (uMenu) uMenu.hidden = true; if (uOv) uOv.hidden = true; uBtn?.setAttribute("aria-expanded", "false"); }
+      if (uBtn && uMenu) {
+        uBtn.addEventListener("click", () => {
+          const open = uMenu.hidden;
+          uMenu.hidden = !open; if (uOv) uOv.hidden = !open;
+          uBtn.setAttribute("aria-expanded", String(open));
+        });
+        uOv?.addEventListener("click", closeUser);
+        document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeUser(); });
+      }
+
       const lo = document.getElementById("bo-logout");
       if (lo) lo.addEventListener("click", async (e) => { e.preventDefault(); await fetch("/api/login", { method: "DELETE" }); location.href = "/login"; });
       // 通知ベル：クリックで一覧をパネル表示し、開いたら全既読にしてバッジを消す。
@@ -197,13 +302,13 @@ if (ses) { try { unreadNotif = await (await import("../lib/notifications.ts")).c
               const link = String(n.link || "#");
               // javascript: 等のスキーム注入を排除し、相対/http(s)/#のみ許可。
               a.href = /^(https?:|\/|#)/.test(link) ? link : "#";
-              a.style.cssText = "display:block;padding:8px;border-bottom:1px solid #f0f0f0;color:#222;text-decoration:none;" + (n.read_at ? "opacity:.55" : "font-weight:600");
+              a.style.cssText = "display:block;padding:8px;border-bottom:1px solid var(--line);color:var(--ink);text-decoration:none;" + (n.read_at ? "opacity:.55" : "font-weight:600");
               a.textContent = String(n.body || "");
               panel.appendChild(a);
             }
           } else {
             const p = document.createElement("p");
-            p.style.cssText = "padding:10px;color:#888;font-size:.85rem;margin:0";
+            p.style.cssText = "padding:10px;color:var(--muted);font-size:.85rem;margin:0";
             p.textContent = "通知はありません";
             panel.appendChild(p);
           }

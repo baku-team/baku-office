@@ -96,6 +96,8 @@ const skills = hasPlus && isOrgAdmin ? await listSkills(env).catch(() => []) : [
         const log = document.getElementById("log");
         if (!log) return;  // Plus未満は要素が無い
         const sel = document.getElementById("model");
+        // ホームの相棒プロンプトからの ?q= を入力欄に反映。
+        try { const q = new URLSearchParams(location.search).get("q"); if (q) { const m = document.getElementById("msg"); if (m) { m.value = q; m.focus(); } } } catch (e) { /* noop */ }
         let sessionId = "";
         const esc = (s) => s.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
         function dload(text, ext, mime) {
@@ -233,28 +235,31 @@ const skills = hasPlus && isOrgAdmin ? await listSkills(env).catch(() => []) : [
 </App>
 
 <style>
-  .chat { display: grid; grid-template-columns: 230px 1fr; gap: 14px; align-items: start; }
-  @media (max-width: 640px) { .chat { grid-template-columns: 1fr; } }
-  .sbar { display: flex; flex-direction: column; gap: 8px; }
-  .ses-list { display: flex; flex-direction: column; gap: 2px; max-height: 56vh; overflow-y: auto; }
-  .ses-row { display: flex; align-items: center; gap: 4px; border-radius: 6px; padding: 1px 2px; }
-  .ses-row.on { background: #eef1f5; }
-  .ses-open { flex: 1; color: #27313c; text-decoration: none; font-size: .85rem; padding: 5px 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .ses-del { border: none; background: none; color: #9aa6b2; cursor: pointer; font-size: 1rem; line-height: 1; padding: 2px 6px; }
-  .ses-del:hover { color: #b91c1c; }
-  .pane { min-width: 0; }
-  .cbar { display: flex; gap: 12px; align-items: center; justify-content: space-between; margin-bottom: 8px; }
-  .cbar select { font: inherit; padding: 3px 6px; border: 1px solid #dde3ea; border-radius: 6px; }
-  #log { border: 1px solid #dde3ea; border-radius: 8px; padding: 12px; min-height: 240px; max-height: 52vh; overflow-y: auto; background: #fff; display: flex; flex-direction: column; gap: 8px; }
-  .cmsg { max-width: 88%; }
+  .chat { display: grid; grid-template-columns: 248px 1fr; gap: 18px; align-items: start; }
+  @media (max-width: 720px) { .chat { grid-template-columns: 1fr; } }
+  .sbar { display: flex; flex-direction: column; gap: 12px; position: sticky; top: 84px; }
+  .ses-list { display: flex; flex-direction: column; gap: 3px; max-height: 56vh; overflow-y: auto; }
+  .ses-row { display: flex; align-items: center; gap: 9px; border-radius: var(--r-sm); padding: 2px 4px; transition: background .15s; }
+  .ses-row:hover { background: var(--surface-3); }
+  .ses-row.on { background: var(--brand-soft); }
+  .ses-open { flex: 1; color: var(--ink-2); text-decoration: none; font-size: .86rem; font-weight: 600; padding: 7px 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ses-row.on .ses-open { color: var(--brand-strong); }
+  .ses-del { border: none; background: none; color: var(--faint); cursor: pointer; font-size: 1rem; line-height: 1; padding: 2px 8px; border-radius: var(--r-xs); }
+  .ses-del:hover { color: var(--danger); }
+  .pane { min-width: 0; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md); padding: 16px; box-shadow: var(--shadow-sm); }
+  .cbar { display: flex; gap: 12px; align-items: center; justify-content: space-between; margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+  .cbar select { font: inherit; padding: 7px 12px; border: 1px solid var(--line-strong); border-radius: var(--r-sm); background: var(--surface); color: var(--ink); }
+  #log { border: 1px solid var(--line); border-radius: var(--r); padding: 18px; min-height: 240px; max-height: 52vh; overflow-y: auto; background: var(--surface-2); display: flex; flex-direction: column; gap: 16px; }
+  .cmsg { max-width: 86%; }
   .cmsg.u { align-self: flex-end; }
   .cmsg.a { align-self: flex-start; }
-  .cbub { padding: 8px 12px; border-radius: 10px; font-size: .92rem; line-height: 1.5; }
-  .cmsg.u .cbub { background: #14365c; color: #fff; border-bottom-right-radius: 2px; }
-  .cmsg.a .cbub { background: #eef1f5; color: #27313c; border-bottom-left-radius: 2px; }
-  .cdl { display: flex; gap: 6px; align-items: center; margin-top: 4px; font-size: .74rem; color: #6b7785; }
-  .cdl a { color: #5b6770; text-decoration: none; border: 1px solid #dde3ea; border-radius: 4px; padding: 1px 7px; }
-  .cdl a:hover { background: #f4f6f9; }
-  .cinput { display: flex; gap: 8px; margin-top: 12px; }
-  .cinput textarea { flex: 1; min-height: 52px; padding: 8px; border: 1px solid #dde3ea; border-radius: 8px; font: inherit; resize: vertical; }
+  .cbub { padding: 12px 16px; border-radius: 16px; font-size: .92rem; line-height: 1.6; }
+  .cmsg.u .cbub { background: var(--primary-bg); color: var(--primary-ink); border-top-right-radius: 4px; }
+  .cmsg.a .cbub { background: var(--surface); color: var(--ink); border: 1px solid var(--line); border-top-left-radius: 4px; }
+  .cdl { display: flex; gap: 8px; align-items: center; margin-top: 6px; font-size: .74rem; color: var(--muted); flex-wrap: wrap; }
+  .cdl a { color: var(--ink-2); text-decoration: none; border: 1px solid var(--line-strong); border-radius: var(--r-xs); padding: 3px 9px; font-weight: 600; }
+  .cdl a:hover { background: var(--surface-3); }
+  .cinput { display: flex; gap: 10px; margin-top: 14px; align-items: flex-end; }
+  .cinput textarea { flex: 1; min-height: 52px; padding: 12px 14px; border: 1px solid var(--line-strong); border-radius: var(--r-sm); font: inherit; resize: vertical; background: var(--surface); color: var(--ink); }
+  .cinput textarea:focus { outline: none; border-color: var(--brand); box-shadow: var(--ring); }
 </style>

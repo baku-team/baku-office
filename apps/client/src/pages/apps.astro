@@ -35,9 +35,9 @@ const ENT_OPTS = ["free", "plus", "pro", "nonprofit", "enterprise"];
   <h1>アプリ</h1>
 
   <h2>使う（導入済み）</h2>
-  <div class="grid">
+  <div class="grid g-auto">
     {launch.map((l) => (
-      <a class="card" href={l.href} style="text-decoration:none;color:inherit;display:block">
+      <a class="card link" href={l.href}>
         <strong>{l.label}</strong><div class="muted" style="font-size:.8rem">{l.app}</div>
       </a>
     ))}
@@ -50,7 +50,7 @@ const ENT_OPTS = ["free", "plus", "pro", "nonprofit", "enterprise"];
     {store.map((a) => (
       <div class="card" data-store={a.id}>
         <strong>{a.name}</strong> <span class="muted">v{a.version}{a.category ? `・${a.category}` : ""}</span>
-        {a.badges.map((bd) => (<span class="pill" style="margin-left:4px;background:#fbf6ed;color:#b8893b">{bd}</span>))}
+        {a.badges.map((bd) => (<span class="pill brand" style="margin-left:4px">{bd}</span>))}
         {a.description && <div class="muted" style="font-size:.85rem;margin-top:2px">{a.description}</div>}
         <div class="muted" style="font-size:.8rem;margin-top:4px">⬇ {a.downloads}　★ {a.avg_rating || "—"}（{a.reviews}）{a.min_entitlement !== "free" ? `　要${a.min_entitlement}` : ""}</div>
         <div class="row" style="margin-top:6px">
@@ -117,7 +117,7 @@ const ENT_OPTS = ["free", "plus", "pro", "nonprofit", "enterprise"];
         {drafts.map((d) => (
           <div class="card" data-draft={d.id} style="margin:.5rem 0">
             <strong>{d.name}</strong> <span class="muted">v{d.version}</span>
-            <span class="pill" style={d.gate_status === "ready" ? "background:#dcfce7;color:#166534" : d.gate_status === "blocked" ? "background:#fee2e2;color:#b91c1c" : ""} aria-label={`状態: ${d.gate_status === "ready" ? "実装可" : d.gate_status === "blocked" ? "ブロック" : "企画中"}`}>{d.gate_status === "ready" ? "✓ 実装可" : d.gate_status === "blocked" ? "⛔ ブロック" : "企画中"}</span>
+            <span class={"pill " + (d.gate_status === "ready" ? "ok" : d.gate_status === "blocked" ? "danger" : "")} aria-label={`状態: ${d.gate_status === "ready" ? "実装可" : d.gate_status === "blocked" ? "ブロック" : "企画中"}`}>{d.gate_status === "ready" ? "✓ 実装可" : d.gate_status === "blocked" ? "⛔ ブロック" : "企画中"}</span>
             {d.spec && <><br /><span class="muted" style="font-size:.85rem">仕様: {d.spec}</span></>}
             <br /><span class="muted" style="font-size:.8rem">要求権限: {d.permissions.join(" / ") || "なし"}</span>
             {d.preflight && (<ul style="margin:.4rem 0 0;padding-left:1.1rem;font-size:.82rem">{d.preflight.checks.map((c) => (<li class="muted">{c.status === "ok" ? "✅" : c.status === "warn" ? "⚠️" : "⛔"} {c.label}：{c.detail}</li>))}</ul>)}
