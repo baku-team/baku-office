@@ -11,12 +11,13 @@ const hasPlus = atLeast(await cachedEntitlement(env), "plus");
 const isAdmin = ses.role === "admin" && ses.ctx === "org";
 
 const { dailyTotals, monthTotals, todayTotals, monthUsd, monthTokens, getLimits, resetTimes, PROVIDER_LABEL, USAGE_PROVIDERS } = await import("../lib/usage.ts");
+const { neuronsFromUsd } = await import("../core/models/config.ts");
 let daily: { day: string; count: number }[] = [];
 let month: Record<string, number> = {};
 let today: Record<string, number> = {};
 let usd: Record<string, number> = {};
 let tokens: Record<string, number> = {};
-let limits: Record<string, { freeQuota?: number; monthlyCap?: number; monthlyUsdCap?: number; onExceed?: string }> = {};
+let limits: Record<string, { freeQuota?: number; monthlyCap?: number; monthlyUsdCap?: number; monthlyNeuronCap?: number; onExceed?: string }> = {};
 let reset = { daily: "", monthly: "" };
 if (hasPlus) {
   daily = await dailyTotals(env, 14);
@@ -29,7 +30,7 @@ if (hasPlus) {
 }
 const maxDay = Math.max(1, ...daily.map((d) => d.count));
 const fmtTok = (n: number) => (n >= 1e6 ? (n / 1e6).toFixed(2) + "M" : n >= 1e3 ? (n / 1e3).toFixed(1) + "k" : String(n));
-const rows = USAGE_PROVIDERS.map((p) => ({ p, label: PROVIDER_LABEL[p] ?? p, today: today[p] ?? 0, month: month[p] ?? 0, usd: usd[p] ?? 0, tokens: tokens[p] ?? 0, lim: limits[p] ?? {} }));
+const rows = USAGE_PROVIDERS.map((p) => ({ p, label: PROVIDER_LABEL[p] ?? p, today: today[p] ?? 0, month: month[p] ?? 0, usd: usd[p] ?? 0, tokens: tokens[p] ?? 0, neurons: neuronsFromUsd(usd[p] ?? 0), lim: limits[p] ?? {} }));
 const totalUsd = rows.reduce((a, r) => a + r.usd, 0);
 const overs = rows.filter((r) => (r.lim.monthlyCap && r.month >= (r.lim.monthlyCap ?? 0)) || (r.lim.monthlyUsdCap && r.usd >= (r.lim.monthlyUsdCap ?? 0)));
 const warns = rows.filter((r) => r.lim.freeQuota && r.today >= (r.lim.freeQuota ?? 0) * 0.8 && r.today < (r.lim.monthlyCap ?? Infinity));
@@ -77,7 +78,7 @@ const spct = (u: number, l: number) => (u < 0 || l <= 0 ? 0 : Math.min(100, Math
       <h2>プロバイダ別</h2>
       <div class="banner banner-info">リセット：無料枠＝<strong>{reset.daily}</strong>（日次）／上限＝<strong>{reset.monthly}</strong>（月次）／当月の推定費用合計＝<strong>${totalUsd.toFixed(2)}</strong>（参考単価による概算・実費は各プロバイダの請求が正）</div>
       <div class="table-wrap"><table>
-        <thead><tr><th>API</th><th>本日</th><th>当月回数</th><th>当月token</th><th>当月推定$</th><th>無料枠/日</th><th>当月回数上限</th><th>当月上限$</th><th>超過時</th></tr></thead>
+        <thead><tr><th>API</th><th>本日</th><th>当月回数</th><th>当月token</th><th>当月推定$</th><th>当月ニューロン/上限</th><th>無料枠/日</th><th>当月回数上限</th><th>当月上限$</th><th>超過時</th></tr></thead>
         <tbody>
           {rows.map((r) => (
             <tr data-prov={r.p}>
@@ -86,6 +87,7 @@ const spct = (u: number, l: number) => (u < 0 || l <= 0 ? 0 : Math.min(100, Math
               <td class={r.lim.monthlyCap && r.month >= (r.lim.monthlyCap ?? 0) ? "u-over" : ""}>{r.month}{r.lim.monthlyCap ? ` / ${r.lim.monthlyCap}` : ""}</td>
               <td class="muted">{r.tokens ? fmtTok(r.tokens) : "—"}</td>
               <td class={r.lim.monthlyUsdCap && r.usd >= (r.lim.monthlyUsdCap ?? 0) ? "u-over" : ""}>{r.usd ? `$${r.usd.toFixed(2)}` : "—"}{r.lim.monthlyUsdCap ? ` / $${r.lim.monthlyUsdCap}` : ""}</td>
+              <td>{r.p === "workers_ai" ? (<>{r.neurons ? r.neurons.toLocaleString() : "0"} <input class="lim-nc" type="number" min="0" value={r.lim.monthlyNeuronCap ?? ""} placeholder="上限" disabled={!isAdmin} style="width:90px" /></>) : <span class="muted">—</span>}</td>
               <td><input class="lim-fq" type="number" min="0" value={r.lim.freeQuota ?? ""} placeholder="—" disabled={!isAdmin} style="width:80px" /></td>
               <td><input class="lim-mc" type="number" min="0" value={r.lim.monthlyCap ?? ""} placeholder="—" disabled={!isAdmin} style="width:80px" /></td>
               <td><input class="lim-uc" type="number" min="0" step="0.01" value={r.lim.monthlyUsdCap ?? ""} placeholder="—" disabled={!isAdmin} style="width:80px" /></td>
@@ -150,7 +152,8 @@ const spct = (u: number, l: number) => (u < 0 || l <= 0 ? 0 : Math.min(100, Math
               const fq = tr.querySelector(".lim-fq").value;
               const mc = tr.querySelector(".lim-mc").value;
               const uc = tr.querySelector(".lim-uc").value;
-              limits[tr.dataset.prov] = { freeQuota: fq ? Number(fq) : 0, monthlyCap: mc ? Number(mc) : 0, monthlyUsdCap: uc ? Number(uc) : 0, onExceed: tr.querySelector(".lim-oe").value };
+              const ncEl = tr.querySelector(".lim-nc");
+              limits[tr.dataset.prov] = { freeQuota: fq ? Number(fq) : 0, monthlyCap: mc ? Number(mc) : 0, monthlyUsdCap: uc ? Number(uc) : 0, monthlyNeuronCap: ncEl && ncEl.value ? Number(ncEl.value) : 0, onExceed: tr.querySelector(".lim-oe").value };
             });
             const r = await window.bo.api("/api/usage", { limits }, { btn: e.currentTarget, successMsg: "上限を保存しました" });
             if (r.ok) setTimeout(() => location.reload(), 600);

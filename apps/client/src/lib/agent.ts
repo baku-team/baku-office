@@ -11,9 +11,10 @@ import { maxParallelAgents, agentMaxHops } from "./settings.ts";
 import { callPartner, groupRelayCall } from "./a2a.ts";
 import { autonomyReady, AUTONOMY_TOOLS, AUTONOMY_POLICY, runAutonomyTool } from "./autonomy.ts";
 import { localChatModel } from "../core/models/local.ts";
+import { workersAiChatModel } from "../core/models/workers-ai.ts";
 import { geminiModel } from "../core/models/gemini.ts";
 import { claudeModel } from "../core/models/claude.ts";
-import { geminiModelId, claudeModelId } from "../core/models/config.ts";
+import { geminiModelId, claudeModelId, workersAiModelId } from "../core/models/config.ts";
 import "../parts/index.ts"; // 組み込みパーツを登録（副作用・移植性アーキ §4）
 import { webSearch, makeDocument } from "./media-ai.ts";
 import { listSkills, runSkill, generateSkill } from "./skills.ts";
@@ -121,7 +122,7 @@ export async function runAgent(ctx: Ctx, owner: string, text: string, image?: { 
   const env = ctx.env;
   const geminiKey = await getApiKey(env, "gemini");
   const claudeKey = await getApiKey(env, "claude");
-  if (!geminiKey && !claudeKey && !env.LOCAL_AI_BASE_URL) return "AI機能が未設定です。管理画面の『連携設定』または『高度なオプション』で Gemini か Claude のAPIキーを登録してください。";
+  if (!geminiKey && !claudeKey && !env.LOCAL_AI_BASE_URL && !env.AI) return "AI機能が未設定です。管理画面の『連携設定』または『高度なオプション』で Gemini か Claude のAPIキーを登録してください。";
   const hasClaude = !!claudeKey;
   const engine = await getAiEngine(env);
   const enabledSkills = hasClaude ? await listSkills(env, true) : [];
@@ -156,8 +157,16 @@ export async function runAgent(ctx: Ctx, owner: string, text: string, image?: { 
 
   // 使うモデルを1つに解決（予算チェック込み）。pause 時は文言を返して終了。
   let model: ChatModel | null = null;
-  let provider: "gemini" | "claude" | "local" = "gemini";
-  if ((want === "local" || (!geminiKey && !claudeKey)) && env.LOCAL_AI_BASE_URL) {
+  let provider: "gemini" | "claude" | "local" | "workers_ai" = "gemini";
+  const wantLocal = want === "local" || (!geminiKey && !claudeKey);
+  // ローカル/クラウドAI：CF上で稼働中なら Workers AI（ニューロン課金）を優先。無ければ OpenAI互換ローカル。
+  if (wantLocal && env.AI) {
+    const wb = await overBudget(env, "workers_ai");
+    if (wb === "pause") return "Workers AI（ローカル/クラウドAI）の今月の上限に達しました（設定 → 使用量・上限 で変更できます）。";
+    await recordUsage(env, "workers_ai");
+    model = workersAiChatModel(env.AI, workersAiModelId(env));
+    provider = "workers_ai";
+  } else if (wantLocal && env.LOCAL_AI_BASE_URL) {
     model = localChatModel(env.LOCAL_AI_BASE_URL, env.LOCAL_AI_MODEL ?? "llama3.1");
     provider = "local";
   } else {

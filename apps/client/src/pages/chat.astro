@@ -47,13 +47,13 @@ const skills = hasPlus && isOrgAdmin ? await listSkills(env).catch(() => []) : [
             <div class="model-seg" id="model-seg" role="group" aria-label="モデル選択">
               <button class="model-opt on" type="button" data-m="gemini">Gemini<small>標準・無料</small></button>
               <button class="model-opt" type="button" data-m="claude">Claude<small>高精度・要キー</small></button>
-              <button class="model-opt" type="button" data-m="local">ローカル<small>簡易</small></button>
+              <button class="model-opt" type="button" data-m="local">クラウドAI<small>Workers AI・無料枠</small></button>
             </div>
             {/* スクリプト互換のため hidden で値を保持 */}
             <select id="model" hidden>
               <option value="gemini">Gemini（標準・無料枠）</option>
               <option value="claude">Claude（高精度・要キー）</option>
-              <option value="local">ローカル（簡易）</option>
+              <option value="local">クラウドAI（Workers AI・無料枠）</option>
             </select>
             <button class="btn btn-sm ses-toggle" type="button" id="ses-toggle">会話履歴</button>
           </div>

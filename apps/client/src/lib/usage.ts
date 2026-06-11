@@ -1,6 +1,6 @@
 // API使用量（回数ベース）の記録・集計・上限。AI機能や各APIの利用を日次でカウントし、
 // 「API使用量」画面で可視化＋無料枠アラート＋従量上限を制御する（§使用量画面）。
-import { resolvePricing } from "../core/models/config.ts";
+import { resolvePricing, NEURON_USD } from "../core/models/config.ts";
 import { logDiag } from "./diag.ts";
 
 // 使用量の記録失敗を診断に残す（P1-2）。WHY: 握りつぶすと上限判定が壊れても気づけない。
@@ -9,12 +9,18 @@ function noteRecordFailure(env: Env, provider: string, e: unknown): void {
   void logDiag(env, "warn", "usage", `使用量記録に失敗（上限判定が不正確になる恐れ）: ${provider}`, (e as Error)?.message ?? String(e));
 }
 
-export const USAGE_PROVIDERS = ["gemini", "claude", "web_search", "image_gen", "tts", "video_gen", "custom"] as const;
+export const USAGE_PROVIDERS = ["gemini", "claude", "workers_ai", "web_search", "image_gen", "tts", "video_gen", "custom"] as const;
 export type UsageProvider = string;
 
 export const PROVIDER_LABEL: Record<string, string> = {
-  gemini: "Gemini（AI）", claude: "Claude（AI）", web_search: "Web検索", image_gen: "画像生成", tts: "音声合成", video_gen: "動画生成", custom: "カスタムAPI",
+  gemini: "Gemini（AI）", claude: "Claude（AI）", workers_ai: "Workers AI（CF・ニューロン）", web_search: "Web検索", image_gen: "画像生成", tts: "音声合成", video_gen: "動画生成", custom: "カスタムAPI",
 };
+
+// 当月の推定ニューロン（workers_ai 用）。est_usd ÷ ニューロン単価。
+export async function monthNeurons(env: Env): Promise<number> {
+  const usd = (await monthUsd(env))["workers_ai"] ?? 0;
+  return usd > 0 ? Math.round(usd / NEURON_USD) : 0;
+}
 
 const todayUtc = (): string => new Date().toISOString().slice(0, 10);
 const monthUtc = (): string => new Date().toISOString().slice(0, 7);
@@ -109,7 +115,7 @@ export async function monthTokens(env: Env): Promise<Record<string, number>> {
 
 // 上限設定（KV）。freeQuota=無料枠（日次・アラート用）／monthlyCap=回数上限（当月）／
 // monthlyUsdCap=推定費用の hard cap（当月・USD）／onExceed=超過時の挙動。
-export type Limit = { freeQuota?: number; monthlyCap?: number; monthlyUsdCap?: number; onExceed?: "switch_free" | "pause" };
+export type Limit = { freeQuota?: number; monthlyCap?: number; monthlyUsdCap?: number; monthlyNeuronCap?: number; onExceed?: "switch_free" | "pause" };
 export type Limits = Record<string, Limit>;
 export async function getLimits(env: Env): Promise<Limits> {
   try { return JSON.parse((await env.LICENSE.get("usage_limits")) ?? "{}") as Limits; } catch { return {}; }
@@ -126,6 +132,11 @@ export async function overBudget(env: Env, provider: string): Promise<"ok" | "sw
   if (lim.monthlyUsdCap && lim.monthlyUsdCap > 0) {
     const usd = (await monthUsd(env))[provider] ?? 0;
     if (usd >= lim.monthlyUsdCap) return lim.onExceed ?? "pause";
+  }
+  // ニューロン上限（workers_ai 用）：est_usd 換算で判定。
+  if (lim.monthlyNeuronCap && lim.monthlyNeuronCap > 0) {
+    const usd = (await monthUsd(env))[provider] ?? 0;
+    if (usd >= lim.monthlyNeuronCap * NEURON_USD) return lim.onExceed ?? "pause";
   }
   if (lim.monthlyCap && lim.monthlyCap > 0) {
     const used = (await monthTotals(env))[provider] ?? 0;
