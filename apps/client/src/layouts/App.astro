@@ -37,12 +37,14 @@ const ctx = Astro.locals.ctx;
 const [themeMod, navMod, diagMod, notifMod, clientMod] = await Promise.all([
   import("../core/theme.ts"), import("../core/nav.ts"), import("../lib/diag.ts"), import("../lib/notifications.ts"), import("../lib/client.ts"),
 ]);
-const [theme, navOv, limitErr, unreadNotif, entitlement] = await Promise.all([
+const [theme, navOv, limitErr, unreadNotif, entitlement, hasClaude, hasGemini] = await Promise.all([
   themeMod.getTheme(ctx).catch(() => ({}) as import("../core/theme.ts").ThemeConfig),
   navMod.getNavOverrides(ctx).catch(() => null),
   diagMod.hasRecentLimitError(env).catch(() => false),
   ses ? notifMod.countUnread(ctx, ses.uid).catch(() => 0) : Promise.resolve(0),
   ses ? clientMod.cachedEntitlement(env).catch(() => "free" as const) : Promise.resolve("free" as const),
+  ses ? clientMod.hasApiKey(env, "claude").catch(() => false) : Promise.resolve(false),
+  ses ? clientMod.hasApiKey(env, "gemini").catch(() => false) : Promise.resolve(false),
 ]);
 const themeStyle = themeMod.themeCss(theme);
 const brand = themeMod.brandName(theme);
@@ -51,6 +53,8 @@ const navItems = navMod.buildNav(items, [], navOv);
 // 相棒（エージェント）マスコット：既定は貘キャラ。Pro未満は「眠っている」表示。
 const mascotUrl = theme.mascotUrl || "/mascot/baku.png";
 const agentAwake = atLeast(entitlement, "pro");
+// 使用中AIの能力で相棒の動きを変える：Claude=活発 / Gemini=標準 / それ以外(Workers AI)=ゆっくり。
+const mascotEngine = hasClaude ? "claude" : hasGemini ? "gemini" : "workers_ai";
 // ユーザーチップ表示用。
 const uname = ses?.name ?? ses?.role ?? "";
 const initial = (uname || "B").slice(0, 1).toUpperCase();
@@ -165,7 +169,7 @@ const firstName = ses?.name ?? (ses?.role ?? "ユーザー");
     </div>
     {auth && ses && (
       <>
-        <button class={"bo-agent " + (agentAwake ? "idle" : "asleep") + (mascotUrl !== "/mascot/baku.png" ? " custom" : "")} id="bo-agent" type="button" data-awake={agentAwake ? "1" : "0"} title="相棒（AI・エージェント）" aria-label="相棒（AI・エージェント）の稼働状況">
+        <button class={"bo-agent " + (agentAwake ? "idle" : "asleep") + (mascotUrl !== "/mascot/baku.png" ? " custom" : "")} id="bo-agent" type="button" data-awake={agentAwake ? "1" : "0"} data-engine={mascotEngine} title="相棒（AI・エージェント）" aria-label="相棒（AI・エージェント）の稼働状況">
           <span class="bo-agent-dots" aria-hidden="true"><i></i><i></i><i></i></span>
           <span class="bo-agent-zzz" aria-hidden="true">z<small>z</small></span>
           <span class="bo-agent-sprite-wrap">

@@ -78,6 +78,12 @@ code, kbd, samp, pre { font-family: var(--mono); }
 .bo-agent-img { width: 88px; height: auto; pointer-events: none; transform-origin: 50% 100%; animation: boAgentIdle 4s ease-in-out infinite; }
 /* カスタム/AI生成画像は背景があり得るので額装（角丸＋面）で自然に見せる。既定の貘は枠なし。 */
 .bo-agent.custom .bo-agent-img { width: 80px; height: 80px; object-fit: cover; border-radius: 18px; background: var(--surface); border: 1px solid var(--line-strong); }
+/* 使用中AIの能力で相棒の動きを変える：Workers AI=ゆっくり / Gemini=標準 / Claude=活発。
+   稼働中(working)・眠り(asleep)は後段ルールが優先（最も活発／睡眠）。 */
+.bo-agent[data-engine="workers_ai"] .bo-agent-img { animation-duration: 6.5s; }
+.bo-agent[data-engine="gemini"] .bo-agent-img { animation-duration: 4s; }
+.bo-agent[data-engine="claude"] .bo-agent-img { animation: boAgentLively 1.7s ease-in-out infinite; }
+@keyframes boAgentLively { 0%,100% { transform: translateY(0) rotate(0); } 30% { transform: translateY(-5px) rotate(-2deg); } 65% { transform: translateY(-1px) rotate(2deg); } }
 /* 待機（idle・Pro）：ゆったり浮遊 */
 @keyframes boAgentIdle { 0%,100% { transform: translateY(0) rotate(0deg); } 50% { transform: translateY(-4px) rotate(-1deg); } }
 /* 稼働中：弾む＋思考ドット＋件数バッジ */
