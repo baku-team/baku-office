@@ -123,8 +123,8 @@ const skills = hasPlus && isOrgAdmin ? await listSkills(env).catch(() => []) : [
         const noteEl = document.getElementById("model-note");
         const engineForModel = (m) => (m === "claude" ? "claude" : m === "gemini" ? "gemini" : "workers_ai");
         const setNote = (m) => {
-          // 相棒の動きに、その場で選んだモデルを反映（全ページ共通）。
-          window.bo.setAgentEngine?.(engineForModel(m));
+          // 相棒の動きに、その場で選んだモデルを反映（全ページ共通）。window.bo 未初期化でも安全に。
+          window.bo?.setAgentEngine?.(engineForModel(m));
           const n = NOTE[m]; if (!noteEl || !n) return;
           noteEl.innerHTML =
             '<div class="mn-use">使用中：' + n.use + "</div>" +
