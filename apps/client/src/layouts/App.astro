@@ -75,7 +75,7 @@ const firstName = ses?.name ?? (ses?.role ?? "ユーザー");
         <a class="sb-brand" href="/"><span class="mark"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d={ICONS.spark} /></svg></span>{brand}</a>
         <nav class="sb-nav" aria-label="サイドナビ">
           {navItems.map((i) => (
-            <a href={i.href} aria-current={active === i.href ? "page" : undefined}>
+            <a href={i.href} data-astro-prefetch="viewport" aria-current={active === i.href ? "page" : undefined}>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d={iconFor(i.href)} /></svg>
               {i.label}
             </a>
@@ -97,7 +97,7 @@ const firstName = ses?.name ?? (ses?.role ?? "ユーザー");
           </span>
           <nav class="nav">
             {navItems.map((i) => (
-              <a href={i.href} aria-current={active === i.href ? "page" : undefined}>
+              <a href={i.href} data-astro-prefetch="viewport" aria-current={active === i.href ? "page" : undefined}>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d={iconFor(i.href)} /></svg>
                 {i.label}
               </a>
@@ -150,7 +150,7 @@ const firstName = ses?.name ?? (ses?.role ?? "ユーザー");
     {auth && ses && (
       <nav class="tabbar" aria-label="メインナビ">
         {navItems.map((i) => (
-          <a href={i.href} aria-current={active === i.href ? "page" : undefined}>
+          <a href={i.href} data-astro-prefetch="viewport" aria-current={active === i.href ? "page" : undefined}>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width={active === i.href ? "2.2" : "1.8"} stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d={iconFor(i.href)} /></svg>
             {i.label}
           </a>
