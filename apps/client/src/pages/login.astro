@@ -30,7 +30,7 @@ const promises = [
       </div>
       <div class="login-brand-mid">
         <div class="eyebrow" style="color:var(--brand)">合同会社 貘</div>
-        <h1 class="display" style="margin:.5rem 0 0">自社のクラウドと<span style="color:var(--brand)">相棒</span>を、ひとつに。</h1>
+        <h1 class="display" style="margin:.5rem 0 0"><span class="nb">自社の</span><span class="nb">クラウドと</span><span class="nb"><span style="color:var(--brand)">相棒</span>を、</span><span class="nb">ひとつに。</span></h1>
         <div class="promises">
           {promises.map((p) => (
             <div class="promise">
@@ -82,6 +82,8 @@ const promises = [
     .lb-mark svg { width: 20px; height: 20px; }
     .login-brand-mid { max-width: 480px; z-index: 2; }
     .login-brand-mid .display { color: #F8F5EE; line-height: 1.2; }
+    /* 折り返しは語のまとまり単位のみ（チャンク内では改行しない）。 */
+    .login-brand-mid .display .nb { white-space: nowrap; }
     .promises { display: flex; flex-direction: column; gap: 14px; margin-top: 32px; }
     .promise { display: flex; gap: 12px; align-items: flex-start; }
     .promise svg { flex: 0 0 auto; margin-top: 2px; background: rgba(255,255,255,.16); border-radius: 50%; padding: 4px; width: 26px; height: 26px; color: #F8F5EE; }

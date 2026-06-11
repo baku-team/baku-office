@@ -230,6 +230,7 @@ const skills = hasPlus && isOrgAdmin ? await listSkills(env).catch(() => []) : [
           const r = await window.bo.api("/api/chat", body, { btn: document.getElementById("send"), successMsg: null });
           clearAttach();
           if (r.ok) {
+            window.bo.pollAgent?.(); // 相棒マスコットを即時更新（バックグラウンド実行の可視化）
             addMsg("a", r.data.reply, true);
             const isNew = !sessionId;
             sessionId = r.data.sessionId;
