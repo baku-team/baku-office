@@ -76,6 +76,8 @@ code, kbd, samp, pre { font-family: var(--mono); }
 .bo-agent:active { transform: scale(.97); }
 .bo-agent-sprite-wrap { width: 100%; height: 100%; display: grid; place-items: end center; filter: drop-shadow(0 6px 10px rgba(14,26,43,.28)); }
 .bo-agent-img { width: 88px; height: auto; pointer-events: none; transform-origin: 50% 100%; animation: boAgentIdle 4s ease-in-out infinite; }
+/* カスタム/AI生成画像は背景があり得るので額装（角丸＋面）で自然に見せる。既定の貘は枠なし。 */
+.bo-agent.custom .bo-agent-img { width: 80px; height: 80px; object-fit: cover; border-radius: 18px; background: var(--surface); border: 1px solid var(--line-strong); }
 /* 待機（idle・Pro）：ゆったり浮遊 */
 @keyframes boAgentIdle { 0%,100% { transform: translateY(0) rotate(0deg); } 50% { transform: translateY(-4px) rotate(-1deg); } }
 /* 稼働中：弾む＋思考ドット＋件数バッジ */

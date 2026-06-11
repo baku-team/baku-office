@@ -34,6 +34,16 @@ const theme = hasPlus ? await getTheme(Astro.locals.ctx) : {};
             <button class="btn btn-sm" type="button" id="th-mascot-default" style="flex:0 0 auto">既定に戻す</button>
           </div>
         </div>
+        <div class="field">
+          <label>AIで相棒を生成（Workers AI）</label>
+          <div class="row" style="gap:.5rem"><input id="th-mascot-prompt" placeholder="例：青い貘の赤ちゃん、和柄、かわいい、シンプル" style="flex:1" /><button class="btn btn-primary btn-sm" type="button" id="th-mascot-gen" style="flex:0 0 auto">生成して設定</button></div>
+          <div class="muted" style="font-size:.78rem;margin-top:4px">説明を入れると相棒画像を生成し、そのまま設定します（数秒〜十数秒）。CF上の Workers AI で生成します。</div>
+        </div>
+        <div class="field">
+          <label>画像をアップロードして設定</label>
+          <div class="row" style="gap:.5rem"><input id="th-mascot-file" type="file" accept="image/png,image/jpeg,image/webp,image/gif" style="flex:1" /><button class="btn btn-sm" type="button" id="th-mascot-up" style="flex:0 0 auto">アップロード</button></div>
+          <div class="muted" style="font-size:.78rem;margin-top:4px">PNG/JPEG/WebP/GIF・3MBまで。背景透過のPNGが綺麗に表示されます。</div>
+        </div>
         <div class="row">
           <label style="flex:1">ブランド色<input id="th-brand-color" value={theme.colors?.brand ?? ""} placeholder="#C9A86A" /></label>
           <label style="flex:1">背景色<input id="th-bg" value={theme.colors?.bg ?? ""} placeholder="#EFE9DC" /></label>
@@ -49,7 +59,26 @@ const theme = hasPlus ? await getTheme(Astro.locals.ctx) : {};
           const mascot = document.getElementById("th-mascot");
           const prev = document.getElementById("th-mascot-prev");
           mascot?.addEventListener("input", () => { if (prev) prev.src = mascot.value.trim() || "/mascot/baku.png"; });
-          document.getElementById("th-mascot-default")?.addEventListener("click", () => { if (mascot) mascot.value = ""; if (prev) prev.src = "/mascot/baku.png"; });
+          document.getElementById("th-mascot-default")?.addEventListener("click", async (e) => {
+            const r = await window.bo.api("/api/mascot", { _action: "reset" }, { btn: e.currentTarget, successMsg: "既定に戻しました" });
+            if (r.ok) { if (mascot) mascot.value = ""; if (prev) prev.src = "/mascot/baku.png"; setTimeout(() => location.reload(), 700); }
+          });
+          // AI生成（Workers AI）
+          document.getElementById("th-mascot-gen")?.addEventListener("click", async (e) => {
+            const prompt = (document.getElementById("th-mascot-prompt").value || "").trim();
+            if (!prompt) { window.bo.toast("どんなキャラにするか入力してください", "err"); return; }
+            const r = await window.bo.api("/api/mascot", { _action: "generate", prompt }, { btn: e.currentTarget, successMsg: null });
+            if (r.ok) { window.bo.toast("相棒を生成しました"); if (mascot) mascot.value = r.data.mascotUrl; if (prev) prev.src = r.data.mascotUrl; setTimeout(() => location.reload(), 1000); }
+          });
+          // アップロード
+          document.getElementById("th-mascot-up")?.addEventListener("click", async (e) => {
+            const f = document.getElementById("th-mascot-file").files?.[0];
+            if (!f) { window.bo.toast("ファイルを選択してください", "err"); return; }
+            if (f.size > 3 * 1024 * 1024) { window.bo.toast("画像は3MBまでです", "err"); return; }
+            const dataB64 = await new Promise((res, rej) => { const rd = new FileReader(); rd.onload = () => res(String(rd.result).split(",")[1] || ""); rd.onerror = rej; rd.readAsDataURL(f); });
+            const r = await window.bo.api("/api/mascot", { _action: "upload", dataB64, mime: f.type }, { btn: e.currentTarget, successMsg: null });
+            if (r.ok) { window.bo.toast("相棒を設定しました"); if (mascot) mascot.value = r.data.mascotUrl; if (prev) prev.src = r.data.mascotUrl; setTimeout(() => location.reload(), 1000); }
+          });
           btn.addEventListener("click", async (e) => {
             const theme = { brand: document.getElementById("th-brand").value, logoUrl: document.getElementById("th-logo").value, mascotUrl: mascot ? mascot.value : "", colors: { brand: document.getElementById("th-brand-color").value, bg: document.getElementById("th-bg").value, ink: document.getElementById("th-ink").value } };
             const r = await window.bo.api("/api/settings", { _action: "ui_theme", theme }, { btn: e.currentTarget, successMsg: "テーマを保存しました" });

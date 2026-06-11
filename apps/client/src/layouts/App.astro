@@ -165,7 +165,7 @@ const firstName = ses?.name ?? (ses?.role ?? "ユーザー");
     </div>
     {auth && ses && (
       <>
-        <button class={"bo-agent " + (agentAwake ? "idle" : "asleep")} id="bo-agent" type="button" data-awake={agentAwake ? "1" : "0"} title="相棒（AI・エージェント）" aria-label="相棒（AI・エージェント）の稼働状況">
+        <button class={"bo-agent " + (agentAwake ? "idle" : "asleep") + (mascotUrl !== "/mascot/baku.png" ? " custom" : "")} id="bo-agent" type="button" data-awake={agentAwake ? "1" : "0"} title="相棒（AI・エージェント）" aria-label="相棒（AI・エージェント）の稼働状況">
           <span class="bo-agent-dots" aria-hidden="true"><i></i><i></i><i></i></span>
           <span class="bo-agent-zzz" aria-hidden="true">z<small>z</small></span>
           <span class="bo-agent-sprite-wrap">
