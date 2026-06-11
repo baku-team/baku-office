@@ -158,7 +158,7 @@ const visGroups = groups.map((g) => ({ ...g, items: g.items.filter((i) => i.show
       }
       const seg = document.getElementById("set-nav");
       if (seg) {
-        const cur = root.getAttribute("data-nav") || "top";
+        const cur = root.getAttribute("data-nav") || "bottom";
         seg.querySelectorAll(".seg-opt").forEach((b) => { b.classList.toggle("on", b.dataset.nav === cur); });
         seg.querySelectorAll(".seg-opt").forEach((b) => b.addEventListener("click", () => {
           root.setAttribute("data-nav", b.dataset.nav);

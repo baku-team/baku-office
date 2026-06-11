@@ -130,25 +130,43 @@ const skills = hasPlus && isOrgAdmin ? await listSkills(env).catch(() => []) : [
           a.href = url; a.download = "baku-office-" + Date.now() + "." + ext;
           document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
         }
-        function addMsg(role, text) {
+        // DLリンク（AI応答の本文に付ける）。
+        function appendDl(body, text) {
+          const dl = document.createElement("div"); dl.className = "cdl"; dl.append("DL：");
+          [["txt", "text/plain"], ["md", "text/markdown"], ["html", "text/html"], ["csv", "text/csv"], ["pdf", ""]].forEach(([ext, mime]) => {
+            const a = document.createElement("a"); a.href = "#"; a.textContent = ext.toUpperCase();
+            a.addEventListener("click", (e) => { e.preventDefault(); dload(text, ext, mime); });
+            dl.appendChild(a);
+          });
+          body.appendChild(dl);
+        }
+        // role=u/a。stream=true（新規AI応答のみ）で実応答テキストを段階表示（タイプ風・点滅キャレット）。履歴は即時。
+        function addMsg(role, text, stream) {
           const d = document.createElement("div");
           d.className = "cmsg " + role;
-          const bub = '<div class="cbub">' + esc(text).replace(/\n/g, "<br>") + "</div>";
+          const html = esc(text).replace(/\n/g, "<br>");
           if (role === "a") {
-            // 相棒オーブ＋本文（DLリンクは本文側に付ける）。
-            d.innerHTML = '<span class="orb cmsg-orb" aria-hidden="true"></span><div class="cmsg-body">' + bub + "</div>";
-            const body = d.querySelector(".cmsg-body");
-            const dl = document.createElement("div"); dl.className = "cdl"; dl.append("DL：");
-            [["txt", "text/plain"], ["md", "text/markdown"], ["html", "text/html"], ["csv", "text/csv"], ["pdf", ""]].forEach(([ext, mime]) => {
-              const a = document.createElement("a"); a.href = "#"; a.textContent = ext.toUpperCase();
-              a.addEventListener("click", (e) => { e.preventDefault(); dload(text, ext, mime); });
-              dl.appendChild(a);
-            });
-            body.appendChild(dl);
+            d.innerHTML = '<span class="orb cmsg-orb" aria-hidden="true"></span><div class="cmsg-body"><div class="cbub"></div></div>';
           } else {
-            d.innerHTML = bub;
+            d.innerHTML = '<div class="cbub"></div>';
           }
-          log.appendChild(d); log.scrollTop = log.scrollHeight;
+          const bub = d.querySelector(".cbub");
+          log.appendChild(d);
+          if (stream && role === "a" && text) {
+            let i = 0;
+            const step = () => {
+              i += 3;
+              bub.innerHTML = esc(text.slice(0, i)).replace(/\n/g, "<br>") + '<span class="caret"></span>';
+              log.scrollTop = log.scrollHeight;
+              if (i < text.length) { setTimeout(step, 18); }
+              else { bub.innerHTML = html; appendDl(d.querySelector(".cmsg-body"), text); log.scrollTop = log.scrollHeight; }
+            };
+            step();
+          } else {
+            bub.innerHTML = html;
+            if (role === "a") appendDl(d.querySelector(".cmsg-body"), text);
+            log.scrollTop = log.scrollHeight;
+          }
         }
         // セッションを開く（履歴ロード）。
         async function openSession(id) {
@@ -212,7 +230,7 @@ const skills = hasPlus && isOrgAdmin ? await listSkills(env).catch(() => []) : [
           const r = await window.bo.api("/api/chat", body, { btn: document.getElementById("send"), successMsg: null });
           clearAttach();
           if (r.ok) {
-            addMsg("a", r.data.reply);
+            addMsg("a", r.data.reply, true);
             const isNew = !sessionId;
             sessionId = r.data.sessionId;
             if (isNew) reloadSessions();
@@ -285,6 +303,7 @@ const skills = hasPlus && isOrgAdmin ? await listSkills(env).catch(() => []) : [
   .cmsg.a { align-self: flex-start; }
   .cmsg-orb { width: 26px; height: 26px; flex: 0 0 auto; margin-top: 2px; }
   .cmsg-body { min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+  .caret { display: inline-block; width: 2px; height: 1em; background: currentColor; margin-left: 1px; vertical-align: -2px; animation: pulse 1s steps(2) infinite; }
   .cbub { padding: 12px 16px; border-radius: 16px; font-size: .92rem; line-height: 1.6; }
   .cmsg.u .cbub { background: var(--primary-bg); color: var(--primary-ink); border-top-right-radius: 4px; }
   .cmsg.a .cbub { background: var(--surface); color: var(--ink); border: 1px solid var(--line); border-top-left-radius: 4px; }
