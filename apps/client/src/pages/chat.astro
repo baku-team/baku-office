@@ -114,7 +114,10 @@ const skills = hasPlus && isOrgAdmin ? await listSkills(env).catch(() => []) : [
           local: { use: "クラウドAI（Cloudflare Workers AI・無料枠）", can: "会話・要約・文章作成", cant: "会計登録/検索などのツール操作（必要なときはGemini/Claudeを選択）" },
         };
         const noteEl = document.getElementById("model-note");
+        const engineForModel = (m) => (m === "claude" ? "claude" : m === "gemini" ? "gemini" : "workers_ai");
         const setNote = (m) => {
+          // 相棒の動きに、その場で選んだモデルを反映（全ページ共通）。
+          window.bo.setAgentEngine?.(engineForModel(m));
           const n = NOTE[m]; if (!noteEl || !n) return;
           noteEl.innerHTML =
             '<div class="mn-use">使用中：' + n.use + "</div>" +

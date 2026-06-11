@@ -423,6 +423,10 @@ const firstName = ses?.name ?? (ses?.role ?? "ユーザー");
           } catch { /* offline */ }
         }
         (window as any).bo.pollAgent = pollAgent;
+        // チャットで選んだモデルを相棒の動き（data-engine）に反映。localStorage で全ページ・再読込にも持続。
+        const applyAgentEngine = (e: string) => { if (e === "claude" || e === "gemini" || e === "workers_ai") agentEl.setAttribute("data-engine", e); };
+        try { const saved = localStorage.getItem("bo_chat_engine"); if (saved) applyAgentEngine(saved); } catch { /* noop */ }
+        (window as any).bo.setAgentEngine = (e: string) => { applyAgentEngine(e); try { localStorage.setItem("bo_chat_engine", e); } catch { /* noop */ } };
         const agentAwake = agentEl.dataset.awake === "1";
         // クリック：稼働中→進捗（吹き出し）／何もしていなければチャットで対話（なにか御用ですか？）。
         agentEl.addEventListener("click", () => {
