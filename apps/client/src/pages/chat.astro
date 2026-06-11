@@ -61,6 +61,13 @@ const skills = hasPlus && isOrgAdmin ? await listSkills(env).catch(() => []) : [
             <button class="btn btn-sm ses-toggle" type="button" id="ses-toggle">会話履歴</button>
           </div>
           <div class="model-note" id="model-note"></div>
+          <div class="chat-dl">
+            <span class="muted">この会話を保存：</span>
+            <button class="btn btn-sm dlc" type="button" data-ext="txt">TXT</button>
+            <button class="btn btn-sm dlc" type="button" data-ext="md">MD</button>
+            <button class="btn btn-sm dlc" type="button" data-ext="html">HTML</button>
+            <button class="btn btn-sm dlc" type="button" data-ext="pdf">PDF</button>
+          </div>
           <div id="log"></div>
           {hasPro && (
             <label class="muted" style="font-size:.8rem;display:flex;align-items:center;gap:6px;margin-top:8px">
@@ -153,26 +160,22 @@ const skills = hasPlus && isOrgAdmin ? await listSkills(env).catch(() => []) : [
           a.href = url; a.download = "baku-office-" + Date.now() + "." + ext;
           document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
         }
-        // DLリンク（AI応答の本文に付ける）。
-        function appendDl(body, text) {
-          const dl = document.createElement("div"); dl.className = "cdl"; dl.append("DL：");
-          [["txt", "text/plain"], ["md", "text/markdown"], ["html", "text/html"], ["csv", "text/csv"], ["pdf", ""]].forEach(([ext, mime]) => {
-            const a = document.createElement("a"); a.href = "#"; a.textContent = ext.toUpperCase();
-            a.addEventListener("click", (e) => { e.preventDefault(); dload(text, ext, mime); });
-            dl.appendChild(a);
+        // 会話全体をテキスト化（セッション単位のダウンロード用）。
+        function conversationText() {
+          const out = [];
+          log.querySelectorAll(".cmsg").forEach((m) => {
+            const who = m.classList.contains("u") ? "あなた" : "相棒";
+            const b = m.querySelector(".cbub");
+            out.push(who + "： " + (b ? b.innerText.trim() : ""));
           });
-          body.appendChild(dl);
+          return out.join("\n\n");
         }
-        // role=u/a。stream=true（新規AI応答のみ）で実応答テキストを段階表示（タイプ風・点滅キャレット）。履歴は即時。
+        // role=u/a。発言者ラベル付き。stream=true（新規AI応答のみ）で段階表示（タイプ風・点滅キャレット）。履歴は即時。
         function addMsg(role, text, stream) {
           const d = document.createElement("div");
           d.className = "cmsg " + role;
           const html = esc(text).replace(/\n/g, "<br>");
-          if (role === "a") {
-            d.innerHTML = '<div class="cmsg-body"><div class="cbub"></div></div>';
-          } else {
-            d.innerHTML = '<div class="cbub"></div>';
-          }
+          d.innerHTML = '<div class="cmsg-body"><span class="cmsg-who">' + (role === "a" ? "相棒" : "あなた") + '</span><div class="cbub"></div></div>';
           const bub = d.querySelector(".cbub");
           log.appendChild(d);
           if (stream && role === "a" && text) {
@@ -182,15 +185,22 @@ const skills = hasPlus && isOrgAdmin ? await listSkills(env).catch(() => []) : [
               bub.innerHTML = esc(text.slice(0, i)).replace(/\n/g, "<br>") + '<span class="caret"></span>';
               log.scrollTop = log.scrollHeight;
               if (i < text.length) { setTimeout(step, 18); }
-              else { bub.innerHTML = html; appendDl(d.querySelector(".cmsg-body"), text); log.scrollTop = log.scrollHeight; }
+              else { bub.innerHTML = html; log.scrollTop = log.scrollHeight; }
             };
             step();
           } else {
             bub.innerHTML = html;
-            if (role === "a") appendDl(d.querySelector(".cmsg-body"), text);
             log.scrollTop = log.scrollHeight;
           }
         }
+        // セッション単位のダウンロード（枠外ツールバー）。
+        document.querySelectorAll(".chat-dl .dlc").forEach((b) => b.addEventListener("click", () => {
+          const t = conversationText();
+          if (!t) { window.bo.toast("まだ会話がありません", "err"); return; }
+          const ext = b.dataset.ext;
+          const mime = { txt: "text/plain", md: "text/markdown", html: "text/html", pdf: "" }[ext] || "text/plain";
+          dload(t, ext, mime);
+        }));
         // セッションを開く（履歴ロード）。
         async function openSession(id) {
           sessionId = id; log.innerHTML = "";
@@ -327,19 +337,21 @@ const skills = hasPlus && isOrgAdmin ? await listSkills(env).catch(() => []) : [
   .model-note .mn-use { font-weight: 700; color: var(--ink-2); }
   .model-note .mn-can { color: var(--ok); }
   .model-note .mn-cant { color: var(--danger); }
-  #log { border: 1px solid var(--line); border-radius: var(--r); padding: 18px; min-height: 240px; max-height: 52vh; overflow-y: auto; background: var(--surface-2); display: flex; flex-direction: column; gap: 16px; }
-  .cmsg { max-width: 86%; display: flex; gap: 10px; }
+  .chat-dl { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin: 0 2px 12px; }
+  .chat-dl > span { font-size: .76rem; }
+  #log { border: 1px solid var(--line); border-radius: var(--r); padding: 18px; min-height: 240px; max-height: 52vh; overflow-y: auto; background: var(--surface-2); display: flex; flex-direction: column; gap: 18px; }
+  .cmsg { max-width: 86%; display: flex; }
   .cmsg.u { align-self: flex-end; }
   .cmsg.a { align-self: flex-start; }
-  .cmsg-body { min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+  .cmsg-body { min-width: 0; display: flex; flex-direction: column; gap: 4px; width: 100%; }
+  .cmsg.u .cmsg-body { align-items: flex-end; }
+  .cmsg-who { font-size: .68rem; font-weight: 700; color: var(--muted); margin: 0 6px; }
+  .cmsg.a .cmsg-who { color: var(--brand-strong); }
   .caret { display: inline-block; width: 2px; height: 1em; background: currentColor; margin-left: 1px; vertical-align: -2px; animation: pulse 1s steps(2) infinite; }
-  .cbub { padding: 12px 16px; border-radius: 16px; font-size: .92rem; line-height: 1.6; }
+  .cbub { padding: 11px 15px; border-radius: 16px; font-size: .92rem; line-height: 1.65; display: inline-block; max-width: 100%; }
   .cmsg.u .cbub { background: var(--primary-bg); color: var(--primary-ink); border-top-right-radius: 4px; }
   .cmsg.a .cbub { background: var(--surface); color: var(--ink); border: 1px solid var(--line); border-top-left-radius: 4px; }
-  .cdl { display: flex; gap: 8px; align-items: center; margin-top: 6px; font-size: .74rem; color: var(--muted); flex-wrap: wrap; }
-  .cdl a { color: var(--ink-2); text-decoration: none; border: 1px solid var(--line-strong); border-radius: var(--r-xs); padding: 3px 9px; font-weight: 600; }
-  .cdl a:hover { background: var(--surface-3); }
-  .cinput { display: flex; gap: 10px; margin-top: 14px; align-items: flex-end; }
+  .cinput { display: flex; gap: 10px; margin-top: 16px; align-items: flex-end; }
   .cinput textarea { flex: 1; min-height: 52px; padding: 12px 14px; border: 1px solid var(--line-strong); border-radius: var(--r-sm); font: inherit; resize: vertical; background: var(--surface); color: var(--ink); }
   .cinput textarea:focus { outline: none; border-color: var(--brand); box-shadow: var(--ring); }
 </style>
