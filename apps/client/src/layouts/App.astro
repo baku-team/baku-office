@@ -158,6 +158,26 @@ const firstName = ses?.name ?? (ses?.role ?? "ユーザー");
       </nav>
     )}
     </div>
+    {auth && ses && (
+      <>
+        <button class="bo-agent idle" id="bo-agent" type="button" title="AI・エージェントの稼働状況" aria-label="AI・エージェントの稼働状況">
+          <span class="bo-agent-dots" aria-hidden="true"><i></i><i></i><i></i></span>
+          <span class="bo-agent-sprite-wrap">
+            <svg class="bo-agent-sprite" viewBox="0 0 16 16" shape-rendering="crispEdges" aria-hidden="true">
+              <rect class="px-ant" x="7" y="1" width="2" height="2"></rect>
+              <rect class="px-body" x="3" y="3" width="10" height="9"></rect>
+              <rect class="px-body" x="1" y="6" width="2" height="3"></rect>
+              <rect class="px-body" x="13" y="6" width="2" height="3"></rect>
+              <rect class="px-eye" x="5" y="6" width="2" height="2"></rect>
+              <rect class="px-eye" x="9" y="6" width="2" height="2"></rect>
+              <rect class="px-mouth" x="6" y="9" width="4" height="1"></rect>
+            </svg>
+          </span>
+          <span class="bo-agent-badge" id="bo-agent-badge"></span>
+        </button>
+        <div class="bo-agent-pop" id="bo-agent-pop" hidden></div>
+      </>
+    )}
     <div id="toasts" aria-live="polite"></div>
     <div id="bo-notif" hidden style="position:fixed;top:52px;right:12px;width:320px;max-height:70vh;overflow:auto;background:var(--surface);border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow-lg);z-index:50;padding:8px"></div>
 
@@ -371,6 +391,40 @@ const firstName = ses?.name ?? (ses?.role ?? "ユーザー");
         document.addEventListener("click", (e) => {
           if (!panel.hidden && !panel.contains(e.target as Node) && e.target !== bell) panel.hidden = true;
         });
+      }
+      // エージェント稼働マスコット：/api/activity を定期取得して相棒の動きに反映（全ページ共通）。
+      const agentEl = document.getElementById("bo-agent");
+      const agentPop = document.getElementById("bo-agent-pop");
+      const agentBadge = document.getElementById("bo-agent-badge");
+      if (agentEl && agentPop && agentBadge) {
+        const KIND: Record<string, string> = { agent: "🤖", summary: "📝", video: "🎬" };
+        const KLABEL: Record<string, string> = { agent: "AIエージェント", summary: "ファイル要約", video: "動画生成" };
+        let agentTasks: { kind: string; status: string; label: string }[] = [];
+        const escHtml = (s: string) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c] as string));
+        function renderPop() {
+          if (!agentTasks.length) { agentPop!.innerHTML = '<h4>相棒は待機中です</h4><div class="muted" style="font-size:.8rem">いまバックグラウンドで動いているタスクはありません。</div>'; return; }
+          let h = '<h4><span class="spin"></span>稼働中のタスク ' + agentTasks.length + " 件</h4>";
+          for (const t of agentTasks) h += '<div class="bo-agent-task"><span class="k">' + (KIND[t.kind] || "⚙") + '</span><span class="t">' + escHtml(t.label || KLABEL[t.kind] || "処理") + '</span><span class="s">' + (t.status === "running" ? "実行中" : "待機") + "</span></div>";
+          agentPop!.innerHTML = h;
+        }
+        async function pollAgent() {
+          try {
+            const r = await fetch("/api/activity", { headers: { accept: "application/json" } }); // 進捗バーは出さない（静かに監視）
+            if (!r.ok) return;
+            const d: any = await r.json();
+            agentTasks = d.tasks || [];
+            const n = d.active || 0;
+            agentEl!.classList.toggle("working", n > 0);
+            agentEl!.classList.toggle("idle", n === 0);
+            agentBadge!.textContent = n > 0 ? String(n) : "";
+            if (!agentPop!.hidden) renderPop();
+          } catch { /* offline */ }
+        }
+        (window as any).bo.pollAgent = pollAgent;
+        agentEl.addEventListener("click", () => { agentPop.hidden = !agentPop.hidden; if (!agentPop.hidden) renderPop(); });
+        document.addEventListener("click", (e) => { if (!agentPop.hidden && !agentPop.contains(e.target as Node) && !agentEl.contains(e.target as Node)) agentPop.hidden = true; });
+        pollAgent();
+        setInterval(pollAgent, 8000);
       }
     </script>
     <slot name="scripts" />
