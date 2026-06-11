@@ -29,14 +29,10 @@ const _apps = appCatalog().filter((a) => instSet.has(a.id)).map((a) => ({ id: a.
 try { Astro.locals.runtime.ctx.waitUntil(pollHost(env, Astro.url.origin, _apps).catch(() => {})); }
 catch { pollHost(env, Astro.url.origin, _apps).catch(() => {}); }
 
-// 描画に必要なデータは全て並列取得（直列の往復待ちを排除）。
+// 軽量データは常に並列取得。重い KPI（残高・当月収支・承認待ち・ストレージ）は短期キャッシュ。
 const widgetDefs = widgetsOf(enabledParts([...instSet]));
-const [entitlement, storage, balanceRow, monthAgg, pendingCount, homeLayout, theme, latestVersion, noticesRaw, lastAtRaw, backupAlertState, widgetData] = await Promise.all([
+const [entitlement, homeLayout, theme, latestVersion, noticesRaw, lastAtRaw, backupAlertState, widgetData, kpiRaw] = await Promise.all([
   cachedEntitlement(env).catch(() => "free" as const),
-  getStorageUsage(env).catch(() => [] as Awaited<ReturnType<typeof getStorageUsage>>),
-  env.DB.prepare("SELECT COALESCE(SUM(opening_balance),0) AS b FROM wallets").first<{ b: number }>().catch(() => null),
-  env.DB.prepare("SELECT kind, COALESCE(SUM(amount),0) AS s FROM transactions WHERE deleted_at IS NULL AND kind IN ('income','expense') AND substr(date,1,7)=? GROUP BY kind").bind(ym).all<{ kind: string; s: number }>().catch(() => ({ results: [] as { kind: string; s: number }[] })),
-  reviewQueue(env).then((r) => r.length).catch(() => 0),
   getHomeLayout(ctx).catch(() => null),
   getTheme(ctx).catch(() => ({}) as import("../core/theme.ts").ThemeConfig),
   env.LICENSE.get("latest_version").catch(() => null),
@@ -44,12 +40,35 @@ const [entitlement, storage, balanceRow, monthAgg, pendingCount, homeLayout, the
   env.LICENSE.get("entitlement_at").catch(() => null),
   isOrgAdmin ? backupAlert(env).catch(() => ({ alert: false, never: false, lastAt: null })) : Promise.resolve({ alert: false, never: false, lastAt: null }),
   Promise.all(widgetDefs.map(async (w) => { try { return { title: w.title, span: w.span, ...(await w.run(ctx, ses.uid)) }; } catch { return null; } })).then((a) => a.filter(Boolean) as { title: string; value: string; sub?: string; span?: number }[]),
+  env.LICENSE.get("kpi_cache").catch(() => null),
 ]);
 
-const balance = balanceRow?.b ?? 0;
-let monthIncome = 0, monthExpense = 0;
-for (const row of monthAgg.results) { if (row.kind === "income") monthIncome = row.s; else if (row.kind === "expense") monthExpense = row.s; }
+// KPIは30秒キャッシュ＝DB集計/ストレージ計測を間引く（D1/KV読取の削減＋描画高速化）。
+// 月初〜翌月初の range 検索でインデックス（idx_tx_date）を利用（substr は不可）。
+const monthStart = ym + "-01";
+const _d = new Date();
+const nextMonthStart = new Date(Date.UTC(_d.getUTCFullYear(), _d.getUTCMonth() + 1, 1)).toISOString().slice(0, 10);
+type Kpi = { balance: number; monthIncome: number; monthExpense: number; pending: number; storage: Awaited<ReturnType<typeof getStorageUsage>>; at: number };
+let kpi: Kpi | null = null;
+try { if (kpiRaw) { const o = JSON.parse(kpiRaw) as Kpi; if (nowSec() - o.at < 30) kpi = o; } } catch { /* noop */ }
+if (!kpi) {
+  const [balanceRow, monthAgg, pending, st] = await Promise.all([
+    env.DB.prepare("SELECT COALESCE(SUM(opening_balance),0) AS b FROM wallets").first<{ b: number }>().catch(() => null),
+    env.DB.prepare("SELECT kind, COALESCE(SUM(amount),0) AS s FROM transactions WHERE deleted_at IS NULL AND kind IN ('income','expense') AND date >= ? AND date < ? GROUP BY kind").bind(monthStart, nextMonthStart).all<{ kind: string; s: number }>().catch(() => ({ results: [] as { kind: string; s: number }[] })),
+    reviewQueue(env).then((r) => r.length).catch(() => 0),
+    getStorageUsage(env).catch(() => [] as Awaited<ReturnType<typeof getStorageUsage>>),
+  ]);
+  let mi = 0, me = 0;
+  for (const row of monthAgg.results) { if (row.kind === "income") mi = row.s; else if (row.kind === "expense") me = row.s; }
+  kpi = { balance: balanceRow?.b ?? 0, monthIncome: mi, monthExpense: me, pending, storage: st, at: nowSec() };
+  const blob = JSON.stringify(kpi);
+  try { Astro.locals.runtime.ctx.waitUntil(env.LICENSE.put("kpi_cache", blob)); } catch { env.LICENSE.put("kpi_cache", blob).catch(() => {}); }
+}
+const balance = kpi.balance;
+const monthIncome = kpi.monthIncome, monthExpense = kpi.monthExpense;
 const monthNet = monthIncome - monthExpense;
+const pendingCount = kpi.pending;
+const storage = kpi.storage;
 const updateAvailable = !!latestVersion && cmpVersion(latestVersion, APP_VERSION) > 0;
 let notices: { id: string; severity: string; body: string }[] = [];
 try { notices = JSON.parse(noticesRaw ?? "[]"); } catch { /* noop */ }

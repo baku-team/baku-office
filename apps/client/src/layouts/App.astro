@@ -68,6 +68,7 @@ const firstName = ses?.name ?? (ses?.role ?? "ユーザー");
     {themeStyle && <style set:html={themeStyle}></style>}
   </head>
   <body>
+    <div id="bo-progress" aria-hidden="true"></div>
     <div class="app">
     {auth && ses && (
       <aside class="sidebar">
@@ -164,6 +165,22 @@ const firstName = ses?.name ?? (ses?.role ?? "ユーザー");
       // 共通フィードバック：トースト＋fetchラッパ。全操作で必ず成否を可視化する。
       type ApiOpts = { btn?: HTMLButtonElement | null; method?: string; errMsg?: string | null; successMsg?: string | null };
       const wrap = document.getElementById("toasts");
+      // 上部進捗バー（ホスト/API通信中・画面遷移中）。参照カウントで多重に耐える。
+      const progEl = document.getElementById("bo-progress");
+      let progCount = 0; let progTimer: number | null = null; let progW = 0;
+      function progStart() {
+        progCount++;
+        if (!progEl || progCount > 1) return;
+        progW = 8; progEl.classList.add("on"); progEl.style.width = "8%";
+        progTimer = window.setInterval(() => { progW = Math.min(92, progW + (92 - progW) * 0.18); progEl.style.width = progW + "%"; }, 240);
+      }
+      function progDone() {
+        progCount = Math.max(0, progCount - 1);
+        if (!progEl || progCount > 0) return;
+        if (progTimer) { clearInterval(progTimer); progTimer = null; }
+        progEl.style.width = "100%";
+        window.setTimeout(() => { progEl.classList.remove("on"); progEl.style.width = "0"; progW = 0; }, 260);
+      }
       function toast(msg: string, kind = "ok") {
         // エラーは assertive で即読み上げ（成功/情報は polite）。
         if (wrap) wrap.setAttribute("aria-live", kind === "err" ? "assertive" : "polite");
@@ -180,9 +197,9 @@ const firstName = ses?.name ?? (ses?.role ?? "ユーザー");
         if (on) { btn.disabled = true; btn.dataset.label = btn.innerHTML; btn.innerHTML = '<span class="spin"></span>処理中…'; }
         else { btn.disabled = false; if (btn.dataset.label) btn.innerHTML = btn.dataset.label; }
       }
-      // JSON API 呼び出し＋自動トースト。成功/失敗を必ず表示。
+      // JSON API 呼び出し＋自動トースト。成功/失敗を必ず表示。通信中は上部進捗バーを表示。
       async function api(url: string, body?: unknown, opts: ApiOpts = {}) {
-        const btn = opts.btn ?? null; busy(btn, true);
+        const btn = opts.btn ?? null; busy(btn, true); progStart();
         try {
           const r = await fetch(url, { method: opts.method || "POST", headers: { "content-type": "application/json" }, body: body !== undefined ? JSON.stringify(body) : undefined });
           let j: any = {}; try { j = await r.json(); } catch { /* non-json */ }
@@ -191,7 +208,7 @@ const firstName = ses?.name ?? (ses?.role ?? "ユーザー");
           return { ok: true, data: j };
         } catch (e) {
           toast("通信に失敗しました：" + ((e as Error)?.message || ""), "err"); return { ok: false, error: e };
-        } finally { busy(btn, false); }
+        } finally { busy(btn, false); progDone(); }
       }
       // 確認ダイアログ（危険操作の統一・§9）。window.confirm を置換し、リスクラベル・取消不可表示・
       // 監査ログ導線を標準化。Promise<boolean> を返す。a11y: role=dialog/aria-modal・フォーカストラップ・
@@ -265,7 +282,21 @@ const firstName = ses?.name ?? (ses?.role ?? "ユーザー");
           cancel.focus(); // 既定はキャンセル＝誤確定を防ぐ
         });
       }
-      (window as any).bo = { toast, busy, api, confirm: confirmDialog };
+      (window as any).bo = { toast, busy, api, confirm: confirmDialog, progress: { start: progStart, done: progDone } };
+
+      // 画面遷移（内部リンク/フォーム送信）でも進捗バーを表示。フルページ遷移は新ページ読込で自然にリセット。
+      document.addEventListener("click", (e) => {
+        const a = (e.target as HTMLElement)?.closest?.("a[href]") as HTMLAnchorElement | null;
+        if (!a) return;
+        if (e.defaultPrevented || (e as MouseEvent).button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+        if (a.target === "_blank" || a.hasAttribute("download")) return;
+        const href = a.getAttribute("href") || "";
+        if (!href || href.startsWith("#") || href.startsWith("javascript:")) return;
+        if (a.host && a.host !== location.host) return; // 外部リンクは除外
+        progStart(); window.setTimeout(progDone, 8000); // 遷移しなかった場合の保険
+      }, true);
+      document.addEventListener("submit", (e) => { const f = e.target as HTMLFormElement; if (f && f.method && f.method.toLowerCase() === "get") { progStart(); window.setTimeout(progDone, 8000); } }, true);
+      window.addEventListener("pageshow", () => { progCount = 0; if (progEl) { progEl.classList.remove("on"); progEl.style.width = "0"; } });
 
       // テーマ切替（ダーク/ライト）。切替の一瞬だけ theme-switching でトランジション抑制。
       const MOON = "M20 13.5A8 8 0 119.5 4 6.5 6.5 0 0020 13.5z";
