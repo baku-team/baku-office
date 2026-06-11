@@ -70,43 +70,43 @@ code, kbd, samp, pre { font-family: var(--mono); }
 .appbar .user a { color: var(--muted); }
 .appbar .user a:hover { color: var(--ink); }
 
-/* エージェント稼働マスコット（全ページ共通・ドット絵の相棒） */
-.bo-agent { position: fixed; left: 16px; bottom: 18px; z-index: 60; display: flex; align-items: center; gap: 6px; padding: 6px 8px; border-radius: var(--r-pill); border: 1px solid var(--line); background: color-mix(in srgb, var(--surface) 88%, transparent); backdrop-filter: blur(8px); box-shadow: var(--shadow); cursor: pointer; transition: transform .12s, box-shadow .2s, opacity .3s; }
-.bo-agent:hover { box-shadow: var(--shadow-lg); }
-.bo-agent:active { transform: scale(.96); }
-.bo-agent.idle { opacity: .72; }
-.bo-agent.idle:hover { opacity: 1; }
-.bo-agent-sprite-wrap { width: 30px; height: 30px; display: grid; place-items: center; }
-.bo-agent-sprite { width: 28px; height: 28px; }
-.bo-agent-sprite .px-body { fill: var(--brand); }
-.bo-agent-sprite .px-eye { fill: var(--navy); }
-[data-theme="dark"] .bo-agent-sprite .px-eye { fill: #0E1A2B; }
-.bo-agent-sprite .px-mouth { fill: var(--navy); opacity: .55; }
-.bo-agent-sprite .px-ant { fill: var(--line-strong); }
-/* 稼働中：相棒が跳ねて目が光り、アンテナ点滅＋思考ドット表示 */
-.bo-agent.working .bo-agent-sprite { animation: boAgentBob .9s ease-in-out infinite; }
-.bo-agent.working .px-eye { fill: var(--ok); animation: boAgentBlink 1.6s steps(1) infinite; }
-.bo-agent.working .px-ant { fill: var(--brand); animation: pulse .8s steps(2) infinite; }
-.bo-agent-dots { display: none; gap: 3px; align-items: flex-end; height: 14px; padding: 0 2px; }
+/* エージェント稼働マスコット（全ページ共通・貘の相棒）。「相棒」は主機能のため大きく目立たせる。 */
+.bo-agent { position: fixed; left: 18px; bottom: 18px; z-index: 60; display: block; width: 96px; height: 96px; border: 0; background: transparent; padding: 0; cursor: pointer; transition: transform .15s; -webkit-tap-highlight-color: transparent; }
+.bo-agent:hover { transform: translateY(-3px) scale(1.04); }
+.bo-agent:active { transform: scale(.97); }
+.bo-agent-sprite-wrap { width: 100%; height: 100%; display: grid; place-items: end center; filter: drop-shadow(0 6px 10px rgba(14,26,43,.28)); }
+.bo-agent-img { width: 88px; height: auto; pointer-events: none; transform-origin: 50% 100%; animation: boAgentIdle 4s ease-in-out infinite; }
+/* 待機（idle・Pro）：ゆったり浮遊 */
+@keyframes boAgentIdle { 0%,100% { transform: translateY(0) rotate(0deg); } 50% { transform: translateY(-4px) rotate(-1deg); } }
+/* 稼働中：弾む＋思考ドット＋件数バッジ */
+.bo-agent.working .bo-agent-img { animation: boAgentBob .8s ease-in-out infinite; }
+@keyframes boAgentBob { 0%,100% { transform: translateY(0) rotate(0); } 25% { transform: translateY(-7px) rotate(-3deg); } 75% { transform: translateY(-2px) rotate(3deg); } }
+.bo-agent-dots { position: absolute; top: -4px; right: -2px; display: none; gap: 3px; align-items: flex-end; padding: 5px 8px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-pill); box-shadow: var(--shadow-sm); }
 .bo-agent.working .bo-agent-dots { display: flex; }
-.bo-agent-dots i { width: 4px; height: 4px; border-radius: 50%; background: var(--brand-strong); animation: boAgentDot 1.1s ease-in-out infinite; }
+.bo-agent-dots i { width: 5px; height: 5px; border-radius: 50%; background: var(--brand-strong); animation: boAgentDot 1.1s ease-in-out infinite; }
 [data-theme="dark"] .bo-agent-dots i { background: var(--brand); }
 .bo-agent-dots i:nth-child(2) { animation-delay: .18s; }
 .bo-agent-dots i:nth-child(3) { animation-delay: .36s; }
-.bo-agent-badge { min-width: 16px; height: 16px; padding: 0 4px; border-radius: 9px; background: var(--brand); color: var(--on-brand); font-size: .64rem; font-weight: 800; line-height: 16px; text-align: center; }
-.bo-agent.idle .bo-agent-badge { display: none; }
-.bo-agent-pop { position: fixed; left: 16px; bottom: 60px; z-index: 61; width: min(300px, 86vw); background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md); box-shadow: var(--shadow-lg); padding: 10px; }
-.bo-agent-pop h4 { margin: 0 0 8px; font-size: .82rem; font-weight: 700; display: flex; align-items: center; gap: 6px; }
-.bo-agent-task { display: flex; align-items: center; gap: 9px; padding: 8px 6px; border-top: 1px solid var(--line); font-size: .82rem; }
+/* 眠り（Pro未満）：グレースケール＋薄く＋zzz、ゆっくり呼吸 */
+.bo-agent.asleep .bo-agent-img { filter: grayscale(.85); opacity: .6; animation: boAgentSleep 5s ease-in-out infinite; }
+@keyframes boAgentSleep { 0%,100% { transform: scale(1); } 50% { transform: scale(1.02); } }
+.bo-agent-zzz { position: absolute; top: 2px; right: 4px; display: none; color: var(--muted); font-weight: 800; font-size: .85rem; line-height: 1; animation: boAgentZ 3s ease-in-out infinite; }
+.bo-agent-zzz small { font-size: .62rem; vertical-align: super; }
+.bo-agent.asleep .bo-agent-zzz { display: block; }
+@keyframes boAgentZ { 0% { opacity: 0; transform: translate(0,4px); } 35% { opacity: .9; } 70%,100% { opacity: 0; transform: translate(5px,-9px); } }
+.bo-agent-badge { position: absolute; top: 0; right: 0; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: var(--brand); color: var(--on-brand); font-size: .66rem; font-weight: 800; line-height: 18px; text-align: center; box-shadow: var(--shadow-sm); display: none; }
+.bo-agent.working .bo-agent-badge { display: block; }
+/* 吹き出し（タスク一覧／進捗） */
+.bo-agent-pop { position: fixed; left: 18px; bottom: 122px; z-index: 61; width: min(300px, 86vw); background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md); box-shadow: var(--shadow-lg); padding: 12px; }
+.bo-agent-pop h4 { margin: 0 0 8px; font-size: .85rem; font-weight: 700; display: flex; align-items: center; gap: 6px; }
+.bo-agent-task { display: flex; align-items: center; gap: 9px; padding: 8px 4px; border-top: 1px solid var(--line); font-size: .82rem; }
 .bo-agent-task:first-of-type { border-top: 0; }
 .bo-agent-task .k { width: 24px; height: 24px; border-radius: 7px; display: grid; place-items: center; background: var(--brand-soft); color: var(--brand-strong); flex: 0 0 auto; font-size: .8rem; }
 .bo-agent-task .t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .bo-agent-task .s { font-size: .7rem; color: var(--muted); flex: 0 0 auto; }
-@keyframes boAgentBob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
-@keyframes boAgentBlink { 0%,90%,100% { opacity: 1; } 93%,97% { opacity: .15; } }
 @keyframes boAgentDot { 0%,100% { transform: translateY(0); opacity: .5; } 50% { transform: translateY(-5px); opacity: 1; } }
-@media (max-width: 720px) { .bo-agent { bottom: calc(74px + env(safe-area-inset-bottom)); } .bo-agent-pop { bottom: calc(118px + env(safe-area-inset-bottom)); } }
-@media (prefers-reduced-motion: reduce) { .bo-agent.working .bo-agent-sprite, .bo-agent-dots i { animation: none !important; } }
+@media (max-width: 720px) { .bo-agent { left: 12px; bottom: calc(72px + env(safe-area-inset-bottom)); width: 78px; height: 78px; } .bo-agent-img { width: 72px; } .bo-agent-pop { left: 12px; bottom: calc(150px + env(safe-area-inset-bottom)); } }
+@media (prefers-reduced-motion: reduce) { .bo-agent-img, .bo-agent-dots i, .bo-agent-zzz { animation: none !important; } }
 
 /* トップ進捗バー（ホスト/API通信中・画面遷移中の表示） */
 #bo-progress { position: fixed; top: 0; left: 0; height: 3px; width: 0; background: var(--brand); z-index: 200; opacity: 0; pointer-events: none; transition: width .2s ease, opacity .25s ease; box-shadow: 0 0 8px var(--brand), 0 0 3px var(--brand); }
