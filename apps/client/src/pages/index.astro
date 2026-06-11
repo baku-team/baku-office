@@ -77,10 +77,7 @@ const clampSpan = (n?: number) => Math.max(1, Math.min(3, Number(n) || 1));
 
   {/* 相棒プロンプト（AI相棒への導線） */}
   <div class="card ai-prompt" style="margin-top:1rem">
-    <div class="row" style="display:flex;align-items:center;gap:12px">
-      <span class="orb" style="width:34px;height:34px"></span>
-      <div><strong>相棒に話しかける</strong><div class="muted" style="font-size:.82rem">やりたいことを書くと、AIが手伝います。</div></div>
-    </div>
+    <div><strong>相棒に話しかける</strong><div class="muted" style="font-size:.82rem">やりたいことを書くと、AIが手伝います。</div></div>
     <form class="ai-prompt-bar" method="get" action="/chat">
       <input class="ap-input" name="q" placeholder="例：今月の会費の入金状況をまとめて" aria-label="相棒に話しかける" />
       <button class="btn btn-primary btn-sm" type="submit" style="flex:0 0 auto">送信</button>
