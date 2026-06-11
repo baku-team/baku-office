@@ -49,7 +49,14 @@ export const POST: APIRoute = async ({ request, locals }) => {
   }
 
   const model = (["gemini", "claude", "local"].includes(String(b.model)) ? b.model : undefined) as ChatModelId | undefined;
-  const reply = await ctx.agent.run({ owner: ses.uid, text: prompt, image: b.image, role: ses.role, baseUrl: new URL(request.url).origin, history: toTurns(prior), model });
+  let reply: string;
+  try {
+    reply = await ctx.agent.run({ owner: ses.uid, text: prompt, image: b.image, role: ses.role, baseUrl: new URL(request.url).origin, history: toTurns(prior), model });
+  } catch (e) {
+    const msg = (e as Error)?.message ?? String(e);
+    await (await import("../../lib/diag.ts")).logDiag(env, "error", "chat", `agent.run失敗(model=${b.model ?? "auto"}): ${msg}`);
+    reply = "⚠️ AIの実行でエラーが発生しました。時間をおいて再度お試しください。別のモデル（Gemini など）もお試しいただけます。";
+  }
   await appendMessage(ctx, sessionId, "assistant", reply);
   return json({ ok: true, reply, sessionId });
 };
