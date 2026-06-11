@@ -1,5 +1,6 @@
 ---
 import "../styles/app.css";
+import { atLeast } from "@baku-office/shared";
 const env = Astro.locals.runtime.env;
 interface Props { title: string; active?: string; auth?: boolean; bare?: boolean }
 const { title, active = "", auth = true, bare = false } = Astro.props as Props;
@@ -33,19 +34,23 @@ const items: Item[] = [
 
 // UIカスタマイズ（共通ベース＋団体ごと上書き）。レイアウトの各データは並列取得して直列待ちを排除。
 const ctx = Astro.locals.ctx;
-const [themeMod, navMod, diagMod, notifMod] = await Promise.all([
-  import("../core/theme.ts"), import("../core/nav.ts"), import("../lib/diag.ts"), import("../lib/notifications.ts"),
+const [themeMod, navMod, diagMod, notifMod, clientMod] = await Promise.all([
+  import("../core/theme.ts"), import("../core/nav.ts"), import("../lib/diag.ts"), import("../lib/notifications.ts"), import("../lib/client.ts"),
 ]);
-const [theme, navOv, limitErr, unreadNotif] = await Promise.all([
+const [theme, navOv, limitErr, unreadNotif, entitlement] = await Promise.all([
   themeMod.getTheme(ctx).catch(() => ({}) as import("../core/theme.ts").ThemeConfig),
   navMod.getNavOverrides(ctx).catch(() => null),
   diagMod.hasRecentLimitError(env).catch(() => false),
   ses ? notifMod.countUnread(ctx, ses.uid).catch(() => 0) : Promise.resolve(0),
+  ses ? clientMod.cachedEntitlement(env).catch(() => "free" as const) : Promise.resolve("free" as const),
 ]);
 const themeStyle = themeMod.themeCss(theme);
 const brand = themeMod.brandName(theme);
 const logoUrl = theme.logoUrl;
 const navItems = navMod.buildNav(items, [], navOv);
+// 相棒（エージェント）マスコット：既定は貘キャラ。Pro未満は「眠っている」表示。
+const mascotUrl = theme.mascotUrl || "/mascot/baku.png";
+const agentAwake = atLeast(entitlement, "pro");
 // ユーザーチップ表示用。
 const uname = ses?.name ?? ses?.role ?? "";
 const initial = (uname || "B").slice(0, 1).toUpperCase();
@@ -160,18 +165,11 @@ const firstName = ses?.name ?? (ses?.role ?? "ユーザー");
     </div>
     {auth && ses && (
       <>
-        <button class="bo-agent idle" id="bo-agent" type="button" title="AI・エージェントの稼働状況" aria-label="AI・エージェントの稼働状況">
+        <button class={"bo-agent " + (agentAwake ? "idle" : "asleep")} id="bo-agent" type="button" data-awake={agentAwake ? "1" : "0"} title="相棒（AI・エージェント）" aria-label="相棒（AI・エージェント）の稼働状況">
           <span class="bo-agent-dots" aria-hidden="true"><i></i><i></i><i></i></span>
+          <span class="bo-agent-zzz" aria-hidden="true">z<small>z</small></span>
           <span class="bo-agent-sprite-wrap">
-            <svg class="bo-agent-sprite" viewBox="0 0 16 16" shape-rendering="crispEdges" aria-hidden="true">
-              <rect class="px-ant" x="7" y="1" width="2" height="2"></rect>
-              <rect class="px-body" x="3" y="3" width="10" height="9"></rect>
-              <rect class="px-body" x="1" y="6" width="2" height="3"></rect>
-              <rect class="px-body" x="13" y="6" width="2" height="3"></rect>
-              <rect class="px-eye" x="5" y="6" width="2" height="2"></rect>
-              <rect class="px-eye" x="9" y="6" width="2" height="2"></rect>
-              <rect class="px-mouth" x="6" y="9" width="4" height="1"></rect>
-            </svg>
+            <img class="bo-agent-img" src={mascotUrl} alt="相棒" width="88" height="88" decoding="async" />
           </span>
           <span class="bo-agent-badge" id="bo-agent-badge"></span>
         </button>
@@ -421,10 +419,15 @@ const firstName = ses?.name ?? (ses?.role ?? "ユーザー");
           } catch { /* offline */ }
         }
         (window as any).bo.pollAgent = pollAgent;
-        agentEl.addEventListener("click", () => { agentPop.hidden = !agentPop.hidden; if (!agentPop.hidden) renderPop(); });
+        const agentAwake = agentEl.dataset.awake === "1";
+        // クリック：稼働中→進捗（吹き出し）／何もしていなければチャットで対話（なにか御用ですか？）。
+        agentEl.addEventListener("click", () => {
+          if (agentEl.classList.contains("working")) { agentPop.hidden = !agentPop.hidden; if (!agentPop.hidden) renderPop(); return; }
+          location.href = "/chat?greet=1";
+        });
         document.addEventListener("click", (e) => { if (!agentPop.hidden && !agentPop.contains(e.target as Node) && !agentEl.contains(e.target as Node)) agentPop.hidden = true; });
-        pollAgent();
-        setInterval(pollAgent, 8000);
+        // Pro未満（眠り）は稼働ポーリングしない＝眠ったまま。Pro以上のみ稼働状況を反映。
+        if (agentAwake) { pollAgent(); setInterval(pollAgent, 8000); }
       }
     </script>
     <slot name="scripts" />

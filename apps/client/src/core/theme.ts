@@ -3,7 +3,8 @@
 import type { Ctx } from "./ports.ts";
 
 export type ThemeColors = Partial<Record<"bg" | "surface" | "ink" | "muted" | "line" | "brand" | "brandInk" | "ok" | "warn" | "danger", string>>;
-export type ThemeConfig = { brand?: string; logoUrl?: string; colors?: ThemeColors };
+// mascotUrl=相棒（エージェント）キャラ画像。未設定なら既定の貘キャラ（/mascot/baku.png）。
+export type ThemeConfig = { brand?: string; logoUrl?: string; mascotUrl?: string; colors?: ThemeColors };
 
 const DEFAULT_BRAND = "baku-office";
 const VAR: Record<keyof ThemeColors, string> = {
@@ -34,6 +35,8 @@ export function sanitizeTheme(input: unknown): ThemeConfig {
   const out: ThemeConfig = {};
   if (typeof o.brand === "string" && o.brand.trim()) out.brand = o.brand.trim().slice(0, 40);
   if (typeof o.logoUrl === "string" && /^https?:\/\//.test(o.logoUrl.trim())) out.logoUrl = o.logoUrl.trim().slice(0, 400);
+  // 相棒画像：外部URL（https）か同一オリジンの相対パス（/mascot/... 等）のみ許可。
+  if (typeof o.mascotUrl === "string") { const u = o.mascotUrl.trim(); if (/^https:\/\//.test(u) || /^\/[\w./-]+$/.test(u)) out.mascotUrl = u.slice(0, 400); }
   const colors: ThemeColors = {};
   const ic = (o.colors ?? {}) as ThemeColors;
   for (const k of Object.keys(VAR) as (keyof ThemeColors)[]) {

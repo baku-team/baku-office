@@ -26,6 +26,14 @@ const theme = hasPlus ? await getTheme(Astro.locals.ctx) : {};
       <div class="card">
         <div class="field"><label>ブランド名<input id="th-brand" value={theme.brand ?? ""} placeholder="baku-office" /></label></div>
         <div class="field"><label>ロゴURL<input id="th-logo" value={theme.logoUrl ?? ""} placeholder="https://…/logo.png" /></label></div>
+        <div class="field">
+          <label>相棒（マスコット）画像URL<input id="th-mascot" value={theme.mascotUrl ?? ""} placeholder="空欄=既定（貘キャラ）／ https://…/your.png" /></label>
+          <div class="muted" style="font-size:.8rem;margin-top:4px">空欄で合同会社 貘の既定キャラ。背景透過のPNG（正方形〜横長）推奨。自社キャラの画像URLを指定すると相棒が差し替わります。</div>
+          <div class="row" style="align-items:center;gap:12px;margin-top:8px">
+            <img id="th-mascot-prev" src={theme.mascotUrl || "/mascot/baku.png"} alt="相棒プレビュー" style="width:76px;height:76px;object-fit:contain;background:var(--surface-2);border:1px solid var(--line);border-radius:var(--r-sm)" />
+            <button class="btn btn-sm" type="button" id="th-mascot-default" style="flex:0 0 auto">既定に戻す</button>
+          </div>
+        </div>
         <div class="row">
           <label style="flex:1">ブランド色<input id="th-brand-color" value={theme.colors?.brand ?? ""} placeholder="#C9A86A" /></label>
           <label style="flex:1">背景色<input id="th-bg" value={theme.colors?.bg ?? ""} placeholder="#EFE9DC" /></label>
@@ -38,8 +46,12 @@ const theme = hasPlus ? await getTheme(Astro.locals.ctx) : {};
         (function () {
           const btn = document.getElementById("saveTheme");
           if (!btn) return;
+          const mascot = document.getElementById("th-mascot");
+          const prev = document.getElementById("th-mascot-prev");
+          mascot?.addEventListener("input", () => { if (prev) prev.src = mascot.value.trim() || "/mascot/baku.png"; });
+          document.getElementById("th-mascot-default")?.addEventListener("click", () => { if (mascot) mascot.value = ""; if (prev) prev.src = "/mascot/baku.png"; });
           btn.addEventListener("click", async (e) => {
-            const theme = { brand: document.getElementById("th-brand").value, logoUrl: document.getElementById("th-logo").value, colors: { brand: document.getElementById("th-brand-color").value, bg: document.getElementById("th-bg").value, ink: document.getElementById("th-ink").value } };
+            const theme = { brand: document.getElementById("th-brand").value, logoUrl: document.getElementById("th-logo").value, mascotUrl: mascot ? mascot.value : "", colors: { brand: document.getElementById("th-brand-color").value, bg: document.getElementById("th-bg").value, ink: document.getElementById("th-ink").value } };
             const r = await window.bo.api("/api/settings", { _action: "ui_theme", theme }, { btn: e.currentTarget, successMsg: "テーマを保存しました" });
             if (r.ok) setTimeout(() => location.reload(), 700);
           });

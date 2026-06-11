@@ -239,6 +239,8 @@ const skills = hasPlus && isOrgAdmin ? await listSkills(env).catch(() => []) : [
         }
         document.getElementById("new-ses")?.addEventListener("click", () => { sessionId = ""; log.innerHTML = ""; [...document.querySelectorAll(".ses-row")].forEach((r) => r.classList.remove("on")); document.getElementById("msg")?.focus(); });
         document.getElementById("send")?.addEventListener("click", send);
+        // マスコット（相棒）からの呼び出し：?greet=1 で相棒が話しかける。
+        try { if (new URLSearchParams(location.search).get("greet") === "1" && !log.children.length) addMsg("a", "はい、相棒です。なにか御用ですか？やりたいことを書いてください。"); document.getElementById("msg")?.focus(); } catch (e) { /* noop */ }
         document.getElementById("msg")?.addEventListener("keydown", (e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); send(); } });
         // 既存セッション行（SSR分）の配線。
         document.querySelectorAll(".ses-row").forEach((row) => {
