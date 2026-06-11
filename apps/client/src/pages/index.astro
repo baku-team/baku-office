@@ -83,7 +83,6 @@ const fmtDay = (s: number) => new Date(s * 1000).toISOString().slice(0, 10);
 const jstHour = (new Date().getUTCHours() + 9) % 24;
 const greeting = jstHour < 11 ? "おはようございます" : jstHour < 18 ? "こんにちは" : "おつかれさまです";
 const dispName = ses.name ? `${ses.name} さん` : "";
-const aiSuggestions = ["今月の会費の入金状況をまとめて", "先週の理事会の議事録を要約して", "在庫管理のアプリを作りたい"];
 const brandLabel = brandName(theme);
 const sections = orderedSections(homeLayout);
 const hiddenSet = new Set(homeLayout?.hidden ?? []);
@@ -103,25 +102,9 @@ const clampSpan = (n?: number) => Math.max(1, Math.min(3, Number(n) || 1));
     </div>
   </div>
 
-  {/* 相棒プロンプト（AI相棒への導線） */}
-  <div class="card ai-prompt" style="margin-top:1rem">
-    <div><strong>相棒に話しかける</strong><div class="muted" style="font-size:.82rem">やりたいことを書くと、AIが手伝います。</div></div>
-    <form class="ai-prompt-bar" method="get" action="/chat">
-      <input class="ap-input" name="q" placeholder="例：今月の会費の入金状況をまとめて" aria-label="相棒に話しかける" />
-      <button class="btn btn-primary btn-sm" type="submit" style="flex:0 0 auto">送信</button>
-    </form>
-    <div style="display:flex;gap:.5rem;flex-wrap:wrap;margin-top:.7rem">
-      {aiSuggestions.map((s) => (<a class="chip" href={`/chat?q=${encodeURIComponent(s)}`}>{s}</a>))}
-    </div>
-  </div>
-
   <style>
     .home-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 14px; flex-wrap: wrap; }
     .home-head-right { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
-    .ai-prompt { background: linear-gradient(180deg, var(--brand-soft), var(--surface) 60%); border-color: color-mix(in srgb, var(--brand) 22%, var(--line)); }
-    .ai-prompt-bar { display: flex; gap: 10px; align-items: center; margin-top: 12px; padding: 7px 7px 7px 16px; background: var(--surface); border: 1px solid var(--line-strong); border-radius: var(--r-pill); }
-    .ai-prompt-bar:focus-within { border-color: var(--brand); box-shadow: var(--ring); }
-    .ap-input { flex: 1; border: 0; background: transparent; outline: none; font: inherit; font-size: .94rem; color: var(--ink); padding: 4px 0; }
   </style>
 
   {/* 固定セクション：baku-office からのお知らせ・重要なお知らせ（並べ替え/非表示の対象外・常に最上部）。 */}
