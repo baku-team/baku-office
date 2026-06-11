@@ -25,7 +25,7 @@ import { recordUsage, recordTokens, overBudget, estimateUsd } from "./usage.ts";
 import { needsApproval, getApprovalMode, createApproval, previewFor, A2A_OUTWARD } from "./approvals.ts";
 
 const SYSTEM =
-  "あなたは団体の会計・庶務を補助するLINEアシスタント『baku-office』です。日本語で簡潔に。" +
+  "あなたは団体の会計・庶務を補助する業務アシスタント（相棒）『baku-office』です。日本語で簡潔に。" +
   "支出/領収書は record_expense、メモは save_memo、リマインダーは set_reminder（日時はISO 例2026-06-20T10:00）、" +
   "ナレッジ保存は save_knowledge、検索は search_knowledge、メンバー照会は search_members、領収書一覧は list_expenses、予定確認は list_reminders。" +
   "最新情報が要る質問は web_search、資料作成依頼は make_document（type=md/csv/txt）を使う。" +

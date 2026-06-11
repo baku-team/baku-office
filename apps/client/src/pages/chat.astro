@@ -57,6 +57,7 @@ const skills = hasPlus && isOrgAdmin ? await listSkills(env).catch(() => []) : [
             </select>
             <button class="btn btn-sm ses-toggle" type="button" id="ses-toggle">会話履歴</button>
           </div>
+          <div class="model-note" id="model-note"></div>
           <div id="log"></div>
           {hasPro && (
             <label class="muted" style="font-size:.8rem;display:flex;align-items:center;gap:6px;margin-top:8px">
@@ -103,11 +104,21 @@ const skills = hasPlus && isOrgAdmin ? await listSkills(env).catch(() => []) : [
         const sel = document.getElementById("model");
         // ホームの相棒プロンプトからの ?q= を入力欄に反映。
         try { const q = new URLSearchParams(location.search).get("q"); if (q) { const m = document.getElementById("msg"); if (m) { m.value = q; m.focus(); } } } catch (e) { /* noop */ }
+        // 使用中AIと、できること/できないことの表示。
+        const NOTE = {
+          gemini: "使用中：Gemini（標準・無料枠）。<b>できる</b>：会計入力・ファイル/名簿検索・文書作成・Web検索などツール実行。<b>要</b>：Gemini APIキー（未設定時は他エンジンに切替）。",
+          claude: "使用中：Claude（高精度・要APIキー）。<b>できる</b>：ツール実行全般＋高度な推論。<b>要</b>：Claude APIキー。未設定なら自動でGeminiへ。",
+          local: "使用中：クラウドAI（Cloudflare Workers AI・無料枠）。<b>できる</b>：会話・要約・文章作成。<b>できない</b>：会計登録/検索などのツール実行（その場合はGemini/Claudeを選択）。",
+        };
+        const noteEl = document.getElementById("model-note");
+        const setNote = (m) => { if (noteEl) noteEl.innerHTML = NOTE[m] || ""; };
+        setNote(sel ? sel.value : "gemini");
         // モデルセグメント：選択を hidden select(#model) に同期（既存ロジック互換）。
         const mseg = document.getElementById("model-seg");
         if (mseg && sel) mseg.querySelectorAll(".model-opt").forEach((b) => b.addEventListener("click", () => {
           mseg.querySelectorAll(".model-opt").forEach((x) => x.classList.toggle("on", x === b));
           sel.value = b.dataset.m;
+          setNote(b.dataset.m);
         }));
         // 会話履歴トグル（モバイル）。
         const sesToggle = document.getElementById("ses-toggle");
@@ -146,7 +157,7 @@ const skills = hasPlus && isOrgAdmin ? await listSkills(env).catch(() => []) : [
           d.className = "cmsg " + role;
           const html = esc(text).replace(/\n/g, "<br>");
           if (role === "a") {
-            d.innerHTML = '<span class="orb cmsg-orb" aria-hidden="true"></span><div class="cmsg-body"><div class="cbub"></div></div>';
+            d.innerHTML = '<div class="cmsg-body"><div class="cbub"></div></div>';
           } else {
             d.innerHTML = '<div class="cbub"></div>';
           }
@@ -300,11 +311,12 @@ const skills = hasPlus && isOrgAdmin ? await listSkills(env).catch(() => []) : [
   .model-opt.on { background: var(--surface); color: var(--brand-strong); box-shadow: var(--shadow-sm); }
   .model-opt.on small { color: var(--muted); }
   .ses-toggle { display: none; }
+  .model-note { font-size: .78rem; color: var(--muted); margin: 8px 2px 10px; line-height: 1.5; }
+  .model-note b { color: var(--ink-2); font-weight: 700; }
   #log { border: 1px solid var(--line); border-radius: var(--r); padding: 18px; min-height: 240px; max-height: 52vh; overflow-y: auto; background: var(--surface-2); display: flex; flex-direction: column; gap: 16px; }
   .cmsg { max-width: 86%; display: flex; gap: 10px; }
   .cmsg.u { align-self: flex-end; }
   .cmsg.a { align-self: flex-start; }
-  .cmsg-orb { width: 26px; height: 26px; flex: 0 0 auto; margin-top: 2px; }
   .cmsg-body { min-width: 0; display: flex; flex-direction: column; gap: 6px; }
   .caret { display: inline-block; width: 2px; height: 1em; background: currentColor; margin-left: 1px; vertical-align: -2px; animation: pulse 1s steps(2) infinite; }
   .cbub { padding: 12px 16px; border-radius: 16px; font-size: .92rem; line-height: 1.6; }
