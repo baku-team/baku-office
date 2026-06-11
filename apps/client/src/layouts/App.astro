@@ -6,8 +6,6 @@ const { title, active = "", auth = true, bare = false } = Astro.props as Props;
 
 const { getSession } = await import("../lib/auth.ts");
 const ses = await getSession(env, Astro.request).catch(() => null);
-let limitErr = false;
-try { limitErr = await (await import("../lib/diag.ts")).hasRecentLimitError(env); } catch { /* noop */ }
 
 // ストロークアイコン（24x24・README icons.jsx 由来）。
 const ICONS: Record<string, string> = {
@@ -33,20 +31,21 @@ const items: Item[] = [
   { href: "/settings", label: "設定", show: true },
 ];
 
-// UIカスタマイズ（共通ベース＋団体ごと上書き）。
+// UIカスタマイズ（共通ベース＋団体ごと上書き）。レイアウトの各データは並列取得して直列待ちを排除。
 const ctx = Astro.locals.ctx;
-const { getTheme, themeCss, brandName } = await import("../core/theme.ts");
-const theme = await getTheme(ctx).catch(() => ({}) as import("../core/theme.ts").ThemeConfig);
-const themeStyle = themeCss(theme);
-const brand = brandName(theme);
+const [themeMod, navMod, diagMod, notifMod] = await Promise.all([
+  import("../core/theme.ts"), import("../core/nav.ts"), import("../lib/diag.ts"), import("../lib/notifications.ts"),
+]);
+const [theme, navOv, limitErr, unreadNotif] = await Promise.all([
+  themeMod.getTheme(ctx).catch(() => ({}) as import("../core/theme.ts").ThemeConfig),
+  navMod.getNavOverrides(ctx).catch(() => null),
+  diagMod.hasRecentLimitError(env).catch(() => false),
+  ses ? notifMod.countUnread(ctx, ses.uid).catch(() => 0) : Promise.resolve(0),
+]);
+const themeStyle = themeMod.themeCss(theme);
+const brand = themeMod.brandName(theme);
 const logoUrl = theme.logoUrl;
-// 団体ごと上書き（非表示/ラベル/並び）。業務アプリは「アプリ」ページのランチャーへ集約するため top nav には載せない。
-const { buildNav, getNavOverrides } = await import("../core/nav.ts");
-const navOv = await getNavOverrides(ctx).catch(() => null);
-const navItems = buildNav(items, [], navOv);
-// アプリ内通知の未読数（自動取込の期日通知など。ヘッダのベルに表示）。
-let unreadNotif = 0;
-if (ses) { try { unreadNotif = await (await import("../lib/notifications.ts")).countUnread(ctx, ses.uid); } catch { /* noop */ } }
+const navItems = navMod.buildNav(items, [], navOv);
 // ユーザーチップ表示用。
 const uname = ses?.name ?? ses?.role ?? "";
 const initial = (uname || "B").slice(0, 1).toUpperCase();

@@ -7,56 +7,65 @@ const env = Astro.locals.runtime.env;
 const { getSession } = await import("../lib/auth.ts");
 const ses = await getSession(env, Astro.request);
 if (!ses) return Astro.redirect("/login", 302);
-const { pollHost, cachedEntitlement, APP_VERSION } = await import("../lib/client.ts");
-const { cmpVersion } = await import("../lib/update.ts");
-// 導入アプリを中枢へ申告（どのアプリが使われているかをホストが把握）。
-await import("../parts/index.ts");
-const { appCatalog, installedAppIds } = await import("../core/apps.ts");
-const _inst = new Set(await installedAppIds(Astro.locals.ctx).catch(() => []));
-const _apps = appCatalog().filter((a) => _inst.has(a.id)).map((a) => ({ id: a.id, version: a.version }));
-const check = await pollHost(env, Astro.url.origin, _apps);
-const entitlement = check?.entitlement ?? (await cachedEntitlement(env));
-// 第2層更新：最新版が同梱版より新しければ更新を案内（管理者のみ操作可）。
-const updateAvailable = !!check && cmpVersion(check.latestVersion, APP_VERSION) > 0;
+const ctx = Astro.locals.ctx;
 const isOrgAdmin = ses.role === "admin" && ses.ctx === "org";
+const { pollHost, cachedEntitlement, APP_VERSION, nowSec } = await import("../lib/client.ts");
+const { cmpVersion } = await import("../lib/update.ts");
+await import("../parts/index.ts"); // パーツ登録（カタログ参照の前提）
+const { appCatalog, installedAppIds } = await import("../core/apps.ts");
 const { getStorageUsage, fmtBytes } = await import("../lib/storage-usage.ts");
-const storage = await getStorageUsage(env);
+const { widgetsOf, enabledParts } = await import("../core/parts.ts");
+const { getHomeLayout, orderedSections, HOME_SECTIONS } = await import("../core/home.ts");
+const { brandName, getTheme } = await import("../core/theme.ts");
+const { reviewQueue } = await import("../lib/users.ts");
+const { backupAlert } = await import("../lib/backup.ts");
+
+// 後続の多くが依存するため先に取得。
+const instSet = new Set(await installedAppIds(ctx).catch(() => []));
+const ym = new Date().toISOString().slice(0, 7);
+
+// ホスト疎通＋テレメトリ＋entitlement/notices キャッシュ更新は描画をブロックせず背景実行（体感速度の要）。
+const _apps = appCatalog().filter((a) => instSet.has(a.id)).map((a) => ({ id: a.id, version: a.version }));
+try { Astro.locals.runtime.ctx.waitUntil(pollHost(env, Astro.url.origin, _apps).catch(() => {})); }
+catch { pollHost(env, Astro.url.origin, _apps).catch(() => {}); }
+
+// 描画に必要なデータは全て並列取得（直列の往復待ちを排除）。
+const widgetDefs = widgetsOf(enabledParts([...instSet]));
+const [entitlement, storage, balanceRow, monthAgg, pendingCount, homeLayout, theme, latestVersion, noticesRaw, lastAtRaw, backupAlertState, widgetData] = await Promise.all([
+  cachedEntitlement(env).catch(() => "free" as const),
+  getStorageUsage(env).catch(() => [] as Awaited<ReturnType<typeof getStorageUsage>>),
+  env.DB.prepare("SELECT COALESCE(SUM(opening_balance),0) AS b FROM wallets").first<{ b: number }>().catch(() => null),
+  env.DB.prepare("SELECT kind, COALESCE(SUM(amount),0) AS s FROM transactions WHERE deleted_at IS NULL AND kind IN ('income','expense') AND substr(date,1,7)=? GROUP BY kind").bind(ym).all<{ kind: string; s: number }>().catch(() => ({ results: [] as { kind: string; s: number }[] })),
+  reviewQueue(env).then((r) => r.length).catch(() => 0),
+  getHomeLayout(ctx).catch(() => null),
+  getTheme(ctx).catch(() => ({}) as import("../core/theme.ts").ThemeConfig),
+  env.LICENSE.get("latest_version").catch(() => null),
+  env.LICENSE.get("notices_cache").catch(() => null),
+  env.LICENSE.get("entitlement_at").catch(() => null),
+  isOrgAdmin ? backupAlert(env).catch(() => ({ alert: false, never: false, lastAt: null })) : Promise.resolve({ alert: false, never: false, lastAt: null }),
+  Promise.all(widgetDefs.map(async (w) => { try { return { title: w.title, span: w.span, ...(await w.run(ctx, ses.uid)) }; } catch { return null; } })).then((a) => a.filter(Boolean) as { title: string; value: string; sub?: string; span?: number }[]),
+]);
+
+const balance = balanceRow?.b ?? 0;
+let monthIncome = 0, monthExpense = 0;
+for (const row of monthAgg.results) { if (row.kind === "income") monthIncome = row.s; else if (row.kind === "expense") monthExpense = row.s; }
+const monthNet = monthIncome - monthExpense;
+const updateAvailable = !!latestVersion && cmpVersion(latestVersion, APP_VERSION) > 0;
+let notices: { id: string; severity: string; body: string }[] = [];
+try { notices = JSON.parse(noticesRaw ?? "[]"); } catch { /* noop */ }
+const lastAt = Number(lastAtRaw);
+const online = Number.isFinite(lastAt) && nowSec() - lastAt < 86400;
+
 const pct = (u: number, l: number) => (u < 0 || l <= 0 ? 0 : Math.min(100, Math.round((u / l) * 100)));
 const hintText: Record<string, string> = { paid: "高度なオプション → Workers Paid で上限を拡張できます。", r2: "高度なオプションで R2 を有効化すると大容量に対応できます。", drive: "Google ドライブの空き容量をご確認ください。", none: "" };
 const nearFull = storage.filter((s) => s.enabled && s.used >= 0 && pct(s.used, s.limit) >= 80);
-let balance = 0;
-try { balance = (await env.DB.prepare("SELECT COALESCE(SUM(opening_balance),0) AS b FROM wallets").first<{ b: number }>())?.b ?? 0; } catch { /* 未マイグレ */ }
-// 当月収支（実データ）。date は 'YYYY-MM-DD' 文字列のため substr で当月抽出。
-const ym = new Date().toISOString().slice(0, 7);
-let monthIncome = 0, monthExpense = 0;
-try {
-  const r = await env.DB.prepare("SELECT kind, COALESCE(SUM(amount),0) AS s FROM transactions WHERE deleted_at IS NULL AND kind IN ('income','expense') AND substr(date,1,7)=? GROUP BY kind").bind(ym).all<{ kind: string; s: number }>();
-  for (const row of r.results) { if (row.kind === "income") monthIncome = row.s; else if (row.kind === "expense") monthExpense = row.s; }
-} catch { /* 未マイグレ */ }
-const monthNet = monthIncome - monthExpense;
-// 未処理伝票（個人→組織の承認待ち件数）。
-let pendingCount = 0;
-try { pendingCount = (await (await import("../lib/users.ts")).reviewQueue(env)).length; } catch { /* noop */ }
-const notices = check?.notices ?? [];
 const yen = (n: number) => "¥" + n.toLocaleString("ja-JP");
-// バックアップ未実施/7日超過アラート（管理者のみ・P0-5）。
-const backupAlertState = isOrgAdmin ? await (await import("../lib/backup.ts")).backupAlert(env).catch(() => ({ alert: false, never: false, lastAt: null })) : { alert: false, never: false, lastAt: null };
 const fmtDay = (s: number) => new Date(s * 1000).toISOString().slice(0, 10);
-// 時間帯で変わる挨拶（JST）。
 const jstHour = (new Date().getUTCHours() + 9) % 24;
 const greeting = jstHour < 11 ? "おはようございます" : jstHour < 18 ? "こんにちは" : "おつかれさまです";
 const dispName = ses.name ? `${ses.name} さん` : "";
 const aiSuggestions = ["今月の会費の入金状況をまとめて", "先週の理事会の議事録を要約して", "在庫管理のアプリを作りたい"];
-const brandLabel = (await import("../core/theme.ts")).brandName(await (await import("../core/theme.ts")).getTheme(Astro.locals.ctx).catch(() => ({}) as import("../core/theme.ts").ThemeConfig));
-// アプリ連携ウィジェット（有効アプリが提供：例 登録メンバー数・取引数）。span はアプリ側が指定。
-const { widgetsOf, enabledParts } = await import("../core/parts.ts");
-const widgetData: { title: string; value: string; sub?: string; span?: number }[] = [];
-for (const w of widgetsOf(enabledParts([..._inst]))) {
-  try { widgetData.push({ title: w.title, span: w.span, ...(await w.run(Astro.locals.ctx, ses.uid)) }); } catch { /* skip */ }
-}
-// ホームのセクション構成（団体ごと・並べ替え/非表示）。お知らせは固定で対象外。
-const { getHomeLayout, orderedSections, HOME_SECTIONS } = await import("../core/home.ts");
-const homeLayout = await getHomeLayout(Astro.locals.ctx).catch(() => null);
+const brandLabel = brandName(theme);
 const sections = orderedSections(homeLayout);
 const hiddenSet = new Set(homeLayout?.hidden ?? []);
 const clampSpan = (n?: number) => Math.max(1, Math.min(3, Number(n) || 1));
@@ -70,7 +79,7 @@ const clampSpan = (n?: number) => Math.max(1, Math.min(3, Number(n) || 1));
     </div>
     <div class="home-head-right">
       <span class="pill brand">{planLabel(entitlement)}</span>
-      <span class="pill"><span class="dot" style={`background:${check ? "var(--ok)" : "var(--faint)"}`}></span>{check ? "疎通OK" : "オフライン"}</span>
+      <span class="pill"><span class="dot" style={`background:${online ? "var(--ok)" : "var(--faint)"}`}></span>{online ? "オンライン" : "未接続"}</span>
       {isOrgAdmin && (<button class="btn btn-ghost btn-sm" id="editHome">ホームを編集</button>)}
     </div>
   </div>
@@ -102,7 +111,7 @@ const clampSpan = (n?: number) => Math.max(1, Math.min(3, Number(n) || 1));
     {notices.length === 0 && !updateAvailable && (<p class="muted">現在、新しいお知らせはありません。</p>)}
     {notices.map((n) => (<div class={`banner ${n.severity === "critical" ? "banner-danger" : n.severity === "important" ? "banner-warn" : "banner-info"}`} data-sev={n.severity} data-id={n.id}>{n.body}</div>))}
     {updateAvailable && (
-      <div class="banner banner-warn">🔔 新しいバージョン <strong>{check?.latestVersion}</strong> があります（現在 {APP_VERSION}）。{isOrgAdmin ? <a href="/settings/update">更新する</a> : "管理者にアプリの更新をご依頼ください。"}</div>
+      <div class="banner banner-warn">🔔 新しいバージョン <strong>{latestVersion}</strong> があります（現在 {APP_VERSION}）。{isOrgAdmin ? <a href="/settings/update">更新する</a> : "管理者にアプリの更新をご依頼ください。"}</div>
     )}
     {backupAlertState.alert && (
       <div class="banner banner-warn">💾 {backupAlertState.never ? "データのバックアップがまだ実行されていません。" : `最終バックアップから7日以上経過しています（最終：${backupAlertState.lastAt ? fmtDay(backupAlertState.lastAt) : "—"}）。`}<a href="/backup">今すぐバックアップ</a></div>
