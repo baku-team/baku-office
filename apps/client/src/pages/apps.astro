@@ -43,14 +43,12 @@ const ENT_OPTS = ["free", "plus", "pro", "nonprofit", "enterprise"];
     )}
   </div>
 
-  <h2>使う（導入済み）</h2>
-  <div class="grid g-auto">
-    {launch.map((l) => (
-      <a class="card link" href={l.href}>
-        <strong>{l.label}</strong><div class="muted" style="font-size:.8rem">{l.app}</div>
-      </a>
-    ))}
-    {launch.length === 0 && (<p class="muted">{isAdminOrg ? "起動できるアプリがありません。下の「アプリ管理」や「ストア」から追加してください。" : "起動できるアプリがありません。管理者にアプリの追加を依頼してください。"}</p>)}
+  <div class="card launcher">
+    <div class="launcher-head"><strong>使う（導入済み）</strong><span class="muted" style="font-size:.8rem">導入済みアプリをすぐ起動</span></div>
+    <div class="launch-chips">
+      {launch.map((l) => (<a class="chip" href={l.href} title={l.app}>{l.label}</a>))}
+      {launch.length === 0 && (<span class="muted" style="font-size:.85rem">{isAdminOrg ? "起動できるアプリがありません。下の「ストア」や「アプリ管理」から追加してください。" : "起動できるアプリがありません。管理者にアプリの追加を依頼してください。"}</span>)}
+    </div>
   </div>
 
   <div class="apps-panel" data-panel="store">
@@ -192,4 +190,11 @@ const ENT_OPTS = ["free", "plus", "pro", "nonprofit", "enterprise"];
       });
     });
   </script>
+
+  <style>
+    .launcher { margin-top: 1rem; }
+    .launcher-head { display: flex; align-items: baseline; gap: 10px; justify-content: space-between; margin-bottom: 10px; flex-wrap: wrap; }
+    .launch-chips { display: flex; gap: 8px; flex-wrap: wrap; }
+    .apps-panel { margin-top: 8px; }
+  </style>
 </App>
