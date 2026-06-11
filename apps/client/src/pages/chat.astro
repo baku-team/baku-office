@@ -109,12 +109,18 @@ const skills = hasPlus && isOrgAdmin ? await listSkills(env).catch(() => []) : [
         try { const q = new URLSearchParams(location.search).get("q"); if (q) { const m = document.getElementById("msg"); if (m) { m.value = q; m.focus(); } } } catch (e) { /* noop */ }
         // 使用中AIと、できること/できないことの表示。
         const NOTE = {
-          gemini: "使用中：Gemini（標準・無料枠）。<b>できる</b>：会計入力・ファイル/名簿検索・文書作成・Web検索などツール実行。<b>要</b>：Gemini APIキー（未設定時は他エンジンに切替）。",
-          claude: "使用中：Claude（高精度・要APIキー）。<b>できる</b>：ツール実行全般＋高度な推論。<b>要</b>：Claude APIキー。未設定なら自動でGeminiへ。",
-          local: "使用中：クラウドAI（Cloudflare Workers AI・無料枠）。<b>できる</b>：会話・要約・文章作成。<b>できない</b>：会計登録/検索などのツール実行（その場合はGemini/Claudeを選択）。",
+          gemini: { use: "Gemini（標準・無料枠）", can: "会計入力・ファイル/名簿検索・文書作成・Web検索などツール実行", cant: "Gemini APIキーが必要（未設定時は他エンジンへ切替）" },
+          claude: { use: "Claude（高精度）", can: "ツール実行全般＋高度な推論", cant: "Claude APIキーが必要（未設定時はGeminiへ）" },
+          local: { use: "クラウドAI（Cloudflare Workers AI・無料枠）", can: "会話・要約・文章作成", cant: "会計登録/検索などのツール操作（必要なときはGemini/Claudeを選択）" },
         };
         const noteEl = document.getElementById("model-note");
-        const setNote = (m) => { if (noteEl) noteEl.innerHTML = NOTE[m] || ""; };
+        const setNote = (m) => {
+          const n = NOTE[m]; if (!noteEl || !n) return;
+          noteEl.innerHTML =
+            '<div class="mn-use">使用中：' + n.use + "</div>" +
+            '<div class="mn-can">✅ できる：' + n.can + "</div>" +
+            '<div class="mn-cant">🚫 できない：' + n.cant + "</div>";
+        };
         setNote(sel ? sel.value : "gemini");
         // モデルセグメント：選択を hidden select(#model) に同期（既存ロジック互換）。
         const mseg = document.getElementById("model-seg");
@@ -314,8 +320,10 @@ const skills = hasPlus && isOrgAdmin ? await listSkills(env).catch(() => []) : [
   .model-opt.on { background: var(--surface); color: var(--brand-strong); box-shadow: var(--shadow-sm); }
   .model-opt.on small { color: var(--muted); }
   .ses-toggle { display: none; }
-  .model-note { font-size: .78rem; color: var(--muted); margin: 8px 2px 10px; line-height: 1.5; }
-  .model-note b { color: var(--ink-2); font-weight: 700; }
+  .model-note { font-size: .78rem; color: var(--muted); margin: 8px 2px 12px; line-height: 1.6; display: flex; flex-direction: column; gap: 2px; }
+  .model-note .mn-use { font-weight: 700; color: var(--ink-2); }
+  .model-note .mn-can { color: var(--ok); }
+  .model-note .mn-cant { color: var(--danger); }
   #log { border: 1px solid var(--line); border-radius: var(--r); padding: 18px; min-height: 240px; max-height: 52vh; overflow-y: auto; background: var(--surface-2); display: flex; flex-direction: column; gap: 16px; }
   .cmsg { max-width: 86%; display: flex; gap: 10px; }
   .cmsg.u { align-self: flex-end; }
