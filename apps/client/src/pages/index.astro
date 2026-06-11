@@ -26,6 +26,17 @@ const hintText: Record<string, string> = { paid: "高度なオプション → W
 const nearFull = storage.filter((s) => s.enabled && s.used >= 0 && pct(s.used, s.limit) >= 80);
 let balance = 0;
 try { balance = (await env.DB.prepare("SELECT COALESCE(SUM(opening_balance),0) AS b FROM wallets").first<{ b: number }>())?.b ?? 0; } catch { /* 未マイグレ */ }
+// 当月収支（実データ）。date は 'YYYY-MM-DD' 文字列のため substr で当月抽出。
+const ym = new Date().toISOString().slice(0, 7);
+let monthIncome = 0, monthExpense = 0;
+try {
+  const r = await env.DB.prepare("SELECT kind, COALESCE(SUM(amount),0) AS s FROM transactions WHERE deleted_at IS NULL AND kind IN ('income','expense') AND substr(date,1,7)=? GROUP BY kind").bind(ym).all<{ kind: string; s: number }>();
+  for (const row of r.results) { if (row.kind === "income") monthIncome = row.s; else if (row.kind === "expense") monthExpense = row.s; }
+} catch { /* 未マイグレ */ }
+const monthNet = monthIncome - monthExpense;
+// 未処理伝票（個人→組織の承認待ち件数）。
+let pendingCount = 0;
+try { pendingCount = (await (await import("../lib/users.ts")).reviewQueue(env)).length; } catch { /* noop */ }
 const notices = check?.notices ?? [];
 const yen = (n: number) => "¥" + n.toLocaleString("ja-JP");
 // バックアップ未実施/7日超過アラート（管理者のみ・P0-5）。
@@ -106,9 +117,9 @@ const clampSpan = (n?: number) => Math.max(1, Math.min(3, Number(n) || 1));
     sec === "summary" ? (
       <section data-sec="summary">
         <div class="grid">
-          <div class="card"><div class="label">口座残高（期首合計）</div><div class="num">{yen(balance)}</div></div>
-          <div class="card"><div class="label">当月収支</div><div class="num">¥0</div><div class="muted">会計で登録</div></div>
-          <div class="card"><div class="label">未処理伝票</div><div class="num">0</div></div>
+          <a class="card link" href="/accounting"><div class="label">口座残高（期首合計）</div><div class="num">{yen(balance)}</div></a>
+          <a class="card link" href="/accounting"><div class="label">当月収支（{ym}）</div><div class="num" style={`color:${monthNet < 0 ? "var(--danger)" : monthNet > 0 ? "var(--ok)" : "inherit"}`}>{(monthNet < 0 ? "-¥" : "¥") + Math.abs(monthNet).toLocaleString("ja-JP")}</div><div class="muted" style="font-size:.78rem">収入 {yen(monthIncome)}／支出 {yen(monthExpense)}</div></a>
+          <a class="card link" href="/review"><div class="label">未処理伝票（承認待ち）</div><div class="num">{pendingCount}</div><div class="muted" style="font-size:.78rem">{pendingCount > 0 ? "確認してください" : "なし"}</div></a>
           <div class="card"><div class="label">プラン / ライセンス</div><div class="num" style="font-size:1.1rem">{planLabel(entitlement)}</div></div>
         </div>
       </section>

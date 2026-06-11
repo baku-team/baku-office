@@ -62,7 +62,7 @@ const firstName = ses?.name ?? (ses?.role ?? "ユーザー");
       // テーマ・ナビ形態の初期適用（描画前に data-theme / data-nav を確定＝ちらつき防止）。
       (function () { try {
         var t = localStorage.getItem("bo_theme"); document.documentElement.setAttribute("data-theme", t === "dark" ? "dark" : "light");
-        var n = localStorage.getItem("bo_nav"); document.documentElement.setAttribute("data-nav", (n === "side" || n === "bottom") ? n : "top");
+        var n = localStorage.getItem("bo_nav"); document.documentElement.setAttribute("data-nav", (n === "side" || n === "top") ? n : "bottom");
       } catch (e) {} })();
     </script>
     <title>{title} — {brand}</title>
