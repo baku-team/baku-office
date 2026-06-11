@@ -27,6 +27,7 @@ function toMessages(system: string, history: Turn[]): Msg[] {
 
 type AiResp = {
   response?: string;
+  result?: { response?: string; tool_calls?: unknown[]; usage?: { prompt_tokens?: number; completion_tokens?: number } };
   // Workers AI の function calling 応答（モデルにより name/arguments の形が異なるため両対応）。
   tool_calls?: { id?: string; name?: string; arguments?: unknown; function?: { name: string; arguments: unknown } }[];
   usage?: { prompt_tokens?: number; completion_tokens?: number };
@@ -36,18 +37,23 @@ export function workersAiChatModel(ai: AiBinding, model: string): ChatModel {
   return {
     name: `workers-ai:${model}`,
     async turn(system, history, tools) {
-      const inputs = {
+      const inputs: Record<string, unknown> = {
         messages: toMessages(system, history),
-        tools: tools.map((d: ToolDecl) => ({ type: "function", function: { name: d.name, description: d.description, parameters: d.parameters } })),
         max_tokens: 1024,
+        stream: false,
       };
-      let data: AiResp;
+      // 道具がある時だけ tools を渡す（tool 非対応モデルでの失敗を避ける）。
+      if (tools.length) inputs.tools = tools.map((d: ToolDecl) => ({ type: "function", function: { name: d.name, description: d.description, parameters: d.parameters } }));
+      let raw0: AiResp;
       try {
-        data = (await ai.run(model, inputs)) as AiResp;
+        raw0 = (await ai.run(model, inputs)) as AiResp;
       } catch (e) {
-        console.log("[workers-ai]", (e as Error).message);
-        return { text: "（Workers AI の応答に失敗しました）" };
+        const msg = (e as Error)?.message ?? String(e);
+        console.log("[workers-ai]", msg);
+        return { text: `（Workers AI の応答に失敗しました：${msg.slice(0, 140)}）` };
       }
+      // バインディングは通常 {response,...} を返すが、念のため {result:{...}} ラッパにも対応。
+      const data: AiResp = raw0?.result ? { ...raw0, ...raw0.result } as AiResp : raw0;
       const usage: TokenUsage = { inputTokens: data.usage?.prompt_tokens ?? 0, outputTokens: data.usage?.completion_tokens ?? 0 };
       const raw = data.tool_calls ?? [];
       if (raw.length) {
