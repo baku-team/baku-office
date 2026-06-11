@@ -104,6 +104,14 @@ async function uploadToDrive(token: string, name: string, mime: string, buf: Arr
   return ((await r.json()) as { id?: string }).id ?? null;
 }
 
+// 任意のバッファを Drive へ1ファイルとしてアップロード（全データバックアップのアーカイブ等・P0-5）。
+export async function uploadBufferToDrive(env: Env, name: string, mime: string, buf: ArrayBuffer): Promise<{ ok: boolean; id?: string; error?: string }> {
+  const token = await driveAccessToken(env);
+  if (!token) return { ok: false, error: "Google ドライブが未連携です。" };
+  const id = await uploadToDrive(token, name, mime, buf);
+  return id ? { ok: true, id } : { ok: false, error: "アップロードに失敗しました。" };
+}
+
 // KV/R2 のファイルを Drive へバックアップ（未バックアップ分を最大 limit 件）。Cron から呼ぶ。
 export async function backupToDrive(env: Env, limit = 5): Promise<{ uploaded: number; error?: string }> {
   const token = await driveAccessToken(env);

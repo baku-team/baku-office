@@ -147,6 +147,7 @@ const skills = hasPlus && isOrgAdmin ? await listSkills(env).catch(() => []) : [
             const del = document.createElement("button"); del.className = "ses-del"; del.textContent = "×";
             del.addEventListener("click", async (e) => {
               e.preventDefault();
+              if (!(await window.bo.confirm("このチャットセッションを削除しますか？", { confirmLabel: "削除", danger: true, irreversible: true }))) return;
               const rr = await window.bo.api("/api/chat-sessions", { _action: "delete", id: s.id }, { btn: del, successMsg: "削除しました" });
               if (rr.ok) { if (s.id === sessionId) { sessionId = ""; log.innerHTML = ""; } reloadSessions(); }
             });
@@ -204,6 +205,7 @@ const skills = hasPlus && isOrgAdmin ? await listSkills(env).catch(() => []) : [
           row.querySelector(".ses-open")?.addEventListener("click", (e) => { e.preventDefault(); openSession(id); });
           row.querySelector(".ses-del")?.addEventListener("click", async (e) => {
             e.preventDefault();
+            if (!(await window.bo.confirm("このチャットセッションを削除しますか？", { confirmLabel: "削除", danger: true, irreversible: true }))) return;
             const rr = await window.bo.api("/api/chat-sessions", { _action: "delete", id }, { btn: e.currentTarget, successMsg: "削除しました" });
             if (rr.ok) { if (id === sessionId) { sessionId = ""; log.innerHTML = ""; } reloadSessions(); }
           });

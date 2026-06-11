@@ -28,6 +28,9 @@ let balance = 0;
 try { balance = (await env.DB.prepare("SELECT COALESCE(SUM(opening_balance),0) AS b FROM wallets").first<{ b: number }>())?.b ?? 0; } catch { /* 未マイグレ */ }
 const notices = check?.notices ?? [];
 const yen = (n: number) => "¥" + n.toLocaleString("ja-JP");
+// バックアップ未実施/7日超過アラート（管理者のみ・P0-5）。
+const backupAlertState = isOrgAdmin ? await (await import("../lib/backup.ts")).backupAlert(env).catch(() => ({ alert: false, never: false, lastAt: null })) : { alert: false, never: false, lastAt: null };
+const fmtDay = (s: number) => new Date(s * 1000).toISOString().slice(0, 10);
 // アプリ連携ウィジェット（有効アプリが提供：例 登録メンバー数・取引数）。span はアプリ側が指定。
 const { widgetsOf, enabledParts } = await import("../core/parts.ts");
 const widgetData: { title: string; value: string; sub?: string; span?: number }[] = [];
@@ -56,6 +59,9 @@ const clampSpan = (n?: number) => Math.max(1, Math.min(3, Number(n) || 1));
     {notices.map((n) => (<div class={`banner ${n.severity === "critical" ? "banner-danger" : n.severity === "important" ? "banner-warn" : "banner-info"}`} data-sev={n.severity} data-id={n.id}>{n.body}</div>))}
     {updateAvailable && (
       <div class="banner banner-warn">🔔 新しいバージョン <strong>{check?.latestVersion}</strong> があります（現在 {APP_VERSION}）。{isOrgAdmin ? <a href="/settings/update">更新する</a> : "管理者にアプリの更新をご依頼ください。"}</div>
+    )}
+    {backupAlertState.alert && (
+      <div class="banner banner-warn">💾 {backupAlertState.never ? "データのバックアップがまだ実行されていません。" : `最終バックアップから7日以上経過しています（最終：${backupAlertState.lastAt ? fmtDay(backupAlertState.lastAt) : "—"}）。`}<a href="/backup">今すぐバックアップ</a></div>
     )}
   </section>
 

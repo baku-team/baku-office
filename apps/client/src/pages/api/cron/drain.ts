@@ -6,7 +6,8 @@ import { processSummaryJobs } from "../../../lib/media-ai.ts";
 import { pollVideoJobs } from "../../../lib/capabilities.ts";
 import { processAgentJobs } from "../../../lib/agent-jobs.ts";
 import { guardHeavy } from "../../../lib/diag.ts";
-import { getDriveBackup, backupToDrive } from "../../../lib/drive.ts";
+import { getDriveBackup, backupToDrive, driveConnected, uploadBufferToDrive } from "../../../lib/drive.ts";
+import { getBackupSchedule, backupAlert, buildBackup, backupFileName, recordBackupDone } from "../../../lib/backup.ts";
 import { flushReports } from "../../../lib/reports.ts";
 import { addNotification, pushWebhook } from "../../../lib/notifications.ts";
 import { getNotifyWebhook } from "../../../lib/settings.ts";
@@ -56,6 +57,20 @@ export const POST: APIRoute = async ({ request, locals }) => {
     if (dr.ok) driveBackup = dr.value;
   }
 
+  // 全データの定期バックアップ（有効＋Drive連携＋前回から7日超過時のみ・P0-5）。重い処理のため未実施が続いた時だけ実行。
+  let fullBackup: { uploaded: boolean; error?: string } = { uploaded: false };
+  const sched = await getBackupSchedule(env);
+  if (sched.enabled && (await driveConnected(env)) && (await backupAlert(env)).alert) {
+    const bk = await guardHeavy(env, "full backup", async () => {
+      const { json: body, tables, files } = await buildBackup(env, { decrypt: sched.mode === "decrypted" });
+      const up = await uploadBufferToDrive(env, backupFileName(sched.mode === "decrypted"), "application/json", new TextEncoder().encode(body).buffer);
+      if (!up.ok) throw new Error(up.error ?? "upload failed");
+      await recordBackupDone(env, "drive", sched.mode, tables, files);
+      return true;
+    });
+    fullBackup = bk.ok ? { uploaded: true } : { uploaded: false, error: bk.error };
+  }
+
   // 未送信の報告（自動エラー・要望）をホストへ集積（自己修復ログ）。
   const fr = await guardHeavy(env, "flush reports", () => flushReports(env));
   const reportsSent = fr.ok ? fr.value : 0;
@@ -64,5 +79,5 @@ export const POST: APIRoute = async ({ request, locals }) => {
   const pf = await guardHeavy(env, "purge files", () => purgeFiles(env));
   const purged = pf.ok ? pf.value : { expired: 0, purged: 0 };
 
-  return json({ ok: true, sent, notified, summarized, video, agentJobs, driveBackup, reportsSent, purged });
+  return json({ ok: true, sent, notified, summarized, video, agentJobs, driveBackup, fullBackup, reportsSent, purged });
 };
