@@ -56,6 +56,21 @@ export async function listWallets(env: Env): Promise<Wallet[]> {
 export async function listCategories(env: Env): Promise<Category[]> {
   return (await env.DB.prepare("SELECT * FROM categories ORDER BY kind, sort_order").all<Category>()).results;
 }
+// 各口座の現在残高（opening_balance＋当期の入出金・振替）。会計画面の残高カード用に一括集計。
+export async function walletBalances(env: Env, periodId: string): Promise<(Wallet & { balance: number })[]> {
+  const wallets = await listWallets(env);
+  const { results } = await env.DB.prepare(
+    "SELECT kind, wallet_id, counter_wallet_id, amount FROM transactions WHERE fiscal_period_id=? AND deleted_at IS NULL",
+  ).bind(periodId).all<{ kind: string; wallet_id: string; counter_wallet_id: string | null; amount: number }>();
+  const delta = new Map<string, number>();
+  const add = (id: string | null, v: number) => { if (id) delta.set(id, (delta.get(id) ?? 0) + v); };
+  for (const t of results) {
+    if (t.kind === "income") add(t.wallet_id, t.amount);
+    else if (t.kind === "expense") add(t.wallet_id, -t.amount);
+    else if (t.kind === "transfer") { add(t.wallet_id, -t.amount); add(t.counter_wallet_id, t.amount); }
+  }
+  return wallets.map((w) => ({ ...w, balance: w.opening_balance + (delta.get(w.id) ?? 0) }));
+}
 
 // 取引登録（income/expense/transfer）。
 export async function createTx(env: Env, t: Omit<Tx, "id" | "created_at">): Promise<string> {

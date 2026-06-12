@@ -11,76 +11,138 @@ const selWallet = Astro.url.searchParams.get("wallet") ?? wallets[0]?.id ?? "";
 const is = period ? await acc.incomeStatement(env, period.id) : null;
 const book = period && selWallet ? await acc.cashbook(env, period.id, selWallet) : null;
 const ba = period ? await acc.budgetActual(env, period.id) : [];
+const balances = period ? await acc.walletBalances(env, period.id) : [];
 const yen = (n: number) => "¥" + n.toLocaleString("ja-JP");
+// 入力の初期値・表示は JST 基準。日付は日本語で添える（高齢ユーザーの誤読防止）。
+const jstNow = new Date(Date.now() + 9 * 3600 * 1000);
+const todayIso = jstNow.toISOString().slice(0, 10);
+const jpToday = `${jstNow.getUTCFullYear()}年${jstNow.getUTCMonth() + 1}月${jstNow.getUTCDate()}日（${["日", "月", "火", "水", "木", "金", "土"][jstNow.getUTCDay()]}）`;
+const KIND_JA: Record<string, string> = { income: "入金", expense: "出金", transfer: "振替" };
 ---
-<App title="会計" active="/accounting">
-  <h1>会計 <span class="muted" style="font-size:.9rem">{period?.name ?? "会計期なし"}</span></h1>
+<App title="お金の記録" active="/accounting">
+  <h1>お金の記録 <span class="muted" style="font-size:1rem;font-weight:600">{period?.name ?? "会計期なし"}</span></h1>
 
-  <h2>入出金の登録</h2>
+  {/* 残高カード：開いた瞬間に「今いくらあるか」が見える（会計係の最大の不安に応える）。 */}
+  <section class="bal-row" aria-label="口座の残高">
+    {balances.map((w) => (
+      <div class="bal-card">
+        <div class="bal-name">{w.name}</div>
+        <div class="bal-amt">{yen(w.balance)}</div>
+      </div>
+    ))}
+    {balances.length === 0 && (<div class="muted">口座がまだありません。</div>)}
+  </section>
+
+  <h2>お金を記録する</h2>
   <div class="card">
-    <div class="row">
-      <div style="flex:1"><label class="muted">日付</label><input id="date" type="date" value={new Date().toISOString().slice(0,10)} /></div>
-      <div style="flex:1"><label class="muted">種別</label><select id="kind"><option value="income">収入</option><option value="expense">支出</option><option value="transfer">振替</option></select></div>
-      <div style="flex:1"><label class="muted">口座</label><select id="wallet">{wallets.map((w)=>(<option value={w.id}>{w.name}</option>))}</select></div>
+    <div class="rec-modes" role="group" aria-label="記録の種類">
+      <button type="button" class="rec-mode income" data-kind="income"><span class="rm-sign">＋</span>入金を記録<small>お金を受け取った</small></button>
+      <button type="button" class="rec-mode expense" data-kind="expense"><span class="rm-sign">−</span>出金を記録<small>お金を支払った</small></button>
     </div>
-    <div class="row" style="margin-top:.5rem">
-      <div id="catBox" style="flex:1"><label class="muted">科目</label><select id="cat">{categories.map((c)=>(<option value={c.id} data-kind={c.kind}>{c.name}</option>))}</select></div>
-      <div id="counterBox" style="flex:1;display:none"><label class="muted">振替先口座</label><select id="counter">{wallets.map((w)=>(<option value={w.id}>{w.name}</option>))}</select></div>
-      <div style="flex:1"><label class="muted">金額</label><input id="amount" type="number" min="1" /></div>
+    <div id="recForm" hidden style="margin-top:1rem">
+      <p id="recLabel" class="rec-label"></p>
+      <div class="row">
+        <div style="flex:1">
+          <label for="date">日付</label>
+          <input id="date" type="date" value={todayIso} />
+          <div class="muted" style="font-size:.85rem;margin-top:4px">今日：{jpToday}</div>
+        </div>
+        <div style="flex:1"><label for="wallet">口座</label><select id="wallet">{wallets.map((w)=>(<option value={w.id}>{w.name}</option>))}</select></div>
+      </div>
+      <div class="row" style="margin-top:.5rem">
+        <div id="catBox" style="flex:1"><label for="cat">分類（科目）</label><select id="cat">{categories.map((c)=>(<option value={c.id} data-kind={c.kind}>{c.name}</option>))}</select></div>
+        <div id="counterBox" style="flex:1;display:none"><label for="counter">振替先の口座</label><select id="counter">{wallets.map((w)=>(<option value={w.id}>{w.name}</option>))}</select></div>
+        <div style="flex:1"><label for="amount">金額（円）</label><input id="amount" type="number" min="1" inputmode="numeric" placeholder="0" /></div>
+      </div>
+      <div class="field"><label for="desc">内容（メモ）</label><input id="desc" placeholder="例：6月分の会費" /></div>
+      <input type="hidden" id="kind" value="income" />
+      <div class="row">
+        <button class="btn btn-primary btn-lg" id="reg" style="flex:1">この内容で記録する</button>
+        <button class="btn btn-ghost" id="recCancel" type="button" style="flex:0 0 auto">やめる</button>
+      </div>
     </div>
-    <div class="field"><label class="muted">摘要</label><input id="desc" /></div>
-    <button class="btn btn-primary" id="reg">登録</button>
+    <details class="rec-transfer" style="margin-top:.7rem">
+      <summary>口座間でお金を移したとき（振替）</summary>
+      <p class="muted" style="font-size:.9rem;margin:.4rem 0 .6rem">現金を口座に預けた、口座から引き出した、などの「移動」を記録します。</p>
+      <button type="button" class="btn" data-kind="transfer">口座間の移動を記録する</button>
+    </details>
   </div>
 
-  <h2>収支計算書 <a class="btn btn-sm btn-ghost" href="/accounting/export.csv">CSV出力</a></h2>
+  <h2>収支のまとめ <a class="btn btn-sm btn-ghost" href="/accounting/export.csv">Excel用に保存</a></h2>
   {is && (
     <div class="grid">
-      <div class="table-wrap"><table><thead><tr><th>収入科目</th><th class="r">金額</th></tr></thead><tbody>
+      <div class="table-wrap"><table><thead><tr><th>収入の科目</th><th class="r">金額</th></tr></thead><tbody>
         {is.income.map((r)=>(<tr><td>{r.name}</td><td class="r">{yen(r.amount)}</td></tr>))}
         <tr><th>収入合計</th><th class="r">{yen(is.totalIncome)}</th></tr></tbody></table></div>
-      <div class="table-wrap"><table><thead><tr><th>支出科目</th><th class="r">金額</th></tr></thead><tbody>
+      <div class="table-wrap"><table><thead><tr><th>支出の科目</th><th class="r">金額</th></tr></thead><tbody>
         {is.expense.map((r)=>(<tr><td>{r.name}</td><td class="r">{yen(r.amount)}</td></tr>))}
         <tr><th>支出合計</th><th class="r">{yen(is.totalExpense)}</th></tr></tbody></table></div>
     </div>
   )}
-  {is && (<p><strong>当期収支：{yen(is.totalIncome - is.totalExpense)}</strong></p>)}
+  {is && (<p><strong>今期の収支：{yen(is.totalIncome - is.totalExpense)}</strong></p>)}
 
-  <h2>出納帳</h2>
+  <h2>出納帳（お金の出入り）</h2>
   <div style="display:flex;gap:.4rem;flex-wrap:wrap;margin-bottom:.5rem">{wallets.map((w)=>(<a class={`btn btn-sm ${w.id===selWallet?"btn-primary":"btn-ghost"}`} href={`/accounting?wallet=${w.id}`}>{w.name}</a>))}</div>
   {book && (
     <div class="table-wrap"><table>
-      <thead><tr><th>日付</th><th>種別</th><th>摘要</th><th class="r">入金</th><th class="r">出金</th><th class="r">残高</th><th></th></tr></thead>
+      <thead><tr><th>日付</th><th>種類</th><th>内容</th><th class="r">入金</th><th class="r">出金</th><th class="r">残高</th><th></th></tr></thead>
       <tbody>
         {book.rows.map((t)=>{const isIn=(t.kind==="income"&&t.wallet_id===selWallet)||(t.kind==="transfer"&&t.counter_wallet_id===selWallet);return (
-          <tr><td>{t.date}</td><td>{t.kind}</td><td>{t.description??""}</td><td class="r">{isIn?yen(t.amount):""}</td><td class="r">{!isIn?yen(t.amount):""}</td><td class="r">{yen(t.running)}</td><td><button class="btn btn-sm btn-danger del" data-del={t.id}>削除</button></td></tr>
+          <tr><td>{t.date}</td><td>{KIND_JA[t.kind] ?? t.kind}</td><td>{t.description??""}</td><td class="r">{isIn?yen(t.amount):""}</td><td class="r">{!isIn?yen(t.amount):""}</td><td class="r">{yen(t.running)}</td><td><button class="btn btn-sm btn-danger del" data-del={t.id}>削除</button></td></tr>
         );})}
-        {book.rows.length===0 && (<tr><td colspan="7" class="muted">取引がありません。</td></tr>)}
+        {book.rows.length===0 && (<tr><td colspan="7" class="muted" style="text-align:center;padding:1.2rem">まだ記録がありません。上の「＋ 入金を記録」から最初の1件を登録してみましょう。</td></tr>)}
       </tbody></table></div>
   )}
 
-  <h2>予算実績</h2>
-  <div class="table-wrap"><table><thead><tr><th>科目</th><th class="r">予算</th><th class="r">実績</th><th class="r">差異</th></tr></thead><tbody>
+  <h2>予算と実績</h2>
+  <div class="table-wrap"><table><thead><tr><th>科目</th><th class="r">予算</th><th class="r">実績</th><th class="r">差額</th></tr></thead><tbody>
     {ba.map((r)=>(<tr><td>{r.name}</td><td class="r">{yen(r.budget)}</td><td class="r">{yen(r.actual)}</td><td class="r">{yen(r.budget-r.actual)}</td></tr>))}
+    {ba.length===0 && (<tr><td colspan="4" class="muted" style="text-align:center;padding:1rem">予算の設定はまだありません。</td></tr>)}
   </tbody></table></div>
 
+  <style>
+    .bal-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin: 1rem 0 .4rem; }
+    .bal-card { background: var(--surface); border: 1px solid var(--line-strong); border-radius: var(--r-md); padding: 16px 18px; box-shadow: var(--shadow-sm); }
+    .bal-name { color: var(--muted); font-size: .95rem; font-weight: 600; }
+    .bal-amt { font-size: 1.7rem; font-weight: 800; letter-spacing: -.02em; margin-top: 2px; font-feature-settings: "tnum" 1; }
+    .rec-modes { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .rec-mode { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; min-height: 76px; border: 2px solid var(--line-strong); border-radius: var(--r-md); background: var(--surface); color: var(--ink); font-size: 1.15rem; font-weight: 800; cursor: pointer; transition: transform .1s, border-color .15s, background .15s; }
+    .rec-mode small { font-size: .8rem; font-weight: 500; color: var(--muted); }
+    .rec-mode .rm-sign { font-size: 1.4rem; line-height: 1; }
+    .rec-mode:hover { transform: translateY(-2px); }
+    .rec-mode.income:hover, .rec-mode.income[aria-pressed="true"] { border-color: var(--ok); background: var(--ok-soft); }
+    .rec-mode.expense:hover, .rec-mode.expense[aria-pressed="true"] { border-color: var(--danger); background: var(--danger-soft); }
+    .rec-label { font-weight: 700; font-size: 1.05rem; margin: 0 0 .6rem; padding: .5rem .8rem; border-radius: var(--r-sm); background: var(--surface-2); }
+    .rec-transfer { background: var(--surface-2); border: 1px dashed var(--line-strong); }
+    .rec-transfer > summary { color: var(--muted); }
+    @media (max-width: 420px) { .rec-mode { min-height: 68px; font-size: 1.05rem; } }
+  </style>
+
   <script slot="scripts" is:inline>
-    const kind=document.getElementById("kind"),catBox=document.getElementById("catBox"),counterBox=document.getElementById("counterBox");
-    function sync(){const t=kind.value;catBox.style.display=t==="transfer"?"none":"";counterBox.style.display=t==="transfer"?"":"none";
-      for(const o of document.querySelectorAll("#cat option")){const k=o.dataset.kind;o.hidden=(t==="income"&&k!=="income")||(t==="expense"&&k!=="expense");}
-      const v=[...document.querySelectorAll("#cat option")].find(o=>!o.hidden);if(v)v.selected=true;}
-    kind.addEventListener("change",sync);sync();
+    const recForm=document.getElementById("recForm"),kindEl=document.getElementById("kind"),catBox=document.getElementById("catBox"),counterBox=document.getElementById("counterBox"),recLabel=document.getElementById("recLabel");
+    const LABELS={income:"＋ 入金を記録します",expense:"− 出金を記録します",transfer:"口座間の移動（振替）を記録します"};
+    function openMode(k){
+      kindEl.value=k;recLabel.textContent=LABELS[k]||"";recForm.hidden=false;
+      catBox.style.display=k==="transfer"?"none":"";counterBox.style.display=k==="transfer"?"":"none";
+      for(const o of document.querySelectorAll("#cat option")){const kk=o.dataset.kind;o.hidden=(k==="income"&&kk!=="income")||(k==="expense"&&kk!=="expense");}
+      const v=[...document.querySelectorAll("#cat option")].find(o=>!o.hidden);if(v)v.selected=true;
+      document.querySelectorAll(".rec-mode").forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.kind===k)));
+      recForm.scrollIntoView({behavior:"smooth",block:"nearest"});
+      const amt=document.getElementById("amount");if(amt)setTimeout(()=>amt.focus(),200);
+    }
+    document.querySelectorAll("[data-kind]").forEach(b=>b.addEventListener("click",()=>openMode(b.dataset.kind)));
+    document.getElementById("recCancel").addEventListener("click",()=>{recForm.hidden=true;document.querySelectorAll(".rec-mode").forEach(b=>b.setAttribute("aria-pressed","false"));});
     document.getElementById("reg").addEventListener("click",async(e)=>{
-      const body={date:document.getElementById("date").value,kind:kind.value,wallet_id:document.getElementById("wallet").value,category_id:document.getElementById("cat").value,counter_wallet_id:document.getElementById("counter").value,amount:document.getElementById("amount").value,description:document.getElementById("desc").value};
-      // 送信前のクライアント検証（往復前に即フィードバック）。
+      const body={date:document.getElementById("date").value,kind:kindEl.value,wallet_id:document.getElementById("wallet").value,category_id:document.getElementById("cat").value,counter_wallet_id:document.getElementById("counter").value,amount:document.getElementById("amount").value,description:document.getElementById("desc").value};
       if(!body.date){window.bo.toast("日付を入力してください","err");return;}
       if(!(Number(body.amount)>0)){window.bo.toast("金額は1以上で入力してください","err");return;}
       if(!body.wallet_id){window.bo.toast("口座を選択してください","err");return;}
       if(body.kind==="transfer"&&body.wallet_id===body.counter_wallet_id){window.bo.toast("振替元と振替先が同じ口座です","err");return;}
-      const r=await window.bo.api("/api/tx",body,{btn:e.currentTarget,successMsg:"登録しました"});
+      const r=await window.bo.api("/api/tx",body,{btn:e.currentTarget,successMsg:"記録しました"});
       if(r.ok)setTimeout(()=>location.reload(),600);
     });
     document.querySelectorAll(".del[data-del]").forEach(b=>b.addEventListener("click",async(e)=>{
-      if(!(await window.bo.confirm("この取引を削除（ゴミ箱へ移動）しますか？",{confirmLabel:"削除",danger:true,auditHref:"/diagnostics"})))return;
+      if(!(await window.bo.confirm("この記録を消します。よろしいですか？",{confirmLabel:"削除",danger:true,auditHref:"/diagnostics"})))return;
       const r=await window.bo.api("/api/tx",{_action:"delete",id:e.target.dataset.del},{btn:e.target,successMsg:"削除しました"});
       if(r.ok)setTimeout(()=>location.reload(),500);
     }));
