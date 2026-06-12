@@ -50,7 +50,7 @@ const _d = new Date();
 const nextMonthStart = new Date(Date.UTC(_d.getUTCFullYear(), _d.getUTCMonth() + 1, 1)).toISOString().slice(0, 10);
 type Kpi = { balance: number; monthIncome: number; monthExpense: number; pending: number; storage: Awaited<ReturnType<typeof getStorageUsage>>; at: number };
 let kpi: Kpi | null = null;
-try { if (kpiRaw) { const o = JSON.parse(kpiRaw) as Kpi; if (nowSec() - o.at < 30) kpi = o; } } catch { /* noop */ }
+try { if (kpiRaw) { const o = JSON.parse(kpiRaw) as Kpi; if (nowSec() - o.at < 120) kpi = o; } } catch { /* noop */ }
 if (!kpi) {
   const [balanceRow, monthAgg, pending, st] = await Promise.all([
     env.DB.prepare("SELECT COALESCE(SUM(opening_balance),0) AS b FROM wallets").first<{ b: number }>().catch(() => null),
@@ -62,7 +62,8 @@ if (!kpi) {
   for (const row of monthAgg.results) { if (row.kind === "income") mi = row.s; else if (row.kind === "expense") me = row.s; }
   kpi = { balance: balanceRow?.b ?? 0, monthIncome: mi, monthExpense: me, pending, storage: st, at: nowSec() };
   const blob = JSON.stringify(kpi);
-  try { Astro.locals.runtime.ctx.waitUntil(env.LICENSE.put("kpi_cache", blob)); } catch { env.LICENSE.put("kpi_cache", blob).catch(() => {}); }
+  // KV書き込み（kpi_cache）は失敗しても描画を止めない。上限超過時に put が同期例外/拒否のどちらでも500にしない。
+  try { Astro.locals.runtime.ctx.waitUntil(env.LICENSE.put("kpi_cache", blob).catch(() => {})); } catch { /* KV上限など：無視 */ }
 }
 const balance = kpi.balance;
 const monthIncome = kpi.monthIncome, monthExpense = kpi.monthExpense;

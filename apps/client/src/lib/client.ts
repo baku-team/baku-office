@@ -41,8 +41,8 @@ export async function pollHost(env: Env, deployUrl?: string, apps?: { id: string
     const r = await hostFetch(env, "/api/check?" + qs.toString(), { headers: { "x-bo-license": token } });
     if (!r.ok) return null;
     const data = (await r.json()) as CheckResponse;
-    await env.LICENSE.put(KV_ENTITLEMENT, data.entitlement);
-    await env.LICENSE.put(KV_ENTITLEMENT_AT, String(nowSec())); // 鮮度（重要ゲートのダウングレード窓を縮小）
+    await env.LICENSE.put(KV_ENTITLEMENT, data.entitlement).catch(() => {});
+    await env.LICENSE.put(KV_ENTITLEMENT_AT, String(nowSec())).catch(() => {}); // 鮮度（重要ゲートのダウングレード窓を縮小）。KV上限時も pollHost を止めない
     // ホーム描画をブロックしないための表示用キャッシュ（pollHost は背景実行・§体感速度）。
     if (data.latestVersion) await env.LICENSE.put("latest_version", data.latestVersion).catch(() => {});
     await env.LICENSE.put("notices_cache", JSON.stringify(data.notices ?? [])).catch(() => {});
