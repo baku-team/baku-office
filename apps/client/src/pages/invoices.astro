@@ -54,7 +54,7 @@ const yen = (n: number | null) => (n == null ? "—" : "¥" + n.toLocaleString()
               <td class="muted" style="font-size:.8rem">{r.due_date ?? "—"}</td>
               <td>
                 {isAdmin
-                  ? (<select class="inv-status">{STATUSES.map((v) => (<option value={v} selected={r.status === v}>{STATUS_LABEL[v]}</option>))}</select>)
+                  ? (<select class="inv-status" aria-label="請求の状態">{STATUSES.map((v) => (<option value={v} selected={r.status === v}>{STATUS_LABEL[v]}</option>))}</select>)
                   : (<span class="pill">{STATUS_LABEL[r.status] ?? r.status}</span>)}
               </td>
               <td>{r.file_id ? (<a href={`/files/${r.file_id}`} target="_blank" rel="noreferrer">表示</a>) : "—"}</td>

@@ -14,9 +14,9 @@ const yen = (n: number | null) => (n != null ? "¥" + n.toLocaleString("ja-JP") 
   <p class="muted">領収書・メモ・タスク・予定を記録し、必要なものを組織へ共有申請できます（§6/9）。</p>
   <div class="card">
     <div class="row">
-      <select id="type"><option value="receipt">領収書</option><option value="memo">メモ</option><option value="task">タスク</option><option value="schedule">予定</option></select>
-      <input id="title" placeholder="概要" />
-      <input id="amount" type="number" placeholder="金額" />
+      <select id="type" aria-label="種別"><option value="receipt">領収書</option><option value="memo">メモ</option><option value="task">タスク</option><option value="schedule">予定</option></select>
+      <input id="title" placeholder="概要" aria-label="概要" />
+      <input id="amount" type="number" placeholder="金額" aria-label="金額" />
       <button class="btn btn-primary" id="add" style="flex:0 0 auto">追加</button>
     </div>
   </div>

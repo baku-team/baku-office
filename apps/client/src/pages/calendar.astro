@@ -29,6 +29,7 @@ const fmtTs = (s: number | null) => (s ? new Date(s * 1000).toISOString().slice(
 ---
 <App title="カレンダー" active="/calendar">
   <h1>カレンダー連携</h1>
+  <p class="muted">団体内の予定の登録・確認は <a href="/schedule">予定</a> から行えます。この画面は Google カレンダーとの連携を設定します。</p>
   {!hasPro && (
     <div class="card">
       <div class="banner banner-warn">この機能は <strong>Pro 以上</strong>のプランで利用できます。</div>
@@ -38,7 +39,7 @@ const fmtTs = (s: number | null) => (s ? new Date(s * 1000).toISOString().slice(
   )}
   {hasPro && (
     <Fragment>
-      {!configured && (<div class="banner banner-warn">Google OAuth が未設定のため連携できません。{isAdmin ? <Fragment>管理者は <a href="/settings/google-setup">Google 連携セットアップ</a> から設定できます。</Fragment> : "管理者にご確認ください。"}</div>)}
+      {!configured && (<div class="banner banner-warn">Google との連携が未設定のため利用できません。{isAdmin ? <Fragment>管理者は <a href="/settings/google-setup">Google との連携</a> から設定できます。</Fragment> : "管理者にご確認ください。"}</div>)}
       <div class="card">
         <p>カレンダー連携：<span class="pill">{calGranted ? "連携済み" : "未連携"}</span> {connected && <span class="muted" style="font-size:.8rem">最終利用：{fmtTs(lastUsed)}</span>}</p>
         {isAdmin && configured && (
