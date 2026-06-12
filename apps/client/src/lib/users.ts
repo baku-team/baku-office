@@ -178,7 +178,9 @@ export async function listMyItems(env: Env, ownerId: string): Promise<{ id: stri
 }
 
 // パスワードハッシュ：PBKDF2-SHA256（塩あり・ストレッチあり）。形式 "pbkdf2$<iter>$<saltB64>$<hashB64>"。
-const PBKDF2_ITER = 210000;
+// WHY 100000上限：Cloudflare Workers の WebCrypto は PBKDF2 の iterations を 100000 までしか許可しない
+// （超過すると NotSupportedError で参加/ログインのパスワード処理が500になる）。100000は同ランタイムでの最大値。
+const PBKDF2_ITER = 100000;
 export async function pbkdf2Hash(password: string, saltB64?: string): Promise<string> {
   const salt = saltB64 ? Uint8Array.from(atob(saltB64), (c) => c.charCodeAt(0)) : crypto.getRandomValues(new Uint8Array(16));
   const base = await crypto.subtle.importKey("raw", new TextEncoder().encode(password), "PBKDF2", false, ["deriveBits"]);
