@@ -229,11 +229,17 @@ const isAdminOrg = ses?.role === "admin" && ses?.ctx === "org";
         try {
           const r = await fetch(url, { method: opts.method || "POST", headers: { "content-type": "application/json" }, body: body !== undefined ? JSON.stringify(body) : undefined });
           let j: any = {}; try { j = await r.json(); } catch { /* non-json */ }
-          if (!r.ok || j.error) { toast(opts.errMsg || ("エラー：" + (j.error || r.status)), "err"); return { ok: false, data: j }; }
+          if (!r.ok || j.error) {
+            // サーバの j.error にはエラー番号が含まれる。errMsg 指定時はそれを優先しつつ、番号を必ず添える。
+            let msg = opts.errMsg || j.error || ("エラー：" + r.status);
+            if (j.code && !String(msg).includes(j.code)) msg += "（エラー番号: " + j.code + "）";
+            toast(msg, "err");
+            return { ok: false, data: j };
+          }
           if (opts.successMsg !== null) toast(opts.successMsg || "完了しました", "ok");
           return { ok: true, data: j };
         } catch (e) {
-          toast("通信に失敗しました：" + ((e as Error)?.message || ""), "err"); return { ok: false, error: e };
+          toast("通信に失敗しました。電波・接続をご確認ください（エラー番号: E0001）", "err"); return { ok: false, error: e };
         } finally { busy(btn, false); progDone(); }
       }
       // 確認ダイアログ（危険操作の統一・§9）。window.confirm を置換し、リスクラベル・取消不可表示・

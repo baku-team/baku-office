@@ -5,6 +5,8 @@ import { bootCheck } from "./lib/boot-check.ts";
 import { sameOrigin, getSession } from "./lib/auth.ts";
 import { needsConsent } from "./lib/consent.ts";
 import { buildCtx } from "./core/ctx.ts";
+import { resolveError, appendCode } from "./lib/errors.ts";
+import { logDiag } from "./lib/diag.ts";
 
 // ログイン誘導を素通りさせる静的アセットの拡張子 allowlist。
 // WHY: 旧実装は「`.` を含む全パス」を exempt にしており /accounting/export.csv 等の動的ルートまで
@@ -44,19 +46,20 @@ function withSec(res: Response): Response {
   return res;
 }
 
-// KV/D1 の1日あたり書き込み上限超過（無料枠で起こりやすい）を検出して、原因の分かるメッセージに変換する。
-// WHY: 既定では生の 500 になり「何が起きたか」が利用者に伝わらない。上限到達を明示して再試行/上位プランへ誘導する。
-function isWriteLimitError(e: unknown): boolean {
-  const m = (e instanceof Error ? e.message : String(e ?? "")).toLowerCase();
-  return m.includes("limit exceeded") || m.includes("too many requests") || m.includes("daily request limit");
-}
-const LIMIT_MSG = "ただいま保存（書き込み）回数が本日の上限に達したため、一時的に保存できません。時間をおいて（日付が変わると回復します）お試しください。管理者の方は上位プラン（Workers Paid）で上限を引き上げられます。";
-function limitResponse(pathname: string, accept: string): Response {
+// 想定外エラーを「利用者向け文言＋エラー番号」に変換して返す（API=JSON / ページ=簡易HTML）。
+// WHY: 既定では生の 500 になり「どこで何が起きたか」が伝わらない。番号を添えてサポート連絡を容易にする。
+const escHtml = (s: string) => s.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c] as string));
+function buildErrorResponse(status: number, code: string, message: string, pathname: string, accept: string): Response {
   const isApi = pathname.startsWith("/api/") || accept.includes("application/json");
-  const headers = { "retry-after": "3600" };
-  if (isApi) return new Response(JSON.stringify({ error: LIMIT_MSG }), { status: 503, headers: { "content-type": "application/json", ...headers } });
-  const html = `<!doctype html><html lang="ja"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>一時的に保存できません</title><div style="max-width:640px;margin:12vh auto;padding:24px;font-family:system-ui,-apple-system,'Hiragino Kaku Gothic ProN',sans-serif;line-height:1.9;color:#0E1A2B"><h1 style="font-size:1.35rem">一時的に保存できません</h1><p style="font-size:1.05rem">${LIMIT_MSG}</p><p><a href="javascript:history.back()" style="color:#836528;font-weight:600">← 前の画面に戻る</a></p></div></html>`;
-  return new Response(html, { status: 503, headers: { "content-type": "text/html; charset=utf-8", ...headers } });
+  const retry = String(status === 503 ? 3600 : 5);
+  if (isApi) {
+    return new Response(JSON.stringify({ error: appendCode(message, code), code }), {
+      status,
+      headers: { "content-type": "application/json", "retry-after": retry },
+    });
+  }
+  const html = `<!doctype html><html lang="ja"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>エラー（${code}）</title><div style="max-width:640px;margin:12vh auto;padding:24px;font-family:system-ui,-apple-system,'Hiragino Kaku Gothic ProN',sans-serif;line-height:1.9;color:#0E1A2B"><h1 style="font-size:1.35rem">問題が発生しました</h1><p style="font-size:1.05rem">${escHtml(message)}</p><p style="font-size:1.02rem">サポートにお問い合わせの際は、次の番号をお伝えください：<br><strong style="font-size:1.25rem;letter-spacing:.04em">エラー番号 ${code}</strong></p><p><a href="javascript:history.back()" style="color:#836528;font-weight:600">← 前の画面に戻る</a></p></div></html>`;
+  return new Response(html, { status, headers: { "content-type": "text/html; charset=utf-8", "retry-after": retry } });
 }
 
 // ライセンス未保持なら /activate へ誘導（§4）。アプリ全体の前段でスキーマ自動適用も行う。
@@ -109,8 +112,12 @@ export const onRequest = defineMiddleware(async (context, next) => {
   }
   return withSec(await next());
   } catch (e) {
-    // KV/D1 の書き込み上限超過は、生の500ではなく「上限到達」の明確なメッセージへ。
-    if (isWriteLimitError(e)) return withSec(limitResponse(pathname, context.request.headers.get("accept") ?? ""));
-    throw e;
+    // 全ての未捕捉エラーに「エラー番号」を付けて返す。番号だけで発生箇所を特定できる（ERROR_CODES.md 参照）。
+    const { status, code, message } = resolveError(e, pathname);
+    // 任意の記録（取得は必須でない。書き込み失敗＝KV/D1上限時も握りつぶす）。
+    try {
+      await logDiag(env, "error", "exception", `[${code}] ${context.request.method} ${pathname}: ${(e instanceof Error ? e.message : String(e)).slice(0, 200)}`);
+    } catch { /* noop */ }
+    return withSec(buildErrorResponse(status, code, message, pathname, context.request.headers.get("accept") ?? ""));
   }
 });
