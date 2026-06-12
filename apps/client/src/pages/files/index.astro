@@ -12,10 +12,11 @@ const kb = (n: number) => (n < 1024 ? n + " B" : (n / 1024).toFixed(1) + " KB");
 ---
 <App title="ファイル" active="/files">
   <h1>ファイル</h1>
-  <p class="muted">ストレージ：<strong>{mode === "r2" ? "高度（R2）" : "標準（KV・カード不要）"}</strong>（§11）</p>
+  <p class="muted">保存方法：<strong>{mode === "r2" ? "大容量に対応" : "標準（追加費用なし）"}</strong></p>
   <div class="card">
-    <div class="row">
-      <input type="file" id="file" />
+    <label for="file">アップロードするファイル</label>
+    <div class="row" style="margin-top:6px">
+      <input type="file" id="file" aria-label="アップロードするファイル" />
       <button class="btn btn-primary" id="up" style="flex:0 0 auto">アップロード</button>
     </div>
   </div>
@@ -26,10 +27,10 @@ const kb = (n: number) => (n < 1024 ? n + " B" : (n / 1024).toFixed(1) + " KB");
         {files.map((f) => (
           <tr data-id={f.id}>
             <td>{f.name}</td><td>{kb(f.size)}</td><td>{f.mime ?? ""}</td>
-            <td><a class="btn btn-sm" href={`/files/${f.id}`}>DL</a> <button class="btn btn-sm btn-danger del">削除</button></td>
+            <td><a class="btn btn-sm" href={`/files/${f.id}`}>ダウンロード</a> <button class="btn btn-sm btn-danger del">削除</button></td>
           </tr>
         ))}
-        {files.length === 0 && (<tr><td colspan="4" class="muted">ファイルがありません。</td></tr>)}
+        {files.length === 0 && (<tr><td colspan="4" class="muted" style="text-align:center;padding:1.2rem">まだファイルがありません。上の欄からアップロードしてみましょう。</td></tr>)}
       </tbody>
     </table>
   </div>

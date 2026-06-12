@@ -60,7 +60,7 @@ const yen = (n: number | null) => (n == null ? "—" : "¥" + n.toLocaleString()
               <td>{r.file_id ? (<a href={`/files/${r.file_id}`} target="_blank" rel="noreferrer">表示</a>) : "—"}</td>
             </tr>
           ))}
-          {invoices.length === 0 && (<tr><td colspan="6" class="muted">請求書はまだありません。</td></tr>)}
+          {invoices.length === 0 && (<tr><td colspan="6" class="muted" style="text-align:center;padding:1.2rem">まだ請求書がありません。</td></tr>)}
         </tbody>
       </table></div>
     </Fragment>

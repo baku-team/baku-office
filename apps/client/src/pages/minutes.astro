@@ -11,17 +11,17 @@ const d = (s: number) => new Date(s * 1000).toISOString().slice(0, 10);
 <App title="議事録" active="/minutes">
   <h1>議事録</h1>
   <div class="card">
-    <div class="field"><input id="title" placeholder="タイトル（例：6月定例会）" /></div>
-    <div class="field"><textarea id="body" rows="4" placeholder="本文・決定事項"></textarea></div>
+    <div class="field"><label for="title">タイトル</label><input id="title" placeholder="例：6月定例会" /></div>
+    <div class="field"><label for="body">本文・決定事項</label><textarea id="body" rows="4" placeholder="話し合った内容や決まったことを書きます"></textarea></div>
     <button class="btn btn-primary" id="add">保存</button>
   </div>
   <div style="margin-top:1rem">
     {results.map((r)=>(<div class="card" data-id={r.id} style="margin-bottom:.6rem"><div style="display:flex;justify-content:space-between"><strong>{r.title}</strong><button class="btn btn-sm btn-danger del">削除</button></div><div class="muted">{d(r.created_at)}</div><p style="white-space:pre-wrap">{r.body}</p></div>))}
-    {results.length===0 && (<p class="muted">議事録がありません。</p>)}
+    {results.length===0 && (<p class="muted" style="text-align:center;padding:1.2rem">まだ議事録がありません。上の欄から最初の議事録を作成してみましょう。</p>)}
   </div>
   <script slot="scripts" is:inline>
-    const P=(b,btn)=>window.bo.api("/api/docs",{kind:"minutes",...b},{btn});
-    document.getElementById("add").addEventListener("click",async(e)=>{const t=document.getElementById("title").value;if(!t){window.bo.toast("タイトルを入力","err");return;}const r=await P({title:t,body:document.getElementById("body").value},e.currentTarget);if(r.ok)setTimeout(()=>location.reload(),500);});
+    const P=(b,btn,msg)=>window.bo.api("/api/docs",{kind:"minutes",...b},{btn,successMsg:msg});
+    document.getElementById("add").addEventListener("click",async(e)=>{const t=document.getElementById("title").value;if(!t){window.bo.toast("タイトルを入力してください","err");return;}const r=await P({title:t,body:document.getElementById("body").value},e.currentTarget,"保存しました");if(r.ok)setTimeout(()=>location.reload(),500);});
     document.querySelectorAll("[data-id] .del").forEach(b=>b.addEventListener("click",async(e)=>{if(!(await window.bo.confirm("この議事録を削除しますか？",{confirmLabel:"削除",danger:true,irreversible:true})))return;const r=await P({_action:"delete",id:e.target.closest("[data-id]").dataset.id},e.target);if(r.ok)setTimeout(()=>location.reload(),400);}));
   </script>
 </App>
