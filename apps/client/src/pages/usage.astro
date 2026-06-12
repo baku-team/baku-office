@@ -76,7 +76,12 @@ const spct = (u: number, l: number) => (u < 0 || l <= 0 ? 0 : Math.min(100, Math
       </div>
 
       <h2>プロバイダ別</h2>
-      <div class="banner banner-info">リセット：無料枠＝<strong>{reset.daily}</strong>（日次）／上限＝<strong>{reset.monthly}</strong>（月次）／当月の推定費用合計＝<strong>${totalUsd.toFixed(2)}</strong>（参考単価による概算・実費は各プロバイダの請求が正）</div>
+      <div class="banner banner-info" style="display:block">
+        <div class="reset-line"><span>無料枠のリセット（日次）</span><strong>{reset.daily}</strong></div>
+        <div class="reset-line"><span>上限のリセット（月次）</span><strong>{reset.monthly}</strong></div>
+        <div class="reset-line"><span>当月の推定費用合計</span><strong>${totalUsd.toFixed(2)}</strong></div>
+        <div class="muted" style="font-size:.78rem;margin-top:6px">※参考単価による概算です。実費は各プロバイダの請求が正となります。</div>
+      </div>
       <div class="table-wrap"><table>
         <thead><tr><th>API</th><th>本日</th><th>当月回数</th><th>当月token</th><th>当月推定$</th><th>当月ニューロン/上限</th><th>無料枠/日</th><th>当月回数上限</th><th>当月上限$</th><th>超過時</th></tr></thead>
         <tbody>
@@ -87,7 +92,12 @@ const spct = (u: number, l: number) => (u < 0 || l <= 0 ? 0 : Math.min(100, Math
               <td class={r.lim.monthlyCap && r.month >= (r.lim.monthlyCap ?? 0) ? "u-over" : ""}>{r.month}{r.lim.monthlyCap ? ` / ${r.lim.monthlyCap}` : ""}</td>
               <td class="muted">{r.tokens ? fmtTok(r.tokens) : "—"}</td>
               <td class={r.lim.monthlyUsdCap && r.usd >= (r.lim.monthlyUsdCap ?? 0) ? "u-over" : ""}>{r.usd ? `$${r.usd.toFixed(2)}` : "—"}{r.lim.monthlyUsdCap ? ` / $${r.lim.monthlyUsdCap}` : ""}</td>
-              <td>{r.p === "workers_ai" ? (<>{r.neurons ? r.neurons.toLocaleString() : "0"} <input class="lim-nc" type="number" min="0" value={r.lim.monthlyNeuronCap ?? ""} placeholder="上限" disabled={!isAdmin} style="width:90px" /></>) : <span class="muted">—</span>}</td>
+              <td>{r.p === "workers_ai" ? (
+                <div class="neuron-cell">
+                  <span class="neuron-val">{r.neurons ? r.neurons.toLocaleString() : "0"}<small> ニューロン</small></span>
+                  <label class="neuron-cap">上限 <input class="lim-nc" type="number" min="0" value={r.lim.monthlyNeuronCap ?? ""} placeholder="無制限" disabled={!isAdmin} /></label>
+                </div>
+              ) : <span class="muted">—</span>}</td>
               <td><input class="lim-fq" type="number" min="0" value={r.lim.freeQuota ?? ""} placeholder="—" disabled={!isAdmin} style="width:80px" /></td>
               <td><input class="lim-mc" type="number" min="0" value={r.lim.monthlyCap ?? ""} placeholder="—" disabled={!isAdmin} style="width:80px" /></td>
               <td><input class="lim-uc" type="number" min="0" step="0.01" value={r.lim.monthlyUsdCap ?? ""} placeholder="—" disabled={!isAdmin} style="width:80px" /></td>
@@ -97,7 +107,7 @@ const spct = (u: number, l: number) => (u < 0 || l <= 0 ? 0 : Math.min(100, Math
         </tbody>
       </table></div>
       <p class="muted">「当月上限$」は応答tokenから算出した<strong>推定費用</strong>での hard cap（超過時に停止/切替）。token課金の実費に近づけるための上限です。</p>
-      {isAdmin && (<button class="btn btn-primary" id="saveLimits">上限を保存</button>)}
+      {isAdmin && (<button class="btn btn-primary" id="saveLimits" style="margin-top:.8rem">上限を保存</button>)}
       {!isAdmin && (<p class="muted">上限の変更は管理者のみ可能です。</p>)}
 
       <h2>任意API（画像生成・音声合成・動画生成など）</h2>
@@ -192,8 +202,21 @@ const spct = (u: number, l: number) => (u < 0 || l <= 0 ? 0 : Math.min(100, Math
 <style>
   .bars { display: flex; align-items: flex-end; gap: 4px; height: 140px; }
   .bar { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; height: 100%; }
-  .bar .fill { width: 64%; background: #14365c; border-radius: 3px 3px 0 0; min-height: 2px; transition: height .2s; }
-  .bar .bl { font-size: .55rem; color: #6b7785; margin-top: 3px; white-space: nowrap; }
-  .u-warn { color: #b4541a; font-weight: 700; }
-  .u-over { color: #c0392b; font-weight: 700; }
+  .bar .fill { width: 64%; background: var(--navy); border-radius: 3px 3px 0 0; min-height: 2px; transition: height .2s; }
+  .bar .bl { font-size: .55rem; color: var(--muted); margin-top: 3px; white-space: nowrap; }
+  .u-warn { color: var(--warn); font-weight: 700; }
+  .u-over { color: var(--danger); font-weight: 700; }
+  /* リセット情報を複数行で見やすく */
+  .reset-line { display: flex; justify-content: space-between; gap: 14px; padding: 3px 0; flex-wrap: wrap; }
+  .reset-line > span { color: var(--muted); }
+  /* ニューロン：消費量と上限入力を縦に分けて間隔を確保 */
+  .neuron-cell { display: flex; flex-direction: column; gap: 10px; min-width: 150px; }
+  .neuron-val { font-weight: 600; }
+  .neuron-val small { color: var(--muted); font-weight: 400; }
+  .neuron-cap { display: flex; align-items: center; gap: 8px; font-size: .74rem; color: var(--muted); }
+  .neuron-cap input { width: 100px; }
+  /* 上限編集テーブル：入力・セルに余白を確保し詰まりを解消 */
+  .table-wrap th, .table-wrap td { padding: .7rem .85rem; vertical-align: middle; }
+  .table-wrap td input, .table-wrap td select { padding: .4rem .55rem; }
+  .table-wrap td .btn-sm { margin: 2px 4px 2px 0; }
 </style>

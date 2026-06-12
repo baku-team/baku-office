@@ -203,7 +203,10 @@ a.card:hover { border-color: var(--line-strong); box-shadow: var(--shadow); text
 .btn-warn { background: var(--warn); color: #fff; border-color: transparent; }
 .btn-danger { background: var(--danger); color: #fff; border-color: transparent; }
 .btn-ghost { background: transparent; border-color: var(--line-strong); }
-.btn-sm { min-height: 34px; padding: 0 .65rem; font-size: .85rem; border-radius: var(--r-xs); }
+.btn-sm { min-height: 34px; padding: 0 .7rem; font-size: .85rem; border-radius: var(--r-xs); }
+/* カード/details 直下の単独ボタンは前要素から余白を取り、詰まりを防ぐ（.row内は gap で制御）。 */
+.card > .btn, details > .btn { margin-top: .8rem; }
+.card > .btn + .btn, details > .btn + .btn { margin-left: .6rem; }
 .btn .spin { width: 14px; height: 14px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: spin .6s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
