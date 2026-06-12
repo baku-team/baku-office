@@ -77,7 +77,16 @@ const visGroups = groups.map((g) => ({ ...g, items: g.items.filter((i) => i.show
     </div>
     <div class="hr"></div>
     <div class="spread" style="flex-wrap:wrap;gap:14px">
-      <div><strong>ナビの形</strong><div class="muted" style="font-size:.82rem">メニューの配置（スマホ画面では自動で下部タブになります）。</div></div>
+      <div><strong>文字の大きさ</strong><div class="muted" style="font-size:.85rem">画面全体の文字を大きくできます（見えにくい方に）。</div></div>
+      <div class="seg" id="set-fontsize" role="group" aria-label="文字の大きさ">
+        <button class="seg-opt" type="button" data-fs="std">標準</button>
+        <button class="seg-opt" type="button" data-fs="large" style="font-size:1.12rem">大</button>
+        <button class="seg-opt" type="button" data-fs="xl" style="font-size:1.28rem">特大</button>
+      </div>
+    </div>
+    <div class="hr"></div>
+    <div class="spread" style="flex-wrap:wrap;gap:14px">
+      <div><strong>ナビの形</strong><div class="muted" style="font-size:.85rem">メニューの配置（スマホ画面では自動で下部タブになります）。</div></div>
       <div class="seg" id="set-nav" role="group" aria-label="ナビの形">
         <button class="seg-opt" type="button" data-nav="top">上部</button>
         <button class="seg-opt" type="button" data-nav="side">サイド</button>
@@ -157,6 +166,17 @@ const visGroups = groups.map((g) => ({ ...g, items: g.items.filter((i) => i.show
           try { localStorage.setItem("bo_theme", dark.checked ? "dark" : "light"); } catch (e) { /* noop */ }
           requestAnimationFrame(() => requestAnimationFrame(() => root.classList.remove("theme-switching")));
         });
+      }
+      // 文字の大きさ（標準/大/特大）。html[data-fontsize] を即時切替＋localStorage 保存（App.astro 起動scriptが読む）。
+      const fs = document.getElementById("set-fontsize");
+      if (fs) {
+        const curFs = root.getAttribute("data-fontsize") || "std";
+        fs.querySelectorAll(".seg-opt").forEach((b) => b.classList.toggle("on", b.dataset.fs === curFs));
+        fs.querySelectorAll(".seg-opt").forEach((b) => b.addEventListener("click", () => {
+          root.setAttribute("data-fontsize", b.dataset.fs);
+          try { localStorage.setItem("bo_fontsize", b.dataset.fs); } catch (e) { /* noop */ }
+          fs.querySelectorAll(".seg-opt").forEach((x) => x.classList.toggle("on", x === b));
+        }));
       }
       const seg = document.getElementById("set-nav");
       if (seg) {
