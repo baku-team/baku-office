@@ -13,7 +13,6 @@ const hasPro = atLeast(entitlement, "pro");
 // API未登録（Gemini/Claudeキー無し）なら Workers AI（CF稼働）を既定に。
 const [hasGemini, hasClaude] = await Promise.all([hasApiKey(env, "gemini").catch(() => false), hasApiKey(env, "claude").catch(() => false)]);
 const defaultModel = (!hasGemini && !hasClaude && env.AI) ? "local" : (hasGemini ? "gemini" : hasClaude ? "claude" : "gemini");
-const uInitial = (ses.name?.trim()?.[0]) || "あ";
 // claude はキー登録時のみ実用。選択肢は出すが、未設定なら gemini にフォールバックする（サーバ側）。
 const { listSessions } = await import("../lib/chat-sessions.ts");
 const sessions = hasPlus ? await listSessions(Astro.locals.ctx, ses.uid).catch(() => []) : [];
@@ -69,7 +68,7 @@ const skills = hasPlus && isOrgAdmin ? await listSkills(env).catch(() => []) : [
             <button class="btn btn-sm dlc" type="button" data-ext="html">HTML</button>
             <button class="btn btn-sm dlc" type="button" data-ext="pdf">PDF</button>
           </div>
-          <div id="log" data-uinitial={uInitial}></div>
+          <div id="log"></div>
           {hasPro && (
             <label class="muted" style="font-size:.8rem;display:flex;align-items:center;gap:6px;margin-top:8px">
               <input type="checkbox" id="bgrun" /> バックグラウンドで実行（重い・多段の依頼向け。完了するとこの会話に結果が追記されます）
@@ -172,13 +171,11 @@ const skills = hasPlus && isOrgAdmin ? await listSkills(env).catch(() => []) : [
           return out.join("\n\n");
         }
         // role=u/a。発言者ラベル付き。stream=true（新規AI応答のみ）で段階表示（タイプ風・点滅キャレット）。履歴は即時。
-        const uInitial = (log.dataset.uinitial || "あ");
         function addMsg(role, text, stream) {
           const d = document.createElement("div");
           d.className = "cmsg " + role;
           const html = esc(text).replace(/\n/g, "<br>");
-          const av = role === "a" ? '<span class="cav cav-a" aria-hidden="true">✦</span>' : '<span class="cav cav-u" aria-hidden="true">' + esc(uInitial) + "</span>";
-          d.innerHTML = av + '<div class="cmsg-body"><span class="cmsg-who">' + (role === "a" ? "相棒" : "あなた") + '</span><div class="cbub"></div></div>';
+          d.innerHTML = '<div class="cmsg-body"><span class="cmsg-who">' + (role === "a" ? "相棒" : "あなた") + '</span><div class="cbub"></div></div>';
           const bub = d.querySelector(".cbub");
           log.appendChild(d);
           if (stream && role === "a" && text) {
@@ -311,7 +308,7 @@ const skills = hasPlus && isOrgAdmin ? await listSkills(env).catch(() => []) : [
   </script>
 </App>
 
-<style>
+<style is:global>
   .chat { display: grid; grid-template-columns: 248px 1fr; gap: 18px; align-items: start; }
   @media (max-width: 720px) {
     .chat { grid-template-columns: 1fr; }
@@ -343,18 +340,17 @@ const skills = hasPlus && isOrgAdmin ? await listSkills(env).catch(() => []) : [
   .chat-dl { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin: 0 2px 12px; }
   .chat-dl > span { font-size: .76rem; }
   #log { border: 1px solid var(--line); border-radius: var(--r); padding: 20px 18px; min-height: 240px; max-height: 52vh; overflow-y: auto; background: var(--surface-2); display: flex; flex-direction: column; gap: 20px; }
-  .cmsg { max-width: 88%; display: flex; gap: 10px; align-items: flex-start; }
-  .cmsg.u { align-self: flex-end; flex-direction: row-reverse; }
-  .cmsg.a { align-self: flex-start; }
-  /* アバター（相棒=金／あなた=紺）で発言者を一目で区別 */
-  .cav { width: 30px; height: 30px; border-radius: 50%; flex: 0 0 auto; display: grid; place-items: center; font-size: .82rem; font-weight: 800; margin-top: 16px; box-shadow: var(--shadow-sm); }
-  .cav-a { background: radial-gradient(circle at 35% 30%, var(--brand-tint), var(--brand) 70%); color: var(--navy); }
-  .cav-u { background: var(--navy-2); color: #F8F5EE; }
+  .cmsg { max-width: 88%; display: flex; flex-direction: column; }
+  .cmsg.u { align-self: flex-end; align-items: flex-end; }
+  .cmsg.a { align-self: flex-start; align-items: flex-start; }
   .cmsg-body { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
   .cmsg.u .cmsg-body { align-items: flex-end; }
-  .cmsg-who { font-size: .72rem; font-weight: 800; margin: 0 4px; letter-spacing: .02em; }
+  /* 発言者名に色を付けて一目で区別（相棒=金／あなた=紺）。 */
+  .cmsg-who { font-size: .74rem; font-weight: 800; margin: 0 4px; letter-spacing: .03em; }
   .cmsg.a .cmsg-who { color: var(--brand-strong); }
-  .cmsg.u .cmsg-who { color: var(--muted); }
+  .cmsg.u .cmsg-who { color: var(--navy-2); }
+  [data-theme="dark"] .cmsg.a .cmsg-who { color: var(--brand); }
+  [data-theme="dark"] .cmsg.u .cmsg-who { color: var(--ink-2); }
   .caret { display: inline-block; width: 2px; height: 1em; background: currentColor; margin-left: 1px; vertical-align: -2px; animation: pulse 1s steps(2) infinite; }
   .cbub { padding: 12px 16px; border-radius: 16px; font-size: .92rem; line-height: 1.7; display: inline-block; max-width: 100%; box-shadow: var(--shadow-sm); }
   .cmsg.u .cbub { background: var(--primary-bg); color: var(--primary-ink); border-top-right-radius: 5px; }
