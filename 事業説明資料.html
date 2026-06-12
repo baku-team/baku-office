@@ -168,8 +168,41 @@
 
   @page{ size:A4; margin:0; }
   @media print{
-    body{background:#fff;}
-    .page{margin:0 auto; box-shadow:none;}
+    html,body{ background:#fff; margin:0; }
+    .page{
+      width:210mm; min-height:auto; height:auto;
+      padding:12mm 14mm; margin:0; box-shadow:none;
+      overflow:visible; page-break-after:always; break-after:page;
+    }
+    .page:last-child{ page-break-after:auto; break-after:auto; }
+    .cover{ min-height:271mm; padding:24mm 20mm; }
+    /* 絶対配置フッターは本文と重なるため通常フローへ戻す */
+    .footer{ position:static; left:auto; right:auto; bottom:auto; margin-top:5mm; }
+    /* ブロックを改ページ境界で割らない */
+    .card,.scene,.win,.node,.shard,.stack .layer,.kpi .k,.callout,
+    .steps .s,.stepper .st,.navmock .ni,.planebox,figure,table{
+      break-inside:avoid; page-break-inside:avoid;
+    }
+    h2.sec,h3{ break-after:avoid; page-break-after:avoid; }
+    /* 縦の余白を詰めて1セクション＝1ページに収める */
+    h2.sec{ margin:1.5mm 0 3.5mm; padding-bottom:2mm; font-size:16pt; }
+    h3{ margin:4mm 0 2mm; font-size:11pt; }
+    p{ margin:0 0 2.2mm; }
+    .lead-p{ font-size:10.5pt; line-height:1.65; }
+    .grid{ gap:4mm; }
+    .card{ padding:4mm; }
+    .card p{ font-size:9pt; }
+    .card .ico{ font-size:13pt; margin-bottom:.5mm; }
+    .kpi{ gap:4mm; margin:4mm 0 !important; }
+    .kpi .k{ padding:4mm; }
+    .kpi .k .n{ font-size:18pt; }
+    .callout{ margin:2.5mm 0; padding:3mm 4.5mm; }
+    table{ margin:2.5mm 0 3mm; }
+    th,td{ padding:4px 7px; }
+    .flow{ margin:3mm 0; }
+    .stack .layer{ padding:3mm 4mm; margin-bottom:2.5mm; }
+    .steps .s{ padding:2.2mm 0 2.2mm 12mm; }
+    .navmock{ margin:2mm 0 3mm; }
   }
 </style>
 </head>
@@ -472,7 +505,9 @@
 
   <p><b>用途で使い分け</b>：通常処理は <b>Gemini 無料枠</b>、高度な判断や機微情報は <b>Claude</b>（学習なし・BYOK）、
   外部に出したくない場合は <b>ローカルLLM</b>（オフライン）。画像／音声／動画などは<b>任意APIをBYOK</b>で追加。
-  クレジットカード不要の無料スタックだけでも基本AIが動作します。</p>
+  クレジットカード不要の無料スタックだけでも基本AIが動作します。
+  <b>APIキーが無くても、Cloudflare 上で動く Workers AI（無料枠）</b>で即座にAIを利用可能（キー未登録時の既定）。
+  高性能AIが制限・混雑した際は<b>自動で Workers AI へ切り替え</b>、事情を説明して対応を継続します。</p>
 
   <h3>エンジンの使い分け</h3>
   <table>
@@ -480,6 +515,7 @@
     <tbody>
       <tr><td class="em">通常・大量処理</td><td>Gemini（無料枠）</td><td>要約・OCR・文字起こし・分類・通常の対話（コストのかかる機械的処理）</td></tr>
       <tr style="background:#eef3f9;"><td class="em">高度・機微</td><td><b>Claude（BYOK）</b></td><td>複雑な判断・連鎖作業・機密情報（学習に使われないエンジン）</td></tr>
+      <tr><td class="em">キー不要・無料</td><td><b>Workers AI（CF稼働）</b></td><td>APIキー未登録でも即利用できる無料枠のクラウドAI。会話・要約・文章作成。ニューロン使用量の可視化・上限設定に対応（高性能AI障害時の自動切替先）</td></tr>
       <tr><td class="em">オフライン</td><td><b>ローカルLLM（OpenAI互換）</b></td><td>外部送信ゼロで相棒を動かす（Profile C）。機密・現場・通信制限環境</td></tr>
       <tr style="background:#eef3f9;"><td class="em">画像・音声・動画</td><td>任意API（BYOK）</td><td>連携設定／高度なオプションで登録したAPIをAI・エージェントが参照</td></tr>
     </tbody>
@@ -502,7 +538,7 @@
     <div class="card" style="border-color:var(--gold);"><h4>🧾 請求書管理</h4>
       <p>請求書ファイルをAIが読み取り（請求元・金額・期日）、未払一覧・支払期日リマインド・消込まで。<span class="pill pro">Pro</span></p></div>
     <div class="card"><h4>🔎 Web検索（グラウンディング）</h4>
-      <p>最新情報が必要な依頼では Web 検索で根拠を取得して回答（web_search）。</p></div>
+      <p>最新情報が必要な依頼では、<b>Gemini のGoogle検索グラウンディング</b>で根拠を取得して回答。</p></div>
     <div class="card" style="border-color:var(--gold);"><h4>🤖 エージェント（チャネル）</h4>
       <p>LINE／Discord から自然文で操作。各AI機能と道具をフル装備し、24h クラウドで稼働。<span class="pill pro">Pro</span></p></div>
     <div class="card"><h4>🧩 スキルの自動導入</h4>
@@ -511,11 +547,16 @@
       <p>安さ優先＝無料エンジン／機密・精度優先＝学習に使われないエンジン or ローカル。機微内容は送信前に確認。</p></div>
     <div class="card"><h4>🧠 組織記憶（引き継ぎ）</h4>
       <p>資料・会話・決定を団体ごとに蓄積し、人が替わっても知識・意向を継承。</p></div>
+    <div class="card" style="border-color:var(--gold);"><h4>🐾 相棒キャラ（マスコット）</h4>
+      <p>全画面に常駐し稼働状況を可視化。自社キャラへ差し替え／AIによる画像生成も可能。使用中AIの能力で動きが変化（Pro未満は休眠）。</p></div>
+    <div class="card"><h4>💾 まるごとバックアップ</h4>
+      <p>会計・名簿・ファイル等の全データを1ファイルに保存（手元/Googleドライブ）。別環境へ復元可能。未実施が続くと通知。<span class="pill plus">Plus</span></p></div>
   </div>
 
   <div class="callout gold">
     <b>賢さとコストの両立：</b>高くつく機械的処理は無料枠エンジンへ委譲し、難しい判断のみ Claude（BYOK）。
     すべての機能は<b>該当APIキーが設定されているときだけ動作</b>するよう出し分け、無設定の機能で無駄な課金が出ません。
+    高性能AIが一時的に使えない時は<b>無料のクラウドAI（Workers AI）へ自動切替</b>し、事情を説明して継続。Workers AI は<b>ニューロン使用量の可視化・上限</b>に対応します。
   </div>
 
   <div class="footer"><span>baku-office 自社専用AIの相棒 事業説明資料</span><span>P.<span class="pg"></span></span></div>
@@ -691,7 +732,7 @@
     <div class="card"><h4>🛡 アクセス制御・監査</h4>
       <p>テナント内は owner_id／scope をデータ層で強制し横断アクセス不可。重要操作は共有承認キューで人が確認。操作は監査ログに記録。</p></div>
     <div class="card"><h4>💾 バックアップ（顧客保有・自己管理）</h4>
-      <p>データは顧客アカウント内のため、バックアップは顧客側の管理（自己責任）。<b>KV・R2 を Google ドライブへ定期バックアップ</b>する任意設定を提供。</p></div>
+      <p>データは顧客アカウント内に常駐するため、<b>当社は一括バックアップを行わない（顧客の自己管理）</b>。顧客が自身のデータを退避するバックアップ用ツールは将来提供予定。</p></div>
     <div class="card"><h4>🔁 ベンダーロックイン回避</h4>
       <p>DBは標準SQL＋アダプタ層、データは可搬。特定クラウドへの依存を最小化し、<b>持ち出して別環境で動かせる</b>。</p></div>
   </div>
@@ -733,7 +774,7 @@
       <tr><td class="em">Stripe 課金</td><td class="ctr">不要</td><td class="ctr">必要</td><td class="ctr">必要</td><td class="ctr">不要</td></tr>
     </tbody>
   </table>
-  <p class="small muted">※Free は Stripe を経由せず即発行。Plus／Pro は入金確認まで Free 相当で稼働。<b>test</b> はホスト管理画面から付与する評価用（全ゲート通過・rank 99）。ダウングレード／解約は支払済み期間の終了時に反映し、データはロック・削除しません。</p>
+  <p class="small muted">※Free は Stripe を経由せず即発行。Plus／Pro は入金確認まで Free 相当で稼働。<b>test</b> はホスト管理画面から付与する評価用（全ゲート通過・rank 99）。ダウングレード／解約は支払済み期間の終了時に反映し、データはロック・削除しません。<br>※上記のほか、非営利団体向けの<b>NonProfit</b>（ホスト審査制・全機能無料）と、個別契約の<b>Enterprise</b>を別途用意します。</p>
 
   <h3>AI利用コストの管理（Plus 以上）</h3>
   <div class="grid col3">
