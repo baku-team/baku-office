@@ -17,12 +17,16 @@ const prof = detectProfile(env);
 <App title="診断・サポート" active="/diagnostics">
   <h1>診断・サポート</h1>
   <div class="card">
-    <p class="muted">稼働中の構成（環境Profile・§6）</p>
-    <p>Profile <strong>{prof.label}</strong>／AI=<strong>{prof.ai === "local" ? "ローカルLLM" : "クラウド"}</strong>／ストレージ=<strong>{prof.storage.toUpperCase()}</strong>／鍵=<strong>{prof.keyStore === "secret" ? "Worker Secret" : prof.keyStore === "missing-prod" ? "未設定（本番・暗号処理ブロック中）" : "KV自動生成（要対応）"}</strong></p>
-    {prof.keyStore === "missing-prod" && (<div class="banner banner-danger">⚠️ <strong>MASTER_KEY が本番で未設定です。</strong>暗号処理（APIキー/PII/ファイル）はブロック中で正常動作しません。<code>wrangler secret put MASTER_KEY --env production</code> で投入してください（§10.1）。</div>)}
-    {prof.keyStore === "kv-autogen" && (<div class="banner banner-warn">MASTER_KEY が Worker Secret 未設定です。本番は <code>wrangler secret put MASTER_KEY</code> を推奨（鍵と暗号文の同居回避・§10.1）。</div>)}
+    <p style="margin:0">いまの状態：<strong>{prof.keyStore === "missing-prod" ? "要対応" : "正常に動作しています"}</strong></p>
+    <details class="adv" style="margin-top:.6rem">
+      <summary>技術的な構成（くわしく）</summary>
+      <p class="adv-note">システムの内部構成です。通常は確認の必要はありません。</p>
+      <p>Profile <strong>{prof.label}</strong>／AI=<strong>{prof.ai === "local" ? "ローカルLLM" : "クラウド"}</strong>／ストレージ=<strong>{prof.storage.toUpperCase()}</strong>／鍵=<strong>{prof.keyStore === "secret" ? "Worker Secret" : prof.keyStore === "missing-prod" ? "未設定（本番・暗号処理ブロック中）" : "KV自動生成（要対応）"}</strong></p>
+      {prof.keyStore === "missing-prod" && (<div class="banner banner-danger">⚠️ <strong>MASTER_KEY が本番で未設定です。</strong>暗号処理（APIキー/PII/ファイル）はブロック中で正常動作しません。<code>wrangler secret put MASTER_KEY --env production</code> で投入してください（§10.1）。</div>)}
+      {prof.keyStore === "kv-autogen" && (<div class="banner banner-warn">MASTER_KEY が Worker Secret 未設定です。本番は <code>wrangler secret put MASTER_KEY</code> を推奨（鍵と暗号文の同居回避・§10.1）。</div>)}
+    </details>
   </div>
-  {limit && (<div class="banner banner-danger">⚠️ 直近にCloudflareの<strong>無料枠の制限</strong>に達したエラーがあります。重い処理を安定させるには <a href="/settings/advanced">高度なオプション → Workers Paid</a> をご検討ください。</div>)}
+  {limit && (<div class="banner banner-warn">⚠️ 直近に処理が混み合った記録があります。重い処理を安定させたい場合は <a href="/settings/advanced">設定 → 高度なオプション</a> をご確認ください（管理者向け）。</div>)}
   <div class="table-wrap"><table><thead><tr><th>日時</th><th>区分</th><th>レベル</th><th>内容</th></tr></thead><tbody>
     {diags.map((d)=>(<tr><td>{t(d.created_at)}</td><td><span class="pill" style={d.category==="limit"?"background:#fee2e2;color:#b91c1c":""} aria-label={d.category==="limit"?"区分: 上限到達":`区分: ${d.category}`}>{d.category==="limit"?"⚠ ":""}{d.category}</span></td><td>{d.level}</td><td>{d.message}</td></tr>))}
     {diags.length===0 && (<tr><td colspan="4" class="muted">記録はありません（正常）。</td></tr>)}

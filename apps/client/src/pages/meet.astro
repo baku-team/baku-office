@@ -37,7 +37,7 @@ const parseActions = (s: string | null): { content: string; due?: string }[] => 
   )}
   {hasPro && (
     <Fragment>
-      {!configured && (<div class="banner banner-warn">Google OAuth が未設定のため連携できません。{isAdmin ? <Fragment>管理者は <a href="/settings/google-setup">Google 連携セットアップ</a> から設定できます。</Fragment> : "管理者にご確認ください。"}</div>)}
+      {!configured && (<div class="banner banner-warn">Google との連携が未設定のため利用できません。{isAdmin ? <Fragment>管理者は <a href="/settings/google-setup">Google との連携</a> から設定できます。</Fragment> : "管理者にご確認ください。"}</div>)}
       <div class="card">
         <p>Meet 連携：<span class="pill">{meetGranted ? "連携済み" : "未連携"}</span> {connected && lastUsed && <span class="muted" style="font-size:.8rem">最終利用：{fmtDate(lastUsed)} UTC</span>}</p>
         <p class="muted" style="font-size:.85rem">Meet 会議の発行にはカレンダー権限も必要です（同時に要求します）。</p>

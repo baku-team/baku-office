@@ -32,7 +32,7 @@ const plain = [
   "■ 削除方法",
   "・各画面から該当データを削除できます。ファイルは保持期間経過後に自動削除されます。削除のご依頼は管理者へご連絡ください。",
   "",
-  "■ 責任分界（ホスト／顧客／BYOK）",
+  "■ 責任の範囲（提供者／利用者／ご自身のAI契約）",
   d.responsibilityNote,
   ...(d.limitedUse ? ["", "■ Google ユーザーデータの限定利用（Limited Use）", d.limitedUse] : []),
   "",
@@ -54,7 +54,7 @@ const plain = [
   </table></div>
   <p class="muted">{d.generatedNote}</p>
 
-  <h2>責任分界（ホスト／顧客／BYOK）</h2>
+  <h2>責任の範囲（提供者／利用者／ご自身のAI契約）</h2>
   <div class="card"><ul style="margin:0">
     {d.responsibilityNote.split("\n").map((line) => (<li>{line.replace(/^・/, "")}</li>))}
   </ul></div>
@@ -63,7 +63,7 @@ const plain = [
     <Fragment>
       <h2>Google ユーザーデータの限定利用（Limited Use）</h2>
       <div class="card">
-        <p class="muted" style="font-size:.85rem">Gmail 等の Restricted scope を連携中のため、Google API Services User Data Policy に基づく開示を表示しています。</p>
+        <p class="muted" style="font-size:.85rem">Gmail 等との連携を利用中のため、Google の利用者データ方針（Google API Services User Data Policy）に基づく開示を表示しています。</p>
         <ul style="margin:0">
           {d.limitedUse.split("\n").slice(1).map((line) => (<li>{line.replace(/^・/, "")}</li>))}
         </ul>

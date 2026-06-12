@@ -59,6 +59,8 @@ const mascotEngine = hasClaude ? "claude" : hasGemini ? "gemini" : "workers_ai";
 const uname = ses?.name ?? ses?.role ?? "";
 const initial = (uname || "B").slice(0, 1).toUpperCase();
 const firstName = ses?.name ?? (ses?.role ?? "ユーザー");
+// クライアント側の組織管理者のみに技術情報（β版・制限案内など）を見せる。一般ユーザーには出さない。
+const isAdminOrg = ses?.role === "admin" && ses?.ctx === "org";
 ---
 <!doctype html>
 <html lang="ja">
@@ -103,7 +105,7 @@ const firstName = ses?.name ?? (ses?.role ?? "ユーザー");
                 ? <img src={logoUrl} alt={brand} style="height:24px;vertical-align:middle" />
                 : <><span class="mark"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d={ICONS.spark} /></svg></span>{brand}</>}
             </a>
-            <span class="beta-badge" title="本サービスは現在ベータ（試験提供）版です。現在は Test ユーザーのみ利用できます。">β版</span>
+            {isAdminOrg && <span class="beta-badge" title="本サービスは現在ベータ（試験提供）版です。現在は Test ユーザーのみ利用できます。">β版</span>}
           </span>
           <nav class="nav">
             {navItems.map((i) => (
@@ -147,10 +149,10 @@ const firstName = ses?.name ?? (ses?.role ?? "ユーザー");
     )}
     {bare ? <slot /> : (
       <main class="wrap">
-        {limitErr && (
+        {limitErr && isAdminOrg && (
           <div class="banner banner-danger">
-            ⚠️ 直近に Cloudflare 無料枠の制限に達した可能性があります。重い処理を安定させるには
-            <a href="/settings/advanced">高度なオプション → Workers Paid</a> をご検討ください（<a href="/diagnostics">診断</a>）。
+            ⚠️ 一時的に処理が混み合った可能性があります。重い処理を安定させたい場合は
+            <a href="/settings/advanced">設定 → 高度なオプション</a> をご確認ください（<a href="/diagnostics">サポート情報</a>）。
           </div>
         )}
         <slot />
