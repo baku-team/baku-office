@@ -1,0 +1,1381 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>baku-office ご案内資料 Modern ｜ 株式会社貘</title>
+<style>
+  :root{
+    --ink:#172026;
+    --muted:#64717c;
+    --paper:#fffdf8;
+    --paper-2:#f6f8f7;
+    --line:#dde5e2;
+    --deep:#163536;
+    --deep-2:#0f2428;
+    --teal:#1f8a83;
+    --mint:#dff3ec;
+    --amber:#c1842c;
+    --amber-2:#fff0cd;
+    --coral:#c75d4b;
+    --rose:#f8ded9;
+    --blue:#476b92;
+    --blue-2:#e5edf5;
+    --white:#ffffff;
+    --shadow:0 22px 70px rgba(17,32,38,.14);
+  }
+  *{ box-sizing:border-box; }
+  html{ -webkit-text-size-adjust:100%; }
+  html,body{ margin:0; padding:0; }
+  body{
+    color:var(--ink);
+    font-family:"Hiragino Sans","Hiragino Kaku Gothic ProN","Yu Gothic",
+      "Noto Sans JP",Meiryo,sans-serif;
+    font-size:10.2pt;
+    line-height:1.72;
+    letter-spacing:0;
+    background:
+      linear-gradient(90deg,rgba(31,138,131,.10),transparent 32%,rgba(193,132,44,.10)),
+      #edf2f0;
+    font-feature-settings:"palt";
+    -webkit-print-color-adjust:exact;
+    print-color-adjust:exact;
+    counter-reset:page;
+  }
+  a{ color:inherit; }
+  b,strong{ color:var(--deep); }
+  p{ margin:0 0 3mm; }
+  .deck{
+    width:min(100%, 1120px);
+    margin:0 auto;
+    padding:24px;
+  }
+  .sheet{
+    width:210mm;
+    min-height:297mm;
+    margin:0 auto 18px;
+    padding:16mm 15mm 19mm;
+    position:relative;
+    overflow:hidden;
+    background:var(--paper);
+    box-shadow:var(--shadow);
+    page-break-after:always;
+  }
+  .sheet:last-child{ page-break-after:auto; }
+  .sheet::before{
+    content:"";
+    position:absolute;
+    inset:0 0 auto 0;
+    height:4px;
+    background:linear-gradient(90deg,var(--teal),var(--amber),var(--coral));
+  }
+  .topline{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:16px;
+    margin-bottom:9mm;
+    color:var(--muted);
+    font-size:8.4pt;
+    letter-spacing:.08em;
+    text-transform:uppercase;
+  }
+  .brand{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    min-width:0;
+  }
+  .brand img{
+    width:34px;
+    height:34px;
+    border-radius:50%;
+    object-fit:cover;
+    background:#fff;
+    border:1px solid rgba(255,255,255,.85);
+  }
+  .brand b{
+    color:inherit;
+    white-space:nowrap;
+  }
+  .sec-label{
+    color:var(--amber);
+    font-size:8.5pt;
+    font-weight:800;
+    letter-spacing:.18em;
+    margin-bottom:1.5mm;
+  }
+  h1,h2,h3,h4{ margin:0; letter-spacing:0; }
+  h1{
+    font-size:33pt;
+    line-height:1.15;
+    font-weight:850;
+    text-wrap:balance;
+  }
+  h2{
+    color:var(--deep);
+    font-size:21pt;
+    line-height:1.25;
+    font-weight:850;
+    margin-bottom:4mm;
+    text-wrap:balance;
+  }
+  h3{
+    color:var(--deep);
+    font-size:12.4pt;
+    line-height:1.35;
+    font-weight:800;
+    margin:7mm 0 2.5mm;
+  }
+  h4{
+    color:var(--deep);
+    font-size:10.8pt;
+    line-height:1.42;
+    font-weight:800;
+    margin-bottom:1.4mm;
+  }
+  .lead{
+    color:#31414a;
+    font-size:11.5pt;
+    line-height:1.88;
+    max-width:165mm;
+  }
+  .muted{ color:var(--muted); }
+  .small{ color:var(--muted); font-size:8.4pt; line-height:1.65; }
+  .sp-only{ display:none; }
+  .grid{
+    display:grid;
+    gap:4mm;
+  }
+  .grid.two{ grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .grid.three{ grid-template-columns:repeat(3,minmax(0,1fr)); }
+  .grid.four{ grid-template-columns:repeat(4,minmax(0,1fr)); }
+  .panel{
+    background:var(--white);
+    border:1px solid var(--line);
+    border-radius:8px;
+    padding:4.4mm;
+    page-break-inside:avoid;
+  }
+  .panel.tint{ background:var(--paper-2); }
+  .panel.teal{ border-color:rgba(31,138,131,.35); background:linear-gradient(180deg,#fff,var(--mint)); }
+  .panel.amber{ border-color:rgba(193,132,44,.35); background:linear-gradient(180deg,#fff,var(--amber-2)); }
+  .panel.rose{ border-color:rgba(199,93,75,.28); background:linear-gradient(180deg,#fff,var(--rose)); }
+  .panel.blue{ border-color:rgba(71,107,146,.30); background:linear-gradient(180deg,#fff,var(--blue-2)); }
+  .panel p{
+    color:#35444d;
+    font-size:9.3pt;
+    line-height:1.68;
+    margin:0;
+  }
+  .num{
+    display:inline-grid;
+    place-items:center;
+    width:7.6mm;
+    height:7.6mm;
+    border-radius:99px;
+    color:#fff;
+    background:var(--deep);
+    font-weight:850;
+    font-size:9pt;
+    margin-bottom:2mm;
+  }
+  .eyebrow{
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+    color:var(--deep);
+    background:rgba(255,255,255,.13);
+    border:1px solid rgba(255,255,255,.22);
+    border-radius:999px;
+    padding:5px 12px;
+    font-size:8.8pt;
+    font-weight:800;
+  }
+  .chips{
+    display:flex;
+    flex-wrap:wrap;
+    gap:8px;
+    margin-top:7mm;
+  }
+  .chip{
+    display:inline-flex;
+    align-items:center;
+    min-height:29px;
+    padding:4px 11px;
+    border-radius:999px;
+    border:1px solid var(--line);
+    background:#fff;
+    color:#26343b;
+    font-size:8.5pt;
+    font-weight:750;
+    white-space:nowrap;
+  }
+  .chip.teal{ background:var(--mint); border-color:rgba(31,138,131,.30); color:#12615c; }
+  .chip.amber{ background:var(--amber-2); border-color:rgba(193,132,44,.35); color:#755018; }
+  .chip.rose{ background:var(--rose); border-color:rgba(199,93,75,.30); color:#8b3c30; }
+  .hero{
+    color:#fff;
+    background:
+      radial-gradient(circle at 88% 10%,rgba(255,240,205,.28),transparent 28%),
+      radial-gradient(circle at 70% 72%,rgba(31,138,131,.38),transparent 34%),
+      linear-gradient(138deg,var(--deep-2),var(--deep) 58%,#2f3d2f);
+    display:grid;
+    grid-template-rows:auto 1fr auto;
+    gap:12mm;
+    padding:18mm 16mm 18mm;
+  }
+  .hero::before{ display:none; }
+  .hero .brand b,.hero strong{ color:#fff; }
+  .hero .brand img{ width:48px; height:48px; }
+  .hero .topline{ color:rgba(255,255,255,.72); margin-bottom:0; }
+  .hero .eyebrow{
+    color:#fff;
+  }
+  .hero-main{
+    display:grid;
+    grid-template-columns:1.05fr .95fr;
+    align-items:center;
+    gap:12mm;
+  }
+  .hero h1 span{ color:#ffe3a7; }
+  .hero .lead{
+    color:rgba(255,255,255,.80);
+    margin-top:6mm;
+    max-width:112mm;
+  }
+  .hero .chips .chip{
+    color:#fff;
+    background:rgba(255,255,255,.10);
+    border-color:rgba(255,255,255,.22);
+  }
+  .hero-meta{
+    display:flex;
+    justify-content:space-between;
+    gap:16px;
+    color:rgba(255,255,255,.70);
+    font-size:9pt;
+    border-top:1px solid rgba(255,255,255,.20);
+    padding-top:5mm;
+  }
+  .orbital{
+    width:100%;
+    aspect-ratio:1/1;
+    min-height:105mm;
+    position:relative;
+  }
+  .orbit-ring{
+    position:absolute;
+    inset:10%;
+    border:1px solid rgba(255,255,255,.20);
+    border-radius:50%;
+  }
+  .orbit-ring:nth-child(2){ inset:23%; border-color:rgba(255,227,167,.25); }
+  .core{
+    position:absolute;
+    left:50%;
+    top:50%;
+    transform:translate(-50%,-50%);
+    width:46%;
+    aspect-ratio:1/1;
+    border-radius:50%;
+    display:grid;
+    place-items:center;
+    text-align:center;
+    background:linear-gradient(150deg,#ffffff,#dff3ec);
+    color:var(--deep);
+    box-shadow:0 24px 60px rgba(0,0,0,.24);
+    border:1px solid rgba(255,255,255,.7);
+    padding:10mm;
+  }
+  .core b{
+    display:block;
+    font-size:23pt;
+    line-height:1;
+    color:var(--deep);
+    margin-bottom:2mm;
+  }
+  .core span{ font-size:8.6pt; font-weight:800; }
+  .sat{
+    position:absolute;
+    width:32mm;
+    min-height:26mm;
+    display:grid;
+    place-items:center;
+    text-align:center;
+    padding:3mm;
+    border-radius:8px;
+    background:rgba(255,255,255,.12);
+    border:1px solid rgba(255,255,255,.22);
+    backdrop-filter:blur(6px);
+    font-weight:800;
+    font-size:9pt;
+    color:#fff;
+  }
+  .sat small{
+    display:block;
+    margin-top:1mm;
+    color:rgba(255,255,255,.68);
+    font-size:7.2pt;
+    line-height:1.35;
+  }
+  .sat.ai{ left:6%; top:22%; }
+  .sat.apps{ right:3%; top:19%; }
+  .sat.data{ left:14%; bottom:8%; }
+  .sat.own{ right:10%; bottom:12%; }
+  .stat-row{
+    display:grid;
+    grid-template-columns:repeat(3,minmax(0,1fr));
+    gap:4mm;
+    margin:7mm 0;
+  }
+  .stat{
+    min-height:26mm;
+    padding:4mm;
+    border-radius:8px;
+    background:var(--deep);
+    color:#fff;
+    display:flex;
+    flex-direction:column;
+    justify-content:center;
+  }
+  .stat b{
+    color:#ffe3a7;
+    font-size:21pt;
+    line-height:1.05;
+  }
+  .stat span{
+    color:rgba(255,255,255,.76);
+    font-size:8.4pt;
+    margin-top:1mm;
+  }
+  .storyline{
+    display:grid;
+    grid-template-columns:1fr auto 1fr;
+    gap:4mm;
+    align-items:stretch;
+    margin:5mm 0;
+  }
+  .storyline .vs{
+    display:grid;
+    place-items:center;
+    color:#fff;
+    background:var(--coral);
+    border-radius:999px;
+    width:10mm;
+    height:10mm;
+    font-size:8pt;
+    font-weight:900;
+    align-self:center;
+  }
+  .compare-title{
+    display:flex;
+    justify-content:space-between;
+    gap:8px;
+    align-items:center;
+    margin-bottom:2.5mm;
+  }
+  .compare-title .label{
+    color:#fff;
+    background:var(--deep);
+    border-radius:999px;
+    padding:2px 8px;
+    font-size:7.5pt;
+    font-weight:850;
+  }
+  .compare-title .label.warn{ background:var(--coral); }
+  .diagram{
+    width:100%;
+    margin:4mm 0 2mm;
+    border-radius:8px;
+    border:1px solid var(--line);
+    background:#fff;
+    overflow:hidden;
+    page-break-inside:avoid;
+  }
+  .diagram svg{ display:block; width:100%; height:auto; }
+  .table-wrap{
+    width:100%;
+    overflow-x:auto;
+    -webkit-overflow-scrolling:touch;
+    margin:4mm 0;
+  }
+  table{
+    width:100%;
+    border-collapse:separate;
+    border-spacing:0;
+    font-size:9pt;
+    line-height:1.55;
+    page-break-inside:avoid;
+    background:#fff;
+    border:1px solid var(--line);
+    border-radius:8px;
+    overflow:hidden;
+  }
+  table.cmp{ min-width:610px; }
+  th,td{
+    text-align:left;
+    vertical-align:top;
+    padding:8px 10px;
+    border-right:1px solid var(--line);
+    border-bottom:1px solid var(--line);
+  }
+  tr:last-child th,tr:last-child td{ border-bottom:0; }
+  th:last-child,td:last-child{ border-right:0; }
+  thead th{
+    background:var(--deep);
+    color:#fff;
+    font-weight:800;
+  }
+  thead th:first-child{ background:#eef2ef; color:var(--muted); }
+  tbody th{
+    width:23%;
+    color:var(--deep);
+    background:#f4f7f5;
+    white-space:nowrap;
+    font-weight:800;
+  }
+  td.pick{
+    background:#fbf8ef;
+  }
+  td.pick b{ color:#7a5218; }
+  .nav-grid{
+    display:grid;
+    grid-template-columns:repeat(4,minmax(0,1fr));
+    gap:3mm;
+    margin:5mm 0;
+  }
+  .nav-item{
+    min-height:31mm;
+    border:1px solid var(--line);
+    border-radius:8px;
+    padding:3.5mm;
+    background:#fff;
+  }
+  .nav-item .mark{
+    width:8mm;
+    height:8mm;
+    border-radius:3px;
+    background:var(--deep);
+    color:#fff;
+    display:grid;
+    place-items:center;
+    font-size:8pt;
+    font-weight:900;
+    margin-bottom:3mm;
+  }
+  .nav-item p{
+    color:var(--muted);
+    font-size:8.4pt;
+    line-height:1.55;
+    margin:0;
+  }
+  .feature-list{
+    display:grid;
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    gap:2mm 4mm;
+    margin-top:2mm;
+  }
+  .feature{
+    display:flex;
+    gap:8px;
+    align-items:flex-start;
+    padding:2.5mm 0;
+    border-bottom:1px solid var(--line);
+    page-break-inside:avoid;
+  }
+  .feature::before{
+    content:"";
+    flex:0 0 6px;
+    width:6px;
+    height:6px;
+    border-radius:50%;
+    margin-top:.65em;
+    background:var(--teal);
+  }
+  .feature b{
+    display:block;
+    margin-bottom:1px;
+    font-size:9.2pt;
+  }
+  .feature span{
+    color:var(--muted);
+    font-size:8.45pt;
+    line-height:1.5;
+  }
+  .callout{
+    border-radius:8px;
+    padding:4mm 4.5mm;
+    margin:5mm 0 0;
+    background:var(--mint);
+    border:1px solid rgba(31,138,131,.24);
+    page-break-inside:avoid;
+  }
+  .callout.amber{
+    background:var(--amber-2);
+    border-color:rgba(193,132,44,.30);
+  }
+  .callout.rose{
+    background:var(--rose);
+    border-color:rgba(199,93,75,.26);
+  }
+  .callout p{
+    margin:0;
+    color:#304047;
+    font-size:9.25pt;
+    line-height:1.72;
+  }
+  .badge{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    min-width:14mm;
+    min-height:6mm;
+    border-radius:999px;
+    padding:1px 8px;
+    font-size:7.4pt;
+    line-height:1.3;
+    font-weight:850;
+    border:1px solid var(--line);
+    background:#fff;
+    color:var(--deep);
+    vertical-align:middle;
+  }
+  .badge.free{ background:#f1f5f3; color:#43515a; }
+  .badge.plus{ background:var(--mint); color:#12615c; border-color:rgba(31,138,131,.3); }
+  .badge.pro{ background:var(--amber-2); color:#755018; border-color:rgba(193,132,44,.35); }
+  .chat-scene{
+    background:#fff;
+    border:1px solid var(--line);
+    border-radius:8px;
+    padding:4mm;
+    page-break-inside:avoid;
+  }
+  .chat{
+    display:grid;
+    gap:2.5mm;
+  }
+  .bubble{
+    width:min(88%, 122mm);
+    padding:3mm 3.5mm;
+    border-radius:8px;
+    font-size:9pt;
+    line-height:1.55;
+  }
+  .bubble.user{
+    justify-self:end;
+    background:var(--deep);
+    color:#fff;
+    border-bottom-right-radius:2px;
+  }
+  .bubble.ai{
+    justify-self:start;
+    background:var(--paper-2);
+    color:#2f3e46;
+    border-bottom-left-radius:2px;
+  }
+  .bubble span{
+    display:block;
+    opacity:.64;
+    font-size:7.2pt;
+    margin-bottom:.8mm;
+  }
+  .steps{
+    display:grid;
+    gap:3mm;
+    margin:4mm 0;
+  }
+  .step{
+    display:grid;
+    grid-template-columns:10mm 1fr;
+    gap:3mm;
+    align-items:start;
+    padding:3mm 0;
+    border-bottom:1px solid var(--line);
+    page-break-inside:avoid;
+  }
+  .step:last-child{ border-bottom:0; }
+  .step .num{ margin:0; }
+  .step p{
+    color:var(--muted);
+    font-size:9pt;
+    line-height:1.6;
+    margin:1mm 0 0;
+  }
+  .plans{
+    display:grid;
+    grid-template-columns:repeat(3,minmax(0,1fr));
+    gap:4mm;
+    margin:5mm 0;
+  }
+  .plan{
+    background:#fff;
+    border:1px solid var(--line);
+    border-radius:8px;
+    padding:4.4mm;
+    display:flex;
+    flex-direction:column;
+    min-height:87mm;
+    page-break-inside:avoid;
+  }
+  .plan.focus{
+    border:2px solid var(--amber);
+    background:linear-gradient(180deg,#fff,var(--amber-2));
+  }
+  .plan .name{
+    color:var(--deep);
+    font-size:18pt;
+    font-weight:900;
+    line-height:1.1;
+  }
+  .plan .for{
+    color:var(--muted);
+    font-size:8.4pt;
+    margin:1mm 0 4mm;
+  }
+  .plan ul{
+    list-style:none;
+    margin:0;
+    padding:0;
+    flex:1;
+  }
+  .plan li{
+    position:relative;
+    padding:2mm 0 2mm 5mm;
+    border-top:1px solid var(--line);
+    color:#35444d;
+    font-size:8.8pt;
+    line-height:1.5;
+  }
+  .plan li::before{
+    content:"";
+    position:absolute;
+    left:0;
+    top:.78em;
+    width:4px;
+    height:4px;
+    border-radius:50%;
+    background:var(--teal);
+  }
+  .plan .price{
+    color:#755018;
+    font-size:8.6pt;
+    font-weight:850;
+    margin-top:4mm;
+    padding-top:3mm;
+    border-top:1px solid var(--line);
+  }
+  .timeline{
+    display:grid;
+    grid-template-columns:repeat(3,minmax(0,1fr));
+    gap:0;
+    margin:4mm 0;
+    border:1px solid var(--line);
+    border-radius:8px;
+    overflow:hidden;
+    background:#fff;
+  }
+  .timeline .item{
+    padding:4mm;
+    border-right:1px solid var(--line);
+  }
+  .timeline .item:last-child{ border-right:0; }
+  .timeline b{ display:block; margin-bottom:1mm; }
+  .timeline span{
+    color:var(--muted);
+    font-size:8.5pt;
+    line-height:1.55;
+  }
+  .qa{
+    padding:3.2mm 0;
+    border-bottom:1px solid var(--line);
+    page-break-inside:avoid;
+  }
+  .qa:last-of-type{ border-bottom:0; }
+  .q{
+    color:var(--deep);
+    display:flex;
+    gap:9px;
+    font-weight:850;
+    font-size:10.1pt;
+  }
+  .q::before{
+    content:"Q";
+    flex:0 0 20px;
+    height:20px;
+    border-radius:4px;
+    display:grid;
+    place-items:center;
+    background:var(--deep);
+    color:#fff;
+    font-size:8pt;
+  }
+  .a{
+    color:#35444d;
+    margin:1.5mm 0 0 29px;
+    font-size:9pt;
+    line-height:1.68;
+  }
+  .corp{
+    display:grid;
+    grid-template-columns:auto 1fr;
+    gap:4mm;
+    align-items:center;
+    margin-top:5mm;
+    padding:4mm;
+    background:#fff;
+    border:1px solid var(--line);
+    border-radius:8px;
+  }
+  .corp img{
+    width:15mm;
+    height:15mm;
+    border-radius:50%;
+    object-fit:cover;
+  }
+  .corp dl{ margin:0; font-size:8.8pt; }
+  .corp div{ display:grid; grid-template-columns:24mm 1fr; gap:4mm; padding:1mm 0; border-bottom:1px solid var(--line); }
+  .corp div:last-child{ border-bottom:0; }
+  .corp dt{ color:var(--muted); }
+  .corp dd{ margin:0; color:#35444d; }
+  .footer{
+    position:absolute;
+    left:15mm;
+    right:15mm;
+    bottom:8.5mm;
+    display:flex;
+    justify-content:space-between;
+    gap:10px;
+    padding-top:2mm;
+    border-top:1px solid var(--line);
+    color:var(--muted);
+    font-size:7.8pt;
+  }
+  .footer .pg::after{
+    counter-increment:page;
+    content:counter(page, decimal-leading-zero);
+  }
+  .cover .footer{
+    color:rgba(255,255,255,.64);
+    border-color:rgba(255,255,255,.20);
+  }
+  @page{
+    size:A4;
+    margin:0;
+  }
+  @media print{
+    body{ background:#fff; font-size:9.4pt; line-height:1.55; }
+    .deck{ width:100%; padding:0; }
+    .sheet{
+      margin:0 auto;
+      padding:12mm 13mm 15mm;
+      box-shadow:none;
+      break-after:page;
+      page-break-after:always;
+    }
+    .sheet:last-child{
+      break-after:auto;
+      page-break-after:auto;
+    }
+    .table-wrap{ overflow:visible; }
+    p{ margin-bottom:2mm; }
+    .topline{ margin-bottom:6mm; }
+    .sec-label{ margin-bottom:1mm; }
+    h1{ font-size:30pt; }
+    h2{ font-size:17.5pt; margin-bottom:2.5mm; }
+    h3{ margin:4mm 0 1.6mm; font-size:11.4pt; }
+    h4{ font-size:10pt; margin-bottom:1mm; }
+    .lead{ font-size:9.8pt; line-height:1.58; }
+    .panel{ padding:3.2mm; }
+    .panel p,
+    .feature span,
+    .a,
+    .plan li,
+    .callout p,
+    .bubble{
+      font-size:8.15pt;
+      line-height:1.42;
+    }
+    .grid{ gap:2.6mm; }
+    .plans{ gap:2.6mm; margin:3mm 0; }
+    .plan{ min-height:70mm; padding:3.2mm; }
+    .nav-grid{ gap:2mm; margin:3mm 0; }
+    .feature{ padding:1.6mm 0; }
+    .callout{ padding:3mm; margin-top:3mm; }
+    .stat-row{ gap:2.6mm; margin:4mm 0; }
+    .diagram{ margin:3mm 0 1mm; }
+    .footer{ bottom:6.5mm; left:13mm; right:13mm; }
+  }
+  @media screen and (max-width:900px){
+    body{ overflow-x:hidden; }
+    .deck{ padding:0; }
+    .sheet{
+      width:100%;
+      max-width:100vw;
+      min-height:0;
+      margin:0 0 14px;
+      padding:28px 18px 30px;
+      box-shadow:none;
+      border-bottom:1px solid var(--line);
+    }
+    .sheet::before{ height:3px; }
+    .topline{
+      flex-wrap:wrap;
+      align-items:flex-start;
+      margin-bottom:24px;
+      font-size:11px;
+      line-height:1.4;
+    }
+    .hero .topline{
+      display:grid;
+      grid-template-columns:1fr;
+      gap:10px;
+    }
+    .topline *{ min-width:0; }
+    .topline > span{
+      max-width:100%;
+      white-space:normal;
+      text-align:left;
+    }
+    h1{
+      font-size:clamp(30px, 9vw, 42px);
+      overflow-wrap:anywhere;
+      line-break:anywhere;
+      word-break:normal;
+    }
+    .sp-only{ display:block; }
+    h2{ font-size:clamp(24px, 6vw, 32px); }
+    h3{ font-size:18px; margin-top:28px; }
+    .lead{ font-size:16px; line-height:1.82; }
+    .hero{
+      padding:32px 20px;
+      gap:34px;
+    }
+    .sheet > *,
+    .hero-main > *,
+    .grid > *,
+    .plans > *,
+    .timeline > *,
+    .storyline > *{
+      min-width:0;
+    }
+    .hero-main{
+      grid-template-columns:1fr;
+      gap:26px;
+    }
+    .hero-meta{
+      flex-wrap:wrap;
+      font-size:12px;
+    }
+    .orbital{
+      min-height:300px;
+      max-width:300px;
+      margin:0 auto;
+    }
+    .sat{
+      width:94px;
+      min-height:72px;
+      font-size:12px;
+      padding:10px;
+    }
+    .sat small{ font-size:10px; }
+    .sat.ai{ left:0; }
+    .sat.apps{ right:0; }
+    .sat.data{ left:6%; }
+    .sat.own{ right:5%; }
+    .core b{ font-size:30px; }
+    .grid.two,.grid.three,.grid.four,
+    .stat-row,.plans,.timeline,.feature-list,.nav-grid,.storyline{
+      grid-template-columns:1fr;
+    }
+    .storyline .vs{
+      justify-self:center;
+      transform:rotate(90deg);
+    }
+    .panel p,.feature span,.a,.plan li,.callout p,.bubble{
+      font-size:14px;
+    }
+    p,.lead,.panel p,.callout p,.feature span{
+      max-width:100%;
+      overflow-wrap:anywhere;
+      line-break:anywhere;
+    }
+    .hero .chips{
+      display:grid;
+      grid-template-columns:1fr;
+      gap:8px;
+      align-items:start;
+    }
+    .hero .chip{
+      justify-self:start;
+      max-width:100%;
+    }
+    .nav-item p{ font-size:13px; }
+    .timeline .item{ border-right:0; border-bottom:1px solid var(--line); }
+    .timeline .item:last-child{ border-bottom:0; }
+    .footer{
+      position:static;
+      flex-wrap:wrap;
+      margin-top:24px;
+      font-size:11px;
+      left:auto;
+      right:auto;
+      bottom:auto;
+    }
+    .footer span{ max-width:100%; }
+    .corp{ grid-template-columns:1fr; text-align:center; }
+    .corp img{ margin:0 auto; }
+    .corp div{ grid-template-columns:1fr; gap:0; }
+    .chip{ white-space:normal; }
+  }
+</style>
+</head>
+<body>
+<main class="deck">
+
+<section class="sheet hero">
+  <div class="topline">
+    <div class="brand">
+      <img src="../baku-data/logo_icon.jpg" alt="株式会社貘 ロゴ">
+      <b>株式会社貘</b>
+    </div>
+    <span>Service Guide / 2026.06</span>
+  </div>
+  <div class="hero-main">
+    <div>
+      <span class="eyebrow">baku-office ご案内資料</span>
+      <h1>自社専用の<br class="sp-only"><span>AIの相棒</span>を、<br>まるごと所有する。</h1>
+      <p class="lead">
+        会計・名簿・議事録・お知らせ。団体や小さな会社の事務まわりを、AIの相棒と一緒に進める業務システムです。借りるクラウドではなく、システムもデータもお客様自身の道具として持ち、育てていけます。
+      </p>
+      <div class="chips">
+        <span class="chip">データは自社の手元に残る</span>
+        <span class="chip">AIに頼める・AIと作れる</span>
+        <span class="chip">無料からはじめられる</span>
+      </div>
+    </div>
+    <div class="orbital" aria-label="baku-office の所有モデル概念図">
+      <div class="orbit-ring"></div>
+      <div class="orbit-ring"></div>
+      <div class="core"><div><b>貘</b><span>AIの相棒</span></div></div>
+      <div class="sat ai">AI<br><small>集計・検索・書類づくり</small></div>
+      <div class="sat apps">Apps<br><small>会計・名簿・予定・議事録</small></div>
+      <div class="sat data">Data<br><small>暗号化された業務データ</small></div>
+      <div class="sat own">Own<br><small>お客様名義の専用環境</small></div>
+    </div>
+  </div>
+  <div class="hero-meta">
+    <span>baku-office / 自社専用AI業務システム</span>
+    <span>株式会社貘（baku-team）</span>
+  </div>
+</section>
+
+<section class="sheet">
+  <div class="topline">
+    <div class="brand"><img src="../baku-data/logo_icon.jpg" alt=""><b>baku-office</b></div>
+    <span>01 / Overview</span>
+  </div>
+  <div class="sec-label">01 まず、何が変わるのか</div>
+  <h2>日々の事務と、団体の記憶をひとつの場所へ。</h2>
+  <p class="lead">
+    baku-office は、日々の事務に必要な機能と、それらを操作してくれるAIの相棒をひとまとめにした業務システムです。一般的なクラウドサービスのように事業者のサーバーを借りるのではなく、<b>お客様名義の専用環境にまるごと設置して所有する</b>ことを前提にしています。
+  </p>
+  <div class="stat-row">
+    <div class="stat"><b>4</b><span>画面だけのシンプル操作</span></div>
+    <div class="stat"><b>AI</b><span>集計・検索・書類作成まで実行</span></div>
+    <div class="stat"><b>0円〜</b><span>無料・クレジットカード不要で開始</span></div>
+  </div>
+  <h3>3つの約束</h3>
+  <div class="grid three">
+    <div class="panel teal">
+      <span class="num">1</span>
+      <h4>所有する</h4>
+      <p>アプリも業務データも、お客様専用の環境の中だけに置かれます。当社が業務データを見ることはできない構造です。契約を終えても、蓄積した業務データはお客様の手元に残り、書き出して持ち出せます。</p>
+    </div>
+    <div class="panel amber">
+      <span class="num">2</span>
+      <h4>作る</h4>
+      <p>「こんな画面がほしい」とAIにチャットで頼むだけで、自社専用の機能を追加できます。プログラムの知識がなくても、業務にぴったり合う道具を増やせます。</p>
+    </div>
+    <div class="panel rose">
+      <span class="num">3</span>
+      <h4>育てる</h4>
+      <p>AIが団体の記録・知識を蓄え、集計・検索・書類づくりを手伝います。使うほど業務に詳しくなる、引き継げる「団体の頭脳」になります。</p>
+    </div>
+  </div>
+  <div class="diagram">
+    <svg viewBox="0 0 900 250" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="baku-office の所有モデル">
+      <rect width="900" height="250" fill="#fff"/>
+      <rect x="275" y="30" width="570" height="170" rx="20" fill="#f6f8f7" stroke="#1f8a83" stroke-width="3"/>
+      <text x="560" y="64" text-anchor="middle" font-size="20" font-weight="800" fill="#163536">お客様の専用環境（お客様名義）</text>
+      <rect x="310" y="88" width="150" height="54" rx="10" fill="#dff3ec" stroke="#1f8a83"/>
+      <text x="385" y="112" text-anchor="middle" font-size="15" font-weight="800" fill="#163536">AIの相棒</text>
+      <text x="385" y="132" text-anchor="middle" font-size="12" fill="#64717c">チャットで頼める</text>
+      <rect x="485" y="88" width="150" height="54" rx="10" fill="#fff0cd" stroke="#c1842c"/>
+      <text x="560" y="112" text-anchor="middle" font-size="15" font-weight="800" fill="#163536">業務アプリ</text>
+      <text x="560" y="132" text-anchor="middle" font-size="12" fill="#64717c">会計・名簿・議事録</text>
+      <rect x="660" y="88" width="150" height="54" rx="10" fill="#e5edf5" stroke="#476b92"/>
+      <text x="735" y="112" text-anchor="middle" font-size="15" font-weight="800" fill="#163536">業務データ</text>
+      <text x="735" y="132" text-anchor="middle" font-size="12" fill="#64717c">暗号化して保管</text>
+      <text x="560" y="178" text-anchor="middle" font-size="14" font-weight="800" fill="#1f8a83">契約終了後も、蓄積したデータはお客様の手元に残ります</text>
+      <rect x="55" y="65" width="165" height="92" rx="14" fill="#ffffff" stroke="#dde5e2"/>
+      <text x="138" y="95" text-anchor="middle" font-size="15" font-weight="800" fill="#163536">株式会社貘</text>
+      <text x="138" y="119" text-anchor="middle" font-size="12" fill="#64717c">鍵・更新・サポート</text>
+      <text x="138" y="141" text-anchor="middle" font-size="12" fill="#c75d4b">業務データは扱いません</text>
+      <path d="M220 108H260" stroke="#163536" stroke-width="3"/>
+      <path d="M260 108l-10-7v14z" fill="#163536"/>
+      <path d="M260 152H220" stroke="#c75d4b" stroke-width="2" stroke-dasharray="6 6"/>
+      <circle cx="240" cy="152" r="12" fill="#fff" stroke="#c75d4b" stroke-width="3"/>
+      <path d="M233 145l14 14M247 145l-14 14" stroke="#c75d4b" stroke-width="3"/>
+      <text x="450" y="226" text-anchor="middle" font-size="12" fill="#64717c">役員・職員・会員のみなさまは、パソコン・スマホのブラウザや LINE から利用</text>
+    </svg>
+  </div>
+  <div class="callout amber">
+    <p><b>「貘（ばく）」の名に込めた思い</b>：煩雑な事務、引き継ぎの不安、データを預ける心配といった「悪い夢」を食べ、本来の活動に専念できる毎日をお届けします。</p>
+  </div>
+  <div class="footer"><span>baku-office ご案内資料 ／ 株式会社貘</span><span>P.<span class="pg"></span></span></div>
+</section>
+
+<section class="sheet">
+  <div class="topline">
+    <div class="brand"><img src="../baku-data/logo_icon.jpg" alt=""><b>baku-office</b></div>
+    <span>02 / Difference</span>
+  </div>
+  <div class="sec-label">02 他のサービスとの違い</div>
+  <h2>借りるクラウドから、持てる業務基盤へ。</h2>
+  <p class="lead">
+    便利なクラウドサービスはたくさんあります。けれど多くは「借りもの」。データは提供会社の手元にあり、解約すれば使えなくなり、機能は提供会社が決めたものだけです。baku-office は、この前提そのものを変えます。
+  </p>
+  <div class="storyline">
+    <div class="panel tint">
+      <div class="compare-title"><h4>よくあるクラウドサービス</h4><span class="label warn">Rent</span></div>
+      <p>提供会社のサーバーにデータを預けます。便利な反面、解約時のデータ持ち出しや、機能追加の自由度に制限が出やすい構造です。</p>
+      <div class="chips">
+        <span class="chip rose">データを預ける</span>
+        <span class="chip rose">解約すると使えない</span>
+      </div>
+    </div>
+    <div class="vs">VS</div>
+    <div class="panel teal">
+      <div class="compare-title"><h4>baku-office</h4><span class="label">Own</span></div>
+      <p>各団体が自分の「蔵」を持つかたちです。当社は鍵と更新を届け、業務データはお客様の専用環境に残ります。</p>
+      <div class="chips">
+        <span class="chip teal">データは手元に残る</span>
+        <span class="chip amber">AIで機能を増やせる</span>
+      </div>
+    </div>
+  </div>
+  <div class="table-wrap">
+    <table class="cmp">
+      <thead>
+        <tr>
+          <th></th>
+          <th>一般的なクラウドサービス</th>
+          <th>baku-office</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <th>データの置き場所</th>
+          <td>提供会社のサーバーに預ける</td>
+          <td class="pick"><b>お客様専用の環境</b>に保管。当社は中身に触れられない構造</td>
+        </tr>
+        <tr>
+          <th>解約したら</th>
+          <td>使えなくなり、データの引き取りに手間がかかることも</td>
+          <td class="pick">サービスの利用は止まるが、<b>業務データはそのまま手元に残り持ち出せる</b></td>
+        </tr>
+        <tr>
+          <th>機能の追加</th>
+          <td>提供会社の開発を待つしかない</td>
+          <td class="pick"><b>AIに頼んで自社専用の機能を作れる</b></td>
+        </tr>
+        <tr>
+          <th>AIの記憶</th>
+          <td>会話ごと・個人ごとに消えてしまう</td>
+          <td class="pick">団体の記録として蓄積し、<b>役員交代後も引き継がれる</b></td>
+        </tr>
+        <tr>
+          <th>はじめる費用</th>
+          <td>月額料金が前提のものが多い</td>
+          <td class="pick"><b>無料から</b>。必要になったときだけ広げられる</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="grid three">
+    <div class="panel blue"><h4>安心</h4><p>「見ない約束」ではなく、業務データへ到達する経路を持たない設計で守ります。</p></div>
+    <div class="panel amber"><h4>自由</h4><p>既製品の枠に合わせるのではなく、AIと一緒に自社の仕事に合う画面を増やせます。</p></div>
+    <div class="panel teal"><h4>継続</h4><p>記録・会話・決定が団体の知識として残り、担当者交代後も使い続けられます。</p></div>
+  </div>
+  <div class="footer"><span>baku-office ご案内資料 ／ 株式会社貘</span><span>P.<span class="pg"></span></span></div>
+</section>
+
+<section class="sheet">
+  <div class="topline">
+    <div class="brand"><img src="../baku-data/logo_icon.jpg" alt=""><b>baku-office</b></div>
+    <span>03 / Experience</span>
+  </div>
+  <div class="sec-label">03 使う画面は4つだけ</div>
+  <h2>パソコンでもスマホでも、迷わず使える操作感。</h2>
+  <p class="lead">
+    操作はかんたん。画面は4つだけです。何か操作すると成功・失敗をその場で表示するので、パソコンが得意な人がいない団体でも始めやすい設計です。
+  </p>
+  <div class="nav-grid">
+    <div class="nav-item"><div class="mark">H</div><h4>ホーム</h4><p>お知らせと、団体の「今」がひと目で分かる掲示板。</p></div>
+    <div class="nav-item"><div class="mark">AI</div><h4>AI</h4><p>相棒とのチャット。集計・検索・書類づくりを頼めます。</p></div>
+    <div class="nav-item"><div class="mark">A</div><h4>アプリ</h4><p>必要な機能だけを選び、自分たちのシステムを組み立てます。</p></div>
+    <div class="nav-item"><div class="mark">S</div><h4>設定</h4><p>メンバー、権限、連携、プラン、見た目をまとめて管理。</p></div>
+  </div>
+  <h3>はじめから使える主な機能</h3>
+  <div class="feature-list">
+    <div class="feature"><div><b>会計</b><span>入出金の記帳、出納帳・収支計算書・予算と実績の対比を自動作成。CSV・PDFで出力。</span></div></div>
+    <div class="feature"><div><b>名簿</b><span>会員・役員の名簿を安全に管理。招待と承認、役割ごとの権限設定に対応。</span></div></div>
+    <div class="feature"><div><b>予定・リマインダー</b><span>行事や締め切りを登録すると、決まった時刻にお知らせ。うっかり忘れを防止。</span></div></div>
+    <div class="feature"><div><b>議事録</b><span>会議の音声から文字起こしと要点整理。あとから検索できる記録に。</span></div></div>
+    <div class="feature"><div><b>組織の知恵袋</b><span>段取り・しきたり・引き継ぎ事項を蓄積。「あの件どうだった？」にAIが回答。</span></div></div>
+    <div class="feature"><div><b>ファイル保管</b><span>規約・領収書・写真などを保管。レシートの日付・金額抽出にも対応。</span></div></div>
+    <div class="feature"><div><b>メール・カレンダー連携</b><span>メールやカレンダーとつなぎ、予定作成やメール検索をAIに依頼。</span></div></div>
+    <div class="feature"><div><b>請求書管理</b><span>請求書を読み取って登録。未払い一覧や支払期日のリマインドで払い忘れを防止。</span></div></div>
+  </div>
+  <div class="callout">
+    <p><b>必要な機能だけを、後から足し引き。</b>「会計だけ」「名簿だけ」の小さな使い方から始めて、団体の成長に合わせて広げられます。インターネットが使えない環境向けの構成や、Googleドライブへの定期バックアップにも対応します。</p>
+  </div>
+  <div class="footer"><span>baku-office ご案内資料 ／ 株式会社貘</span><span>P.<span class="pg"></span></span></div>
+</section>
+
+<section class="sheet">
+  <div class="topline">
+    <div class="brand"><img src="../baku-data/logo_icon.jpg" alt=""><b>baku-office</b></div>
+    <span>04 / AI Partner</span>
+  </div>
+  <div class="sec-label">04 AIの相棒にできること</div>
+  <h2>ただ会話するだけでなく、実務に手を伸ばすAI。</h2>
+  <p class="lead">
+    baku-office の相棒は、実際のデータにふれて、集計・検索・書類づくりまで手を動かします。むずかしい言葉は不要。ふだんの言葉で頼めます。
+  </p>
+  <p>
+    <span class="badge free">Free</span> は記録の置き場として無料でお使いいただけます。AIの相棒は <span class="badge plus">Plus</span> から、外出先や実務をまるごと任せる自動化は <span class="badge pro">Pro</span> から加わります。
+  </p>
+  <h3><span class="badge plus">Plus</span> AIの相棒と一緒に働く</h3>
+  <div class="grid three">
+    <div class="panel amber"><h4>集計・検索・書類づくり</h4><p>「6月の交通費を集計して」「この資料を要約して」を会話で実行。結果は PDF・CSV などで取り出せます。</p></div>
+    <div class="panel amber"><h4>機能を自作する</h4><p>「こんな画面がほしい」と頼むだけで、自社専用の機能を追加できます。</p></div>
+    <div class="panel amber"><h4>会議の議事録づくり</h4><p>会議の音声を文字起こしし、要点と決定事項を議事録として整理・保存します。</p></div>
+    <div class="panel amber"><h4>書類・領収書の読み取り</h4><p>PDF・Word・Excel・領収書などを取り込み、日付や金額を自動で抽出。横断検索できます。</p></div>
+    <div class="panel amber"><h4>Web検索で最新情報</h4><p>最新の情報が必要な相談には、Web検索で根拠を確かめてから回答します。</p></div>
+    <div class="panel amber"><h4>組織の記憶を引き出す</h4><p>蓄積した資料・会話・決定から、「あの件どうだった？」にAIが答えます。</p></div>
+  </div>
+  <h3><span class="badge pro">Pro</span> 実務をまるごと任せる</h3>
+  <div class="grid three">
+    <div class="panel"><h4>LINE・Discordから頼める</h4><p>専用アプリは不要。外出先でも、ふだんのチャットから話しかけるだけ。</p></div>
+    <div class="panel"><h4>メール・カレンダー連携</h4><p>メール検索、本文や添付の取り出し、予定作成や会議リンク発行まで。</p></div>
+    <div class="panel"><h4>請求書・オフラインAI・A2A</h4><p>支払期日のリマインド、外に出さないAI、企業間エージェント連携に対応。</p></div>
+  </div>
+  <h3>たとえば、こんなふうに頼めます</h3>
+  <div class="chat-scene">
+    <div class="chat">
+      <div class="bubble user"><span>係</span>6月の交通費を集計して、収支報告に使える表にして。</div>
+      <div class="bubble ai"><span>相棒（貘）</span>6月の「旅費交通費」は 12件・合計 38,420円 でした。月次の集計表を作成しました。そのまま収支報告書に差し込めます。</div>
+      <div class="bubble user"><span>係</span>ありがとう。来週の総会のリマインドも、前日にお願い。</div>
+      <div class="bubble ai"><span>相棒（貘）</span>承知しました。6月17日（水）18時に「定期総会 前日のご案内」をお知らせするよう設定しました。</div>
+    </div>
+  </div>
+  <div class="callout rose">
+    <p><b>機微な内容も、安心して。</b>大切な情報は、より安全なAIや、外部に出さないオフラインのAIを選べます。削除・確定などの大事な操作はかならず人の承認をはさみます。</p>
+  </div>
+  <div class="footer"><span>baku-office ご案内資料 ／ 株式会社貘</span><span>P.<span class="pg"></span></span></div>
+</section>
+
+<section class="sheet">
+  <div class="topline">
+    <div class="brand"><img src="../baku-data/logo_icon.jpg" alt=""><b>baku-office</b></div>
+    <span>Update / What's New</span>
+  </div>
+  <div class="sec-label">最新アップデート</div>
+  <h2>相棒は、もっと身近に。もっと、止まらない。</h2>
+  <p class="lead">
+    最近のアップデートで、相棒（AI）の見た目・選べるAI・安心のそなえが大きく進化しました。むずかしい設定なしで、すぐにお使いいただけます。
+  </p>
+  <div class="grid three">
+    <div class="panel amber"><h4>団体だけの相棒キャラ</h4><p>画面にいつもいる相棒（貘）が、いまの稼働状況をやさしく表示。自社のキャラ画像に差し替えたり、AIにイラストを作ってもらって設定することもできます。</p></div>
+    <div class="panel amber"><h4>無料で使えるクラウドAI</h4><p>APIキーがなくても、クラウド上で動く無料枠のAIですぐに会話を始められます。使った量の見える化と、使いすぎを防ぐ上限設定にも対応。</p></div>
+    <div class="panel amber"><h4>AIが止まりにくい仕組み</h4><p>高性能AIが混雑・制限されても、自動でほかのAIに切り替え、事情をお伝えしながら対応を続けます。</p></div>
+    <div class="panel"><h4>ダークモード＆選べる配置</h4><p>明るい／暗い表示の切替や、メニューの配置（上部・サイド・下部）を好みに合わせて変更。パソコンでもスマホでも見やすく。</p></div>
+    <div class="panel"><h4>まるごとバックアップ</h4><p>会計・名簿・ファイルなど全データを1つのファイルに保存（手元 or Googleドライブ）。万一のときも別環境へ復元できます。未実施が続くとお知らせ。</p></div>
+    <div class="panel"><h4>軽快な操作感</h4><p>次の画面を先読みして表示を高速化。通信中・読み込み中はバーで状況がわかります。</p></div>
+  </div>
+  <div class="callout rose">
+    <p><b>使うほど、自社になじむ。</b>相棒は団体の状況に合わせて「いまできること」を理解し、質問への回答から自動の作業まで力を発揮します。社外には、しくみではなく成果でお応えします。</p>
+  </div>
+  <div class="footer"><span>baku-office ご案内資料 ／ 株式会社貘</span><span>P.<span class="pg"></span></span></div>
+</section>
+
+<section class="sheet">
+  <div class="topline">
+    <div class="brand"><img src="../baku-data/logo_icon.jpg" alt=""><b>baku-office</b></div>
+    <span>05 / Build With AI</span>
+  </div>
+  <div class="sec-label">05 AIと一緒に、機能をつくる</div>
+  <h2>欲しい機能を、チャットから増やせる。</h2>
+  <p class="lead">
+    既製品のサービスでは「欲しい機能が足りない」「使わない機能が多すぎる」が起こりがちです。baku-office では、<b>チャットで頼むだけで自社専用の機能を追加</b>できます。
+  </p>
+  <div class="steps">
+    <div class="step"><span class="num">1</span><div><h4>チャットで頼む</h4><p>「会員ごとの寄付履歴を一覧できる画面がほしい」など、欲しいものをふだんの言葉で伝えます。</p></div></div>
+    <div class="step"><span class="num">2</span><div><h4>AIが計画を提示</h4><p>何を作るか・誰が使えるか・安全か・費用はかかるか。作る前に4つの点を確認します。</p></div></div>
+    <div class="step"><span class="num">3</span><div><h4>ためして直す</h4><p>できあがった画面を実際にさわって確認。「ここを直して」と伝えれば、その場で手直しします。</p></div></div>
+    <div class="step"><span class="num">4</span><div><h4>みんなで使う</h4><p>点検を経て公開すると、団体のメニューに追加。よくできた機能は他の団体と共有もできます。</p></div></div>
+  </div>
+  <h3>たとえば、こんな機能が作れます</h3>
+  <div class="grid three">
+    <div class="panel teal"><h4>寄付・会費の集計画面</h4><p>会員ごとの納入状況を一覧し、未納の方への案内文までAIが下書き。</p></div>
+    <div class="panel amber"><h4>備品・在庫の台帳</h4><p>「テント3張り貸出」と話しかけるだけで記録。貸出中の一覧もすぐ確認。</p></div>
+    <div class="panel blue"><h4>行事の出欠とりまとめ</h4><p>出欠フォームと集計表をセットで作成。締め切り前のリマインドも自動で。</p></div>
+  </div>
+  <h3>勝手なことはさせない、安全のしくみ</h3>
+  <div class="grid two">
+    <div class="panel rose"><h4>AIの基本は「読む・記録する」</h4><p>削除・確定・共有といった大事な操作は、AIだけでは完了しません。かならず人の承認をはさみます。</p></div>
+    <div class="panel rose"><h4>作った機能も決められた範囲だけ</h4><p>AIと作った機能は、最初に確認した範囲のデータにしか触れられません。危険な動きをするものは点検します。</p></div>
+  </div>
+  <div class="callout amber">
+    <p><b>AIの利用料は「使った分だけ」</b>：AIの利用契約はお客様名義で直接結んでいただきます。当社が間に入って上乗せしない、透明な仕組みです。使用量はいつでも確認でき、上限も設定できます。</p>
+  </div>
+  <div class="footer"><span>baku-office ご案内資料 ／ 株式会社貘</span><span>P.<span class="pg"></span></span></div>
+</section>
+
+<section class="sheet">
+  <div class="topline">
+    <div class="brand"><img src="../baku-data/logo_icon.jpg" alt=""><b>baku-office</b></div>
+    <span>06 / Network</span>
+  </div>
+  <div class="sec-label">06 企業をこえて、つながる</div>
+  <h2>自社の中で育てた相棒や機能を、外の価値へ。</h2>
+  <p class="lead">
+    自社の中で育てた相棒や機能は、団体・企業のあいだでも活かせます。よい機能を共有し、相棒同士が連携することで、使うほどに価値が増していきます。
+  </p>
+  <h3>アプリストア：作った機能を共有・再利用</h3>
+  <div class="grid three">
+    <div class="panel teal"><h4>取り込んですぐ使う</h4><p>ストアから導入するだけ。署名を検証してから自分の環境に追加するので安全です。</p></div>
+    <div class="panel teal"><h4>更新が自動で届く</h4><p>共有元が機能を改良すると、導入した先にも更新が届きます。作り直しは不要です。</p></div>
+    <div class="panel teal"><h4>危ないものは即停止</h4><p>問題が見つかった機能は、配布元から全環境で即座に無効化できます。</p></div>
+  </div>
+  <h3>企業間エージェント連携（A2A） <span class="badge pro">Pro</span></h3>
+  <p>
+    各社の相棒が、<b>おたがいの同意のうえで安全に連携</b>。これまで人が間に入っていた企業をまたぐやり取りを、相棒同士で自動化できます。
+  </p>
+  <div class="grid two">
+    <div class="panel"><h4>企業間の日程調整</h4><p>「打ち合わせの候補日を出して」に、相手企業の相棒が空き状況を返答。双方の予定を自動ですり合わせます。</p></div>
+    <div class="panel"><h4>見積・発注のやり取り</h4><p>仕入先の相棒に見積を依頼し、決まった形式で自動応答・発注。電話やメールの往復を減らせます。</p></div>
+    <div class="panel"><h4>同意付きの書類交換</h4><p>請求書や仕様書など、あらかじめ合意した書類だけを安全に受け渡しできます。</p></div>
+    <div class="panel"><h4>グループ・取引先連携</h4><p>関連団体やグループ会社のあいだで、情報共有・依頼・調整を横断的に自動化します。</p></div>
+  </div>
+  <div class="callout">
+    <p><b>安全に成立させる仕組み</b>：連携は両社の同意が前提です。あらかじめ許可した操作だけを受け渡し、相手のデータベースには直接ふれません。電子署名でなりすましを防ぎ、やり取りはすべて記録します。</p>
+  </div>
+  <div class="callout amber">
+    <p><b>つながるほど、強くなる。</b>参加する企業・団体が増えるほど、連携できる相手と自動化できる業務が広がります。取引先との結びつきが深まり、企業どうしのネットワークが自社の財産になります。</p>
+  </div>
+  <div class="footer"><span>baku-office ご案内資料 ／ 株式会社貘</span><span>P.<span class="pg"></span></span></div>
+</section>
+
+<section class="sheet">
+  <div class="topline">
+    <div class="brand"><img src="../baku-data/logo_icon.jpg" alt=""><b>baku-office</b></div>
+    <span>07 / Plans</span>
+  </div>
+  <div class="sec-label">07 プランと、導入の流れ</div>
+  <h2>無料から始めて、必要になった分だけ広げる。</h2>
+  <p class="lead">
+    どなたも無料（Free）からスタート。AIや自動化が必要になったときに、必要な分だけ広げられます。申し込み時にプランを選ぶ必要はありません。
+  </p>
+  <div class="plans">
+    <div class="plan">
+      <div class="name">Free</div>
+      <div class="for">まずは記録の置き場として</div>
+      <ul>
+        <li>会計・名簿・予定・メモなどの基本機能</li>
+        <li>お客様専用環境での運用（データ所有）</li>
+        <li>クレジットカード登録は不要</li>
+      </ul>
+      <div class="price">ずっと無料でお使いいただけます</div>
+    </div>
+    <div class="plan focus">
+      <div class="name">Plus</div>
+      <div class="for">AIの相棒と一緒に働く</div>
+      <ul>
+        <li>Free の全機能</li>
+        <li>AIチャット（集計・検索・書類づくり）</li>
+        <li>AIと一緒に機能をつくる</li>
+        <li>保管容量などの上級オプション</li>
+      </ul>
+      <div class="price">料金はお見積りにてご案内します</div>
+    </div>
+    <div class="plan">
+      <div class="name">Pro</div>
+      <div class="for">実務をどんどん任せる</div>
+      <ul>
+        <li>Plus の全機能</li>
+        <li>LINE などから話しかけて任せられるAI</li>
+        <li>メール・カレンダー・請求書などの自動処理</li>
+        <li>企業間でAIエージェントが連携（A2A）</li>
+      </ul>
+      <div class="price">料金はお見積りにてご案内します</div>
+    </div>
+  </div>
+  <h3>導入はかんたん、3ステップ</h3>
+  <div class="timeline">
+    <div class="item"><b>1. お申し込み</b><span>メールアドレスがあれば申し込めます。プラン選択は不要。全員 Free からのスタートです。</span></div>
+    <div class="item"><b>2. 専用環境の設置</b><span>当社のご案内に沿って、ボタンを押すだけ。専門知識は不要で、最短で当日から使い始められます。</span></div>
+    <div class="item"><b>3. 利用開始</b><span>メンバーを招待して、ふだんの記録から。機能の改善・更新は自動で届きます。</span></div>
+  </div>
+  <div class="callout amber">
+    <p><b>導入後も、伴走します</b>：初期設定のご相談、メンバーへの使い方案内、「うちの業務ならどう使う？」の相談まで、サポート窓口でお手伝いします。</p>
+  </div>
+  <div class="footer"><span>baku-office ご案内資料 ／ 株式会社貘</span><span>P.<span class="pg"></span></span></div>
+</section>
+
+<section class="sheet">
+  <div class="topline">
+    <div class="brand"><img src="../baku-data/logo_icon.jpg" alt=""><b>baku-office</b></div>
+    <span>08 / FAQ</span>
+  </div>
+  <div class="sec-label">08 よくあるご質問・安心への取り組み</div>
+  <h2>導入前の不安に、仕組みで答えます。</h2>
+  <div class="qa">
+    <div class="q">データはどこに保存されますか？</div>
+    <div class="a">お客様名義の専用環境にのみ保管され、通信も保管も暗号化されます。当社は契約や更新に関わる最小限の情報だけを扱い、<b>業務データに到達する経路を持たない構造</b>です。</div>
+  </div>
+  <div class="qa">
+    <div class="q">解約するとどうなりますか？</div>
+    <div class="a">解約すると認証が通らなくなり、サービス全体のご利用が停止します。一方で、これまで蓄積した業務データは、お客様の環境にそのまま残ります。データは書き出して持ち出せ、再開すれば残ったデータの上からそのまま使い始められます。</div>
+  </div>
+  <div class="qa">
+    <div class="q">パソコンが得意な人がいなくても使えますか？</div>
+    <div class="a">はい。設置は当社のご案内どおりにボタンを押すだけ、更新は自動で届きます。日々の操作は4つの画面とチャットだけ。分からないことは、画面の中のAIに日本語で聞けます。</div>
+  </div>
+  <div class="qa">
+    <div class="q">AIが勝手にデータを書き換えたりしませんか？</div>
+    <div class="a">しません。AIの基本権限は「読む・記録する」までで、削除・確定・共有などの重要な操作はかならず人の承認をはさみます。AIと作った機能も、事前に確認した範囲でしか動けません。</div>
+  </div>
+  <div class="qa">
+    <div class="q">個人情報の取り扱いが心配です。</div>
+    <div class="a">名簿などの個人情報は暗号化のうえ、お客様の環境内だけで管理します。外部サービスへ個人情報をむやみに送らない設計で、個人情報保護の規程づくりに役立つひな形のご提供も予定しています。</div>
+  </div>
+  <div class="corp">
+    <img src="../baku-data/logo_icon.jpg" alt="株式会社貘 ロゴ">
+    <dl>
+      <div><dt>会社名</dt><dd>株式会社貘（baku-team）</dd></div>
+      <div><dt>サービス</dt><dd>baku-office：自社専用AIの相棒を、まるごと所有する業務システム</dd></div>
+    </dl>
+  </div>
+  <p class="small">
+    ※ 本資料はサービスの概要をご紹介するもので、記載の機能・プラン・提供条件は開発の進行により変更となる場合があります。最新の内容や料金の詳細は、お見積り時にあらためてご案内いたします。<br>
+    ※ AIの回答内容は参考情報であり、会計・法務等の最終判断はお客様にてお願いいたします。
+  </p>
+  <div class="footer"><span>baku-office ご案内資料 ／ 株式会社貘</span><span>P.<span class="pg"></span></span></div>
+</section>
+
+</main>
+</body>
+</html>

@@ -1,4 +1,4 @@
-# 統合設計書 — baku-office（自社専用AIの相棒・ポータブルコア＋パーツ基盤） v1.4
+# 統合設計書 — baku-office（自社専用AIの相棒・ポータブルコア＋パーツ基盤） v1.5
 
 対象サービス：baku-office（GitHubプロジェクト名）
 提供：株式会社貘（以下「当社（ホスト）」）
@@ -500,6 +500,54 @@ R2の有効化は**クライアントがCloudflareを直接設定する数少な
 
 ---
 
+## 15. 追加実装（v1.5：相棒キャラ／Workers AI／UI刷新ほか）
+
+v1.4 以降に実装した機能の追補。既存のアーキテクチャ（ポータブルコア＋パーツ・単一Worker・自己ホスト）は不変。
+
+### 15.1 UI刷新・テーマ
+- **デザインシステム**：合同会社 貘ブランド（Navy `#0E1A2B` × Gold `#C9A86A` × 和紙アイボリー）。全スタイルは CSS 変数化（`app.css`）。
+- **ダークテーマ**：`html[data-theme="dark"]` でトークン切替（全コンポーネントが var() 参照で自動追従）。描画前に適用しちらつきなし。設定→「表示」で切替。
+- **ナビ3形態**：上部ピル／左サイドバー／下部タブを `html[data-nav]` で切替（pref=localStorage `bo_nav`）。**幅720px以下は下部タブへ自動切替**。設定→「表示」で選択。
+- **トップバー**：ブランドマーク（紺地に金スパーク）＋ナビ＋ダーク切替＋通知ベル＋ユーザーメニュー（設定/課金/ログアウト）。
+- 体感速度のため `clientPrerender`（Speculation Rules）＋リンク先読み（prefetch）を有効化。
+
+### 15.2 相棒（マスコット）
+- 全ページ左下に常駐する「相棒」。既定は貘のドット絵キャラ（`apps/client/public/mascot/baku.png`・背景透過）。
+- **団体ごとに差し替え可**：`theme.mascotUrl`（URL指定／画像アップロード／AI生成）。配信・保存は `/api/mascot`（GET=配信、POST=generate/upload/reset・管理者のみ）、画像は LICENSE KV に保管。
+- **AI生成**：Cloudflare Workers AI の画像モデル（`@cf/black-forest-labs/flux-1-schnell`）でテキスト→画像生成し即設定。
+- **状態の視覚化**：Pro未満は「眠り」表示。バックグラウンド稼働（AIエージェント/要約/動画生成＝`/api/activity`）中はタスク数バッジ＋活発アニメ、クリックで進捗を吹き出し表示。何もしていなければクリックでチャットへ（相棒が話しかける）。
+- **使用中AIの能力で動きが変化**：Claude=活発／Gemini=標準／Workers AI（無料枠）=ゆっくり（チャットの選択を `localStorage` で全ページ反映）。
+
+### 15.3 AIモデルと Cloudflare Workers AI
+- チャットのモデル選択：**Gemini／Claude／クラウドAI（Workers AI）**。使用中AIと「できること／できないこと」を画面に明示。
+- **Workers AI**：CF上で稼働（`env.AI` バインディング・既定 `@cf/meta/llama-3.1-8b-instruct`）。入力は prompt 文字列形式＝**ツール実行なしの会話用**（会話・要約・文章作成）。`core/models/workers-ai.ts`。
+- **既定動作**：APIキー未登録（Plus以上）は Workers AI を既定に。**Gemini/Claude が通信制限/障害のときは Workers AI へ自動フォールバック**し、冒頭で事情を説明して一時対応（`core/models/fallback.ts`）。
+- モデルID・単価は `core/models/config.ts` 既定＋`env WORKERS_AI_MODEL/MODEL_PRICING` で上書き可。
+
+### 15.4 使用量・ニューロン計測
+- Workers AI は provider `workers_ai` として token／推定USD／**推定ニューロン**（$0.011 / 1,000 ニューロン換算）を計測（`lib/usage.ts`）。
+- 「使用量・上限」画面に **当月ニューロン表示＋ニューロン上限（`monthlyNeuronCap`）** を追加。超過時は停止または無料エンジンへ切替。
+- ※ニューロンはバインディングが実数を返さないため推定値（実費は Cloudflare 請求が正）。
+
+### 15.5 全データバックアップ
+- D1 全テーブル＋ LICENSE KV（設定・APIキー）＋ ファイル実体（R2/KV）を 1 つの JSON アーカイブ化（`lib/backup.ts`）。
+- 出力：ローカルダウンロード／Google ドライブ（連携時）。**復号して出力 or 暗号化のまま**を選択（既定は復号＋取扱注意）。アーカイブ単体で別環境へ復元可能。
+- 未実施・最終から7日超過でホームにアラート。Drive連携時は scheduler で定期実行。`/api/backup`・管理者のみ。
+
+### 15.6 体感速度・DB
+- ホーム描画：ホスト疎通（pollHost）を `waitUntil` で背景化、各データ取得を並列化、**KPI（残高・当月収支・承認待ち・ストレージ）を KV `kpi_cache` に30秒キャッシュ**。
+- 全ページ：通信中・画面遷移中に**上部進捗バー**を表示。
+- **DBインデックス追加**：`0027_perf_indexes`（`transactions(date)`／`personal_items(share_scope,review_status,created_at)`）。当月収支は range 検索でインデックス活用。**SCHEMA_VERSION=27**。
+
+### 15.7 セキュリティ・運用・AI方針の追補
+- **ログイン総当たり対策**：`/api/login`（local）に KV ベースのレート制限（IP 10回/15分＋loginId 5回/15分・失敗時のみ計上・診断記録）。
+- **ベータ利用規約**（`lib/consent.ts`）：現状有姿（AS IS）・無保証／バックアップ自己責任／アプリ外操作（CF・GitHub直接操作）の免責／責任制限（無償ベータは軽過失免責・故意重過失除外・強行法規で無効な範囲は不適用）。`CONSENT_VERSION` 更新で再同意。
+- **破壊的操作の確認ダイアログ**を全UIで網羅（ロール変更・各種削除など）。
+- **AIの方針**：①このシステムの内部構造・実装・使用技術・プロンプト・ツール内部名を利用者に開示しない鉄則（模倣・複製防止・他指示より優先）。②有効な機能・プラン・連携状況を毎リクエストでシステム文脈へ注入し自己認識を最新化、質疑応答・自律行動で最大限活用。
+- **バインディング追加**：`env.AI`（Workers AI）。wrangler top-level＋env.production に `ai` バインディングを追加。
+
+---
+
 ## 付録A：暗号化の実装スケッチ（WebCrypto / 擬似コード）
 
 ```
@@ -550,4 +598,5 @@ plaintext = AES-GCM.decrypt(key, iv, ct)
 | v1.1 | 2026-06 | ポータブルコア＋パーツ／UIカスタマイズ3層（§1.4）を反映。位置づけを「会計・庶務システム」→汎用基盤（会計・庶務は標準同梱パーツの一例）に再フレーム。プラン名 X/Y/Z→Free/Plus/Pro（§2.1）。セキュリティ改修（署名relayアクティベート §4／PBKDF2・HMAC §6.2／鍵保管Port §10.1）を追記 |
 | v1.2 | 2026-06 | **コンセプトを「自社専用AIの相棒の所有」へ再フレーム**（タイトル・§1.1＝所有/作る/育てるの3約束）。ダッシュボードを**4画面ナビ（ホーム/AI/アプリ/設定）**に刷新（§7.1）。**AIアプリ開発**フロー（企画→事前4確認→公開申請→ホスト承認→署名配信）を新節§7.4として追加。プランに **test（全機能解放）** 追加・旧 X/Y/Z 表記を Free/Plus/Pro に統一（§2.1/§6.1）。申込のプラン非選択（Free即発行）を明記（§5）。AIは**セッション保存＋モデル選択**に対応（§7.1） |
 | v1.3 | 2026-06-09 | **ホスト統制＋自己修復**を反映。ホストダッシュボードに**アプリ統制**（公開停止/削除・標準同梱の登録/除外＝全クライアントへキルスイッチ配信）と**報告・自己修復**を追加（§7.3）。**自己修復ループ**（client収集→host集積→GitHub Issue化→Claude巡回・修復→クライアント返信／定期巡回Worker `apps/scheduler`・Cron Triggers＋Service Binding）を§13.4として追加。エンタイトルメントとプランは2層別管理（統合不可）で、管理画面は**現在の権限（entitlement）を主表示**に整理 |
+| v1.5 | 2026-06-12 | **§15 追加実装**を新設。UI刷新（貘ブランドのデザインシステム・ダークテーマ・ナビ3形態・新トップバー）、**相棒マスコット**（貘キャラ・差し替え/AI生成・稼働可視化・エンジン別アニメ）、**Cloudflare Workers AI**（CF稼働のクラウドAI・API未登録時の既定・Gemini/Claude障害時の自動フォールバック＋事情説明）、**ニューロン使用量の可視化・上限**、**全データバックアップ**（D1+KV+ファイル／ローカル/Drive／復元）、**体感速度**（clientPrerender/prefetch・ホーム並列化+疎通非ブロック+KPIキャッシュ・進捗バー）、**DBインデックス追加（0027）でSCHEMA_VERSION=27**、ログインレート制限・ベータ規約・確認ダイアログ網羅、AIの内部構造非開示の鉄則＋自己認識の最新化、`env.AI` バインディング追加 |
 | v1.4 | 2026-06-09 | **Google Workspace連携**（標準同梱パーツ gmail/calendar/meet/invoices＝Gmail／カレンダー／Meet議事録／請求書・Pro以上）を反映。1度のOAuth同意で Gmail/Calendar/Meet を接続（refresh_token は `apikey:google_refresh` に MASTER_KEY 暗号化保管）、連携設定（§7.2）・APIキー表（§10.2）・脅威モデル（04 ⑩）へ追記。client D1 マイグレーション 0019_google（meet_records）/0020_invoices（invoices）で **SCHEMA_VERSION=20**。あわせて環境メモ：開発・運用は baku-llc アカウント（env.production）のみ・amber-links 不使用・外部顧客向け本番提供は未開始（開発段階） |
