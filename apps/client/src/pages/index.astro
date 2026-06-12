@@ -76,8 +76,11 @@ const lastAt = Number(lastAtRaw);
 const online = Number.isFinite(lastAt) && nowSec() - lastAt < 86400;
 
 const pct = (u: number, l: number) => (u < 0 || l <= 0 ? 0 : Math.min(100, Math.round((u / l) * 100)));
-const hintText: Record<string, string> = { paid: "高度なオプション → Workers Paid で上限を拡張できます。", r2: "高度なオプションで R2 を有効化すると大容量に対応できます。", drive: "Google ドライブの空き容量をご確認ください。", none: "" };
-const nearFull = storage.filter((s) => s.enabled && s.used >= 0 && pct(s.used, s.limit) >= 80);
+// 一般ユーザー向けは内訳（D1/KV/R2）を見せず「保存できる容量」1本に合算する。
+const measurable = storage.filter((s) => s.enabled && s.used >= 0 && s.limit > 0);
+const totalUsed = measurable.reduce((a, s) => a + s.used, 0);
+const totalLimit = measurable.reduce((a, s) => a + s.limit, 0);
+const totalPct = pct(totalUsed, totalLimit);
 const yen = (n: number) => "¥" + n.toLocaleString("ja-JP");
 const fmtDay = (s: number) => new Date(s * 1000).toISOString().slice(0, 10);
 const jstHour = (new Date().getUTCHours() + 9) % 24;
@@ -105,6 +108,37 @@ const clampSpan = (n?: number) => Math.max(1, Math.min(3, Number(n) || 1));
   <style>
     .home-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 14px; flex-wrap: wrap; }
     .home-head-right { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
+  </style>
+
+  {/* 業務の入口：よく使う4つを大ボタンで常設（並べ替え/非表示の対象外・最上部）。高齢ユーザーが1タップで届くように。 */}
+  <nav class="home-actions" aria-label="よく使う操作">
+    <a class="ha" href="/accounting">
+      <span class="ha-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18v12H3zM3 10h18M7 15h4" /></svg></span>
+      <span class="ha-txt"><strong>お金の記録</strong><small>入金・出金・残高</small></span>
+    </a>
+    <a class="ha" href="/schedule">
+      <span class="ha-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16v15H4zM4 9h16M8 3v4M16 3v4" /></svg></span>
+      <span class="ha-txt"><strong>予定を見る</strong><small>行事・スケジュール</small></span>
+    </a>
+    <a class="ha" href="/membership">
+      <span class="ha-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 11a3 3 0 100-6 3 3 0 000 6M3 19a6 6 0 0112 0M17 11a3 3 0 000-6M21 19a6 6 0 00-4-5.7" /></svg></span>
+      <span class="ha-txt"><strong>名簿（会員）</strong><small>会員の一覧・管理</small></span>
+    </a>
+    <a class="ha" href="/import">
+      <span class="ha-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v10M8 9l4 4 4-4M5 21h14" /></svg></span>
+      <span class="ha-txt"><strong>書類の取り込み</strong><small>ファイル・資料を取込</small></span>
+    </a>
+  </nav>
+  <style>
+    .home-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 1.1rem 0 .4rem; }
+    .ha { display: flex; align-items: center; gap: 14px; min-height: 84px; padding: 16px 18px; border: 1px solid var(--line-strong); border-radius: var(--r-md); background: var(--surface); color: var(--ink); text-decoration: none; box-shadow: var(--shadow-sm); transition: transform .1s, box-shadow .15s, border-color .15s; }
+    .ha:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-color: var(--brand); text-decoration: none; }
+    .ha:active { transform: translateY(0); }
+    .ha-ico { width: 52px; height: 52px; flex: 0 0 auto; border-radius: 14px; display: grid; place-items: center; background: var(--brand-soft); color: var(--brand-strong); }
+    .ha-ico svg { width: 28px; height: 28px; }
+    .ha-txt strong { display: block; font-size: 1.15rem; font-weight: 800; letter-spacing: -.01em; }
+    .ha-txt small { display: block; color: var(--muted); font-size: .9rem; margin-top: 2px; }
+    @media (max-width: 420px) { .home-actions { gap: 10px; } .ha { min-height: 76px; padding: 14px; gap: 11px; } .ha-ico { width: 46px; height: 46px; } .ha-txt strong { font-size: 1.05rem; } }
   </style>
 
   {/* 固定セクション：baku-office からのお知らせ・重要なお知らせ（並べ替え/非表示の対象外・常に最上部）。 */}
@@ -144,28 +178,39 @@ const clampSpan = (n?: number) => Math.max(1, Math.min(3, Number(n) || 1));
       )
     ) : sec === "storage" ? (
       <section data-sec="storage">
-        <h2>ストレージ使用量</h2>
-        {nearFull.map((s) => (<div class="banner banner-warn">⚠️ <strong>{s.label}</strong> が上限の {pct(s.used, s.limit)}% に達しています。{hintText[s.hint]}</div>))}
-        <div class="grid">
-          {storage.map((s) => (
-            <div class="card">
-              <div class="label">{s.label}{!s.enabled && (s.key === "r2" ? "（未使用）" : s.key === "drive" ? "（未連携）" : "")}</div>
-              <div class="gauge"><div class={`gfill ${pct(s.used, s.limit) >= 80 ? "hot" : ""}`} style={`width:${pct(s.used, s.limit)}%`}></div></div>
-              <div class="muted" style="font-size:.82rem;margin-top:4px">{s.used < 0 ? "計測不可" : `${fmtBytes(s.used)} / ${fmtBytes(s.limit)}（${pct(s.used, s.limit)}%）`}</div>
-              {(s.hint === "paid" || s.hint === "r2") && (<div class="muted" style="font-size:.74rem;margin-top:2px"><a href="/settings/advanced">{s.hint === "r2" ? "R2 を有効化" : "Workers Paid で拡張"}</a></div>)}
-              {s.key === "drive" && !s.enabled && (<div class="muted" style="font-size:.74rem;margin-top:2px"><a href="/drive">連携する</a></div>)}
-            </div>
-          ))}
+        <h2>保存できる容量</h2>
+        {totalPct >= 80 && (<div class="banner banner-warn">⚠️ 保存できる容量が残りわずかです（{totalPct}% 使用）。{isOrgAdmin ? "下の「内訳」から拡張をご検討ください。" : "管理者にご相談ください。"}</div>)}
+        <div class="card">
+          <div class="label">いまの使用状況</div>
+          <div class="gauge"><div class={`gfill ${totalPct >= 80 ? "hot" : ""}`} style={`width:${totalPct}%`}></div></div>
+          <div class="muted" style="margin-top:6px">{totalLimit > 0 ? `${fmtBytes(totalUsed)} / ${fmtBytes(totalLimit)}（${totalPct}%）` : "計測中"}</div>
         </div>
+        {isOrgAdmin && (
+          <details class="adv">
+            <summary>保存容量の内訳・拡張（管理者向け）</summary>
+            <p class="adv-note">保存先ごとの内訳です。容量の拡張・外部ストレージの有効化はこちらから行えます。</p>
+            <div class="grid">
+              {storage.map((s) => (
+                <div class="card">
+                  <div class="label">{s.label}{!s.enabled && (s.key === "r2" ? "（未使用）" : s.key === "drive" ? "（未連携）" : "")}</div>
+                  <div class="gauge"><div class={`gfill ${pct(s.used, s.limit) >= 80 ? "hot" : ""}`} style={`width:${pct(s.used, s.limit)}%`}></div></div>
+                  <div class="muted" style="font-size:.85rem;margin-top:4px">{s.used < 0 ? "計測不可" : `${fmtBytes(s.used)} / ${fmtBytes(s.limit)}（${pct(s.used, s.limit)}%）`}</div>
+                  {(s.hint === "paid" || s.hint === "r2") && (<div class="muted" style="font-size:.85rem;margin-top:2px"><a href="/settings/advanced">{s.hint === "r2" ? "外部ストレージを有効化" : "容量プランを拡張"}</a></div>)}
+                  {s.key === "drive" && !s.enabled && (<div class="muted" style="font-size:.85rem;margin-top:2px"><a href="/drive">連携する</a></div>)}
+                </div>
+              ))}
+            </div>
+          </details>
+        )}
       </section>
     ) : sec === "quicklinks" ? (
       <section data-sec="quicklinks">
-        <h2>できること</h2>
+        <h2>そのほかの機能</h2>
         <div class="grid">
-          <a class="card" href="/accounting" style="text-decoration:none;color:inherit"><strong>会計</strong><div class="muted">入出金・出納帳・収支・CSV</div></a>
           <a class="card" href="/files" style="text-decoration:none;color:inherit"><strong>ファイル</strong><div class="muted">アップロード・共有</div></a>
           <a class="card" href="/minutes" style="text-decoration:none;color:inherit"><strong>議事録</strong><div class="muted">作成・一覧</div></a>
-          <a class="card" href="/apps" style="text-decoration:none;color:inherit"><strong>アプリ</strong><div class="muted">機能の導入・開発</div></a>
+          <a class="card" href="/apps" style="text-decoration:none;color:inherit"><strong>アプリ</strong><div class="muted">機能の追加</div></a>
+          <a class="card" href="/settings" style="text-decoration:none;color:inherit"><strong>設定</strong><div class="muted">表示・アカウント</div></a>
         </div>
       </section>
     ) : null
