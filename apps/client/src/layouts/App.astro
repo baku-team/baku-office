@@ -71,6 +71,7 @@ const firstName = ses?.name ?? (ses?.role ?? "ユーザー");
       (function () { try {
         var t = localStorage.getItem("bo_theme"); document.documentElement.setAttribute("data-theme", t === "dark" ? "dark" : "light");
         var n = localStorage.getItem("bo_nav"); document.documentElement.setAttribute("data-nav", (n === "side" || n === "top") ? n : "bottom");
+        var f = localStorage.getItem("bo_fontsize"); document.documentElement.setAttribute("data-fontsize", (f === "large" || f === "xl") ? f : "std");
       } catch (e) {} })();
     </script>
     <title>{title} — {brand}</title>
