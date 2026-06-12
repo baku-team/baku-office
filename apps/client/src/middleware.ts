@@ -44,10 +44,26 @@ function withSec(res: Response): Response {
   return res;
 }
 
+// KV/D1 の1日あたり書き込み上限超過（無料枠で起こりやすい）を検出して、原因の分かるメッセージに変換する。
+// WHY: 既定では生の 500 になり「何が起きたか」が利用者に伝わらない。上限到達を明示して再試行/上位プランへ誘導する。
+function isWriteLimitError(e: unknown): boolean {
+  const m = (e instanceof Error ? e.message : String(e ?? "")).toLowerCase();
+  return m.includes("limit exceeded") || m.includes("too many requests") || m.includes("daily request limit");
+}
+const LIMIT_MSG = "ただいま保存（書き込み）回数が本日の上限に達したため、一時的に保存できません。時間をおいて（日付が変わると回復します）お試しください。管理者の方は上位プラン（Workers Paid）で上限を引き上げられます。";
+function limitResponse(pathname: string, accept: string): Response {
+  const isApi = pathname.startsWith("/api/") || accept.includes("application/json");
+  const headers = { "retry-after": "3600" };
+  if (isApi) return new Response(JSON.stringify({ error: LIMIT_MSG }), { status: 503, headers: { "content-type": "application/json", ...headers } });
+  const html = `<!doctype html><html lang="ja"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>一時的に保存できません</title><div style="max-width:640px;margin:12vh auto;padding:24px;font-family:system-ui,-apple-system,'Hiragino Kaku Gothic ProN',sans-serif;line-height:1.9;color:#0E1A2B"><h1 style="font-size:1.35rem">一時的に保存できません</h1><p style="font-size:1.05rem">${LIMIT_MSG}</p><p><a href="javascript:history.back()" style="color:#836528;font-weight:600">← 前の画面に戻る</a></p></div></html>`;
+  return new Response(html, { status: 503, headers: { "content-type": "text/html; charset=utf-8", ...headers } });
+}
+
 // ライセンス未保持なら /activate へ誘導（§4）。アプリ全体の前段でスキーマ自動適用も行う。
 export const onRequest = defineMiddleware(async (context, next) => {
   const { pathname } = context.url;
   const env = context.locals.runtime.env;
+  try {
 
   // ポータブルコアの実行コンテキストを注入（移植性アーキ §7）。以後 ctx.db/storage/ai/agent 経由で呼ぶ。
   context.locals.ctx = buildCtx(env);
@@ -92,4 +108,9 @@ export const onRequest = defineMiddleware(async (context, next) => {
     }
   }
   return withSec(await next());
+  } catch (e) {
+    // KV/D1 の書き込み上限超過は、生の500ではなく「上限到達」の明確なメッセージへ。
+    if (isWriteLimitError(e)) return withSec(limitResponse(pathname, context.request.headers.get("accept") ?? ""));
+    throw e;
+  }
 });

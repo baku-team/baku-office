@@ -1,6 +1,6 @@
 import type { APIRoute } from "astro";
 import { getSession } from "../../lib/auth.ts";
-import { createInvite, approveUser, rejectUser, setRole } from "../../lib/users.ts";
+import { createInvite, approveUser, rejectUser, setRole, deleteUser, activeAdminCount } from "../../lib/users.ts";
 import type { Role } from "@baku-office/shared";
 
 export const prerender = false;
@@ -28,6 +28,19 @@ export const POST: APIRoute = async ({ request, locals }) => {
     case "role":
       if (b.id && b.role) await setRole(env, b.id, b.role);
       return json({ ok: true });
+    case "delete": {
+      // 名簿から完全削除（取り消し不可）。ロックアウト/自己破壊/システムユーザー破壊を防ぐ。
+      if (!b.id) return json({ error: "対象がありません" }, 400);
+      if (b.id === "org") return json({ error: "システムユーザーは削除できません" }, 400);
+      if (b.id === ses.uid) return json({ error: "自分自身は削除できません" }, 400);
+      const u = await env.DB.prepare("SELECT role,status FROM users WHERE id=?").bind(b.id).first<{ role: string; status: string }>();
+      if (!u) return json({ error: "対象が見つかりません" }, 404);
+      if (u.role === "admin" && u.status === "active" && (await activeAdminCount(env)) <= 1) {
+        return json({ error: "最後の管理者は削除できません" }, 400);
+      }
+      await deleteUser(env, b.id);
+      return json({ ok: true });
+    }
     default:
       return json({ error: "不明な操作" }, 400);
   }

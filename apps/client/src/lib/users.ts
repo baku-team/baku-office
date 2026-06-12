@@ -77,6 +77,13 @@ export async function rejectUser(env: Env, id: string): Promise<void> {
   await env.DB.prepare("UPDATE users SET status='disabled', leave_requested_at=NULL WHERE id=?").bind(id).run();
   await revokeSessions(env, id); // 既存セッションを即時失効（§3-3）。
 }
+// 名簿から完全に削除（ユーザー行＋ログイン手段）。業務データ（団体帰属）は id 参照のまま残す。
+// 取り消せないため、呼び出し側で最後の管理者・自分自身・システムユーザーをガードすること。
+export async function deleteUser(env: Env, id: string): Promise<void> {
+  await env.DB.prepare("DELETE FROM identities WHERE user_id=?").bind(id).run();
+  await env.DB.prepare("DELETE FROM users WHERE id=?").bind(id).run();
+  await revokeSessions(env, id); // 残存セッションを即時失効。
+}
 export async function setRole(env: Env, id: string, role: Role): Promise<void> {
   await env.DB.prepare("UPDATE users SET role=? WHERE id=?").bind(role, id).run();
   await revokeSessions(env, id); // 権限変更は古いrole内包セッションを即時失効＝再ログインで新roleを反映（§3-3）。
