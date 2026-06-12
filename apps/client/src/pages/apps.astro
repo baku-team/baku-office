@@ -44,10 +44,10 @@ const ENT_OPTS = ["free", "plus", "pro", "nonprofit", "enterprise"];
   </div>
 
   <div class="card launcher">
-    <div class="launcher-head"><strong>使う（導入済み）</strong><span class="muted" style="font-size:.8rem">導入済みアプリをすぐ起動</span></div>
-    <div class="launch-chips">
-      {launch.map((l) => (<a class="chip" href={l.href} title={l.app}>{l.label}</a>))}
-      {launch.length === 0 && (<span class="muted" style="font-size:.85rem">{isAdminOrg ? "起動できるアプリがありません。下の「ストア」や「アプリ管理」から追加してください。" : "起動できるアプリがありません。管理者にアプリの追加を依頼してください。"}</span>)}
+    <div class="launcher-head"><strong>使う（導入済み）</strong><span class="muted" style="font-size:.85rem">導入済みアプリをすぐ起動</span></div>
+    <div class="launch-grid">
+      {launch.map((l) => (<a class="launch-card" href={l.href}><span class="lc-label">{l.label}</span><span class="lc-app">{l.app}</span></a>))}
+      {launch.length === 0 && (<span class="muted" style="font-size:.9rem">{isAdminOrg ? "起動できるアプリがありません。下の「ストア」や「アプリ管理」から追加してください。" : "起動できるアプリがありません。管理者にアプリの追加を依頼してください。"}</span>)}
     </div>
   </div>
 
@@ -195,6 +195,11 @@ const ENT_OPTS = ["free", "plus", "pro", "nonprofit", "enterprise"];
     .launcher { margin-top: 1rem; }
     .launcher-head { display: flex; align-items: baseline; gap: 10px; justify-content: space-between; margin-bottom: 10px; flex-wrap: wrap; }
     .launch-chips { display: flex; gap: 8px; flex-wrap: wrap; }
+    .launch-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; }
+    .launch-card { display: flex; flex-direction: column; justify-content: center; gap: 3px; min-height: 64px; padding: 14px 16px; border: 1px solid var(--line-strong); border-radius: var(--r-md); background: var(--surface); color: var(--ink); text-decoration: none; box-shadow: var(--shadow-sm); transition: transform .1s, border-color .15s, box-shadow .15s; }
+    .launch-card:hover { transform: translateY(-2px); border-color: var(--brand); box-shadow: var(--shadow); text-decoration: none; }
+    .launch-card .lc-label { font-size: 1.05rem; font-weight: 700; }
+    .launch-card .lc-app { font-size: .82rem; color: var(--muted); }
     .apps-panel { margin-top: 8px; }
   </style>
 </App>

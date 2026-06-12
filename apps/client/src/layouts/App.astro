@@ -74,6 +74,7 @@ const isAdminOrg = ses?.role === "admin" && ses?.ctx === "org";
         var t = localStorage.getItem("bo_theme"); document.documentElement.setAttribute("data-theme", t === "dark" ? "dark" : "light");
         var n = localStorage.getItem("bo_nav"); document.documentElement.setAttribute("data-nav", (n === "side" || n === "top") ? n : "bottom");
         var f = localStorage.getItem("bo_fontsize"); document.documentElement.setAttribute("data-fontsize", (f === "large" || f === "xl") ? f : "std");
+        if (localStorage.getItem("bo_mascot") === "off") document.documentElement.setAttribute("data-mascot", "off");
       } catch (e) {} })();
     </script>
     <title>{title} — {brand}</title>

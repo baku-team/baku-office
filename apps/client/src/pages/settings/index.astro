@@ -93,6 +93,11 @@ const visGroups = groups.map((g) => ({ ...g, items: g.items.filter((i) => i.show
         <button class="seg-opt" type="button" data-nav="bottom">下部</button>
       </div>
     </div>
+    <div class="hr"></div>
+    <div class="spread" style="flex-wrap:wrap;gap:14px">
+      <div><strong>相棒（キャラクター）を表示</strong><div class="muted" style="font-size:.85rem">画面の右下に表示される相棒のオン／オフ。</div></div>
+      <label class="switch"><input type="checkbox" id="set-mascot" aria-label="相棒を表示" /><span class="track"></span><span class="knob"></span></label>
+    </div>
   </div>
 
   {isAdminOrg && pendingSteps.length > 0 && (
@@ -168,6 +173,15 @@ const visGroups = groups.map((g) => ({ ...g, items: g.items.filter((i) => i.show
         });
       }
       // 文字の大きさ（標準/大/特大）。html[data-fontsize] を即時切替＋localStorage 保存（App.astro 起動scriptが読む）。
+      // 相棒（マスコット）の表示ON/OFF。html[data-mascot] を即時切替＋localStorage 保存（App.astro 起動scriptが読む）。
+      const mascot = document.getElementById("set-mascot");
+      if (mascot) {
+        mascot.checked = root.getAttribute("data-mascot") !== "off";
+        mascot.addEventListener("change", () => {
+          if (mascot.checked) { root.removeAttribute("data-mascot"); try { localStorage.setItem("bo_mascot", "on"); } catch (e) { /* noop */ } }
+          else { root.setAttribute("data-mascot", "off"); try { localStorage.setItem("bo_mascot", "off"); } catch (e) { /* noop */ } }
+        });
+      }
       const fs = document.getElementById("set-fontsize");
       if (fs) {
         const curFs = root.getAttribute("data-fontsize") || "std";
