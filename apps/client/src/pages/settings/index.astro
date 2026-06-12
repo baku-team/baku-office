@@ -85,7 +85,7 @@ const visGroups = groups.map((g) => ({ ...g, items: g.items.filter((i) => i.show
   </div>
 
   {isAdminOrg && pendingSteps.length > 0 && (
-    <div class="card" style="border-left:3px solid #14365c">
+    <div class="card" style="border-left:3px solid var(--brand)">
       <strong>初期設定（あと {pendingSteps.length} 項目）</strong>
       <p class="muted" style="font-size:.85rem;margin:.2rem 0 .6rem">まず必須項目から段階的に設定すると、AI・連携機能を安全に有効化できます。</p>
       <ul style="margin:0;padding-left:1.2rem">
