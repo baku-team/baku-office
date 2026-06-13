@@ -1,0 +1,4 @@
+# baku-office security contact (RFC 9116)
+Contact: mailto:baku@baku-llc.co.jp
+Expires: 2027-06-13T00:00:00.000Z
+Preferred-Languages: ja, en
