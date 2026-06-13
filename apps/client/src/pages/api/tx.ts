@@ -1,5 +1,5 @@
 import type { APIRoute } from "astro";
-import { createTx, softDeleteTx, currentPeriod, ensureSeed } from "../../lib/accounting.ts";
+import { createTx, softDeleteTx, currentPeriod, ensureSeed, findOrCreateCategory } from "../../lib/accounting.ts";
 import { requireOrgAdmin } from "../../lib/auth.ts";
 import { env } from "cloudflare:workers";
 
@@ -30,14 +30,19 @@ export const POST: APIRoute = async ({ request, locals }) => {
   if (kind === "transfer" && !b.counter_wallet_id) return json({ error: "振替は counter_wallet_id が必要" }, 400);
   // 自口座振替は残高計算が壊れる（出納帳の排他分岐で入金側が消える）ため拒否。
   if (kind === "transfer" && b.wallet_id === b.counter_wallet_id) return json({ error: "振替元と振替先が同じ口座です" }, 400);
-  if (kind !== "transfer" && !b.category_id) return json({ error: "科目(category_id)が必要" }, 400);
+  // 科目：id 指定があればそれ、無ければ自由記述の名称(category_name)から検索/作成。
+  let categoryId = b.category_id ? String(b.category_id) : null;
+  if (kind !== "transfer" && !categoryId && typeof b.category_name === "string" && b.category_name.trim()) {
+    categoryId = await findOrCreateCategory(env, b.category_name, kind as "income" | "expense");
+  }
+  if (kind !== "transfer" && !categoryId) return json({ error: "科目を入力してください" }, 400);
 
   const id = await createTx(env, {
     fiscal_period_id: period.id,
     date: String(b.date),
     wallet_id: String(b.wallet_id),
     kind,
-    category_id: kind === "transfer" ? null : String(b.category_id),
+    category_id: kind === "transfer" ? null : categoryId,
     amount: Math.round(amount),
     description: b.description ? String(b.description) : null,
     counter_wallet_id: kind === "transfer" ? String(b.counter_wallet_id) : null,
