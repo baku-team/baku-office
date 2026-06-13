@@ -11,7 +11,7 @@ const hasPlus = atLeast(await cachedEntitlement(env), "plus");
 const isAdmin = ses.role === "admin" && ses.ctx === "org";
 
 const { dailyTotals, monthTotals, todayTotals, monthUsd, monthTokens, getLimits, resetTimes, PROVIDER_LABEL, USAGE_PROVIDERS } = await import("../lib/usage.ts");
-const { neuronsFromUsd } = await import("../core/models/config.ts");
+const { neuronsFromUsd, hasPricing } = await import("../core/models/config.ts");
 let daily: { day: string; count: number }[] = [];
 let month: Record<string, number> = {};
 let today: Record<string, number> = {};
@@ -30,7 +30,7 @@ if (hasPlus) {
 }
 const maxDay = Math.max(1, ...daily.map((d) => d.count));
 const fmtTok = (n: number) => (n >= 1e6 ? (n / 1e6).toFixed(2) + "M" : n >= 1e3 ? (n / 1e3).toFixed(1) + "k" : String(n));
-const rows = USAGE_PROVIDERS.map((p) => ({ p, label: PROVIDER_LABEL[p] ?? p, today: today[p] ?? 0, month: month[p] ?? 0, usd: usd[p] ?? 0, tokens: tokens[p] ?? 0, neurons: neuronsFromUsd(usd[p] ?? 0), lim: limits[p] ?? {} }));
+const rows = USAGE_PROVIDERS.map((p) => ({ p, label: PROVIDER_LABEL[p] ?? p, today: today[p] ?? 0, month: month[p] ?? 0, usd: usd[p] ?? 0, tokens: tokens[p] ?? 0, neurons: neuronsFromUsd(usd[p] ?? 0), priced: hasPricing(env, p), lim: limits[p] ?? {} }));
 const totalUsd = rows.reduce((a, r) => a + r.usd, 0);
 const overs = rows.filter((r) => (r.lim.monthlyCap && r.month >= (r.lim.monthlyCap ?? 0)) || (r.lim.monthlyUsdCap && r.usd >= (r.lim.monthlyUsdCap ?? 0)));
 const warns = rows.filter((r) => r.lim.freeQuota && r.today >= (r.lim.freeQuota ?? 0) * 0.8 && r.today < (r.lim.monthlyCap ?? Infinity));
@@ -87,7 +87,7 @@ const kvPct = KV_WRITE_FREE_LIMIT > 0 ? Math.min(100, Math.round((kvWrites / KV_
         <div class="reset-line"><span>無料枠のリセット（日次）</span><strong>{reset.daily}</strong></div>
         <div class="reset-line"><span>上限のリセット（月次）</span><strong>{reset.monthly}</strong></div>
         <div class="reset-line"><span>当月の推定費用合計</span><strong>${totalUsd.toFixed(2)}</strong></div>
-        <div class="muted" style="font-size:.82rem;margin-top:6px">※参考単価による概算です。実費は各プロバイダの請求が正となります。</div>
+        <div class="muted" style="font-size:.82rem;margin-top:6px">※参考単価による概算です。実費は各プロバイダの請求が正となります。<strong>参考単価が未登録のAPI（Web検索・画像/音声/動画生成・任意API等）は「推定不可」と表示され、この合計には含まれません</strong>（$0＝無料ではありません）。</div>
       </div>
       <div class="table-wrap"><table>
         <thead><tr><th>API</th><th>本日</th><th>当月回数</th><th>当月token</th><th>当月推定$</th><th>当月ニューロン/上限</th><th>無料枠/日</th><th>当月回数上限</th><th>当月上限$</th><th>超過時</th></tr></thead>
@@ -98,7 +98,7 @@ const kvPct = KV_WRITE_FREE_LIMIT > 0 ? Math.min(100, Math.round((kvWrites / KV_
               <td class={r.lim.freeQuota && r.today >= (r.lim.freeQuota ?? 0) * 0.8 ? "u-warn" : ""}>{r.today}{r.lim.freeQuota ? ` / ${r.lim.freeQuota}` : ""}</td>
               <td class={r.lim.monthlyCap && r.month >= (r.lim.monthlyCap ?? 0) ? "u-over" : ""}>{r.month}{r.lim.monthlyCap ? ` / ${r.lim.monthlyCap}` : ""}</td>
               <td class="muted">{r.tokens ? fmtTok(r.tokens) : "—"}</td>
-              <td class={r.lim.monthlyUsdCap && r.usd >= (r.lim.monthlyUsdCap ?? 0) ? "u-over" : ""}>{r.usd ? `$${r.usd.toFixed(2)}` : "—"}{r.lim.monthlyUsdCap ? ` / $${r.lim.monthlyUsdCap}` : ""}</td>
+              <td class={r.priced && r.lim.monthlyUsdCap && r.usd >= (r.lim.monthlyUsdCap ?? 0) ? "u-over" : ""}>{!r.priced ? (r.month ? <span class="u-warn" title="参考単価が未登録のため費用を推定できません。実費は提供元の請求をご確認ください。">推定不可</span> : "—") : (<Fragment>{r.usd ? `$${r.usd.toFixed(2)}` : "—"}{r.lim.monthlyUsdCap ? ` / $${r.lim.monthlyUsdCap}` : ""}</Fragment>)}</td>
               <td>{r.p === "workers_ai" ? (
                 <div class="neuron-cell">
                   <span class="neuron-val">{r.neurons ? r.neurons.toLocaleString() : "0"}<small> ニューロン</small></span>
@@ -107,7 +107,7 @@ const kvPct = KV_WRITE_FREE_LIMIT > 0 ? Math.min(100, Math.round((kvWrites / KV_
               ) : <span class="muted">—</span>}</td>
               <td><input class="lim-fq" type="number" min="0" value={r.lim.freeQuota ?? ""} placeholder="—" disabled={!isAdmin} style="width:80px" /></td>
               <td><input class="lim-mc" type="number" min="0" value={r.lim.monthlyCap ?? ""} placeholder="—" disabled={!isAdmin} style="width:80px" /></td>
-              <td><input class="lim-uc" type="number" min="0" step="0.01" value={r.lim.monthlyUsdCap ?? ""} placeholder="—" disabled={!isAdmin} style="width:80px" /></td>
+              <td><input class="lim-uc" type="number" min="0" step="0.01" value={r.lim.monthlyUsdCap ?? ""} placeholder={r.priced ? "—" : "推定不可"} disabled={!isAdmin || !r.priced} title={r.priced ? "" : "参考単価が未登録のため費用上限は使用できません。回数上限で制限してください。"} style="width:80px" /></td>
               <td><select class="lim-oe" disabled={!isAdmin}><option value="pause" selected={r.lim.onExceed !== "switch_free"}>一時停止</option><option value="switch_free" selected={r.lim.onExceed === "switch_free"}>無料(Gemini)へ</option></select></td>
             </tr>
           ))}

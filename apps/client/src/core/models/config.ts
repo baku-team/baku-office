@@ -43,6 +43,13 @@ export function isValidWorkersAiModel(id: string): boolean {
   return WORKERS_AI_MODELS.some((m) => m.id === id);
 }
 
+// provider に参考単価（token課金）が登録されているか。未登録なら費用推定不可＝UIで
+// 「推定不可」を明示し $0（無料）との誤認を避ける（ROADMAP 3-1）。web検索/画像/音声等の
+// 回数・秒数課金や BYOK の任意APIは既定で未登録。
+export function hasPricing(env: Env, provider: string): boolean {
+  return Boolean(resolvePricing(env)[provider]);
+}
+
 // env.MODEL_PRICING（JSON: {"gemini":{"in":0.3,"out":2.5},...}）で provider 単位に上書き。
 // 妥当な非負数のみ採用し、それ以外は既定値を残す。
 export function resolvePricing(env: Env): Record<string, { in: number; out: number }> {
