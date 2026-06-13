@@ -1,6 +1,7 @@
 import type { APIRoute } from "astro";
 import { registerApp, callerFromToken, getApp, BUILTIN_APP_IDS } from "../../../lib/registry.ts";
 import { recordAudit } from "../../../lib/host.ts";
+import { env } from "cloudflare:workers";
 
 export const prerender = false;
 const json = (o: unknown, s = 200) => new Response(JSON.stringify(o), { status: s, headers: { "content-type": "application/json" } });
@@ -9,7 +10,6 @@ const json = (o: unknown, s = 200) => new Response(JSON.stringify(o), { status: 
 // 認証は署名ライセンストークン（他の registry/a2a と同方式）。WHY: 生 licenseId 受理だと ID を1件知るだけで
 // 第三者が任意 definition/permissions を pending 登録できる（なりすまし）。
 export const POST: APIRoute = async ({ request, locals }) => {
-  const env = locals.runtime.env;
   const b = (await request.json().catch(() => ({}))) as { token?: string; app?: { id?: string; name?: string; version?: string; permissions?: string[]; description?: string; category?: string; definition?: unknown } };
   const caller = await callerFromToken(env, b.token);
   if (!caller) return json({ error: "有効なライセンスが必要" }, 401);

@@ -4,6 +4,7 @@ import { getMascot, storeMascot, clearMascot } from "../../lib/mascot.ts";
 import { getTheme, setTheme } from "../../core/theme.ts";
 import { nowSec } from "../../lib/client.ts";
 import { logDiag } from "../../lib/diag.ts";
+import { env } from "cloudflare:workers";
 
 export const prerender = false;
 const json = (o: unknown, s = 200) => new Response(JSON.stringify(o), { status: s, headers: { "content-type": "application/json" } });
@@ -12,7 +13,6 @@ const b64ToBuf = (s: string) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0))
 
 // 相棒画像の配信（ブラウザの <img> 用）。機微情報でないため認証は課さない（同一オリジン配信）。
 export const GET: APIRoute = async ({ locals }) => {
-  const env = locals.runtime.env;
   const m = await getMascot(env).catch(() => null);
   if (!m) return new Response("not found", { status: 404 });
   return new Response(m.buf, { status: 200, headers: { "content-type": m.ct, "cache-control": "public, max-age=600" } });
@@ -20,7 +20,6 @@ export const GET: APIRoute = async ({ locals }) => {
 
 // 生成（Workers AI）/ アップロード / 既定に戻す。管理者(org)のみ。CSRF は middleware の sameOrigin で担保。
 export const POST: APIRoute = async ({ request, locals }) => {
-  const env = locals.runtime.env;
   const ctx = locals.ctx;
   const ses = await getSession(env, request);
   if (!ses || ses.role !== "admin" || ses.ctx !== "org") return json({ error: "権限がありません（管理者のみ）" }, 403);

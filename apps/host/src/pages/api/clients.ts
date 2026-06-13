@@ -2,6 +2,7 @@ import type { APIRoute } from "astro";
 import { getHostSession } from "../../lib/hostauth.ts";
 import { recordAudit } from "../../lib/host.ts";
 import { deleteRepo } from "@baku-office/shared";
+import { env } from "cloudflare:workers";
 
 export const prerender = false;
 const json = (o: unknown, s = 200) => new Response(JSON.stringify(o), { status: s, headers: { "content-type": "application/json" } });
@@ -9,7 +10,6 @@ const json = (o: unknown, s = 200) => new Response(JSON.stringify(o), { status: 
 // クライアント管理（管理者のみ）：プラン／エンタイトルメント／ステータスを手動変更（§13・運用）。
 // エンタイトルメントは次回の統合チェックでクライアントに反映、status=suspended で機能停止（データは保持）。
 export const POST: APIRoute = async ({ request, locals }) => {
-  const env = locals.runtime.env;
   const ses = await getHostSession(env, request);
   if (!ses?.isAdmin) return json({ error: "管理者のみ" }, 403);
   const b = (await request.json().catch(() => ({}))) as { _action?: string; license_id?: string; plan?: string; entitlement?: string; status?: string };

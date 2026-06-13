@@ -1,11 +1,11 @@
 import type { APIRoute } from "astro";
 import { authorizeUrl, providerEnabled, newState, type Provider } from "../../../../lib/oauth.ts";
+import { env } from "cloudflare:workers";
 
 export const prerender = false;
 
 // OAuth開始：state Cookie を発行して各プロバイダの認可画面へ。
 export const GET: APIRoute = async ({ params, url, locals }) => {
-  const env = locals.runtime.env;
   const p = params.provider as Provider;
   if (!["google", "line", "discord"].includes(p)) return new Response("不明なプロバイダ", { status: 404 });
 

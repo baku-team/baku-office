@@ -1,13 +1,13 @@
 import type { APIRoute } from "astro";
 import { getSession, canAccess } from "../../lib/auth.ts";
 import { createMember, updateMember, deleteMember } from "../../lib/membership.ts";
+import { env } from "cloudflare:workers";
 
 export const prerender = false;
 const json = (o: unknown, s = 200) => new Response(JSON.stringify(o), { status: s, headers: { "content-type": "application/json" } });
 
 // 会員管理（Free以上＝全プラン）。編集は admin / accounting（会計担当）。
 export const POST: APIRoute = async ({ request, locals }) => {
-  const env = locals.runtime.env;
   const ses = await getSession(env, request);
   if (!ses || ses.ctx !== "org") return json({ error: "組織ログインが必要" }, 403);
   if (!canAccess(ses.role, "accounting")) return json({ error: "会計担当または管理者のみ" }, 403);

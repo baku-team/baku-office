@@ -1,7 +1,7 @@
 /// <reference path="../.astro/types.d.ts" />
 /// <reference types="astro/client" />
 
-interface Env {
+interface EnvVars {
   DB: D1Database;
   ASSETS: Fetcher;
   SESSION: KVNamespace;
@@ -13,8 +13,13 @@ interface Env {
   GITHUB_TOKEN?: string;         // secret: repo 作成＋Contents 書込
 }
 
-type Runtime = import("@astrojs/cloudflare").Runtime<Env>;
+interface Env extends EnvVars {}
+declare namespace Cloudflare {
+  interface Env extends EnvVars {}
+}
 
 declare namespace App {
-  interface Locals extends Runtime {}
+  interface Locals {
+    cfContext: ExecutionContext;
+  }
 }

@@ -1,13 +1,13 @@
 import type { APIRoute } from "astro";
 import { getSession } from "../../lib/auth.ts";
 import { createCapability, setCapabilityEnabled, deleteCapability } from "../../lib/capabilities.ts";
+import { env } from "cloudflare:workers";
 
 export const prerender = false;
 const json = (o: unknown, s = 200) => new Response(JSON.stringify(o), { status: s, headers: { "content-type": "application/json" } });
 
 // 任意API（能力レジストリ・高度なオプション・管理者のみ）。
 export const POST: APIRoute = async ({ request, locals }) => {
-  const env = locals.runtime.env;
   const ses = await getSession(env, request);
   if (!ses || ses.role !== "admin" || ses.ctx !== "org") return json({ error: "管理者のみ" }, 403);
   const b = (await request.json().catch(() => ({}))) as { _action?: string; id?: string; capability?: string; provider?: string; endpoint?: string; model?: string; api_key?: string; enabled?: boolean };

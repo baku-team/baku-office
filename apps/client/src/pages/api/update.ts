@@ -1,6 +1,7 @@
 import type { APIRoute } from "astro";
 import { getSession } from "../../lib/auth.ts";
 import { hasDeployHook, saveDeployHook, getDeployHook, clearDeployHook, isValidHookUrl } from "../../lib/update.ts";
+import { env } from "cloudflare:workers";
 
 export const prerender = false;
 const json = (o: unknown, s = 200) => new Response(JSON.stringify(o), { status: s, headers: { "content-type": "application/json" } });
@@ -8,14 +9,12 @@ const json = (o: unknown, s = 200) => new Response(JSON.stringify(o), { status: 
 // 自動更新（案①）：Deploy Hook の暗号化保存／状態／削除と、保存済みフックでの再ビルド発火（§3.3-3.4）。
 // 管理者（組織）のみ。フックURLはホストへ送らずアプリKV内に暗号化保持（原則1）。
 export const GET: APIRoute = async ({ locals, request }) => {
-  const env = locals.runtime.env;
   const ses = await getSession(env, request);
   if (!ses || ses.role !== "admin" || ses.ctx !== "org") return json({ error: "管理者のみ" }, 403);
   return json({ configured: await hasDeployHook(env) });
 };
 
 export const POST: APIRoute = async ({ locals, request }) => {
-  const env = locals.runtime.env;
   const ses = await getSession(env, request);
   if (!ses || ses.role !== "admin" || ses.ctx !== "org") return json({ error: "管理者のみ" }, 403);
   const b = (await request.json().catch(() => ({}))) as { _action?: string; hookUrl?: string };

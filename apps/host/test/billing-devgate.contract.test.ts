@@ -4,6 +4,15 @@ import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
 import { GET as devConfirm } from "../src/pages/api/billing/dev-confirm.ts";
 import { POST as checkout } from "../src/pages/api/billing/checkout.ts";
+// v13：ルートは import { env } from "cloudflare:workers" で env を読む。テストは同一スタブ(_cf-hooks.mjs で差替)を
+// ケースごとに中身を入れ替えて注入する。
+import { env as cfEnv } from "cloudflare:workers";
+
+// スタブ env を fake で置き換える（前ケースの残留をクリア）。
+function setEnv(e: Record<string, unknown>) {
+  for (const k of Object.keys(cfEnv as Record<string, unknown>)) delete (cfEnv as Record<string, unknown>)[k];
+  Object.assign(cfEnv as Record<string, unknown>, e);
+}
 
 function fakeEnv(extra: Record<string, unknown>, sqlite?: DatabaseSync) {
   const db = sqlite && {
@@ -19,11 +28,14 @@ function fakeEnv(extra: Record<string, unknown>, sqlite?: DatabaseSync) {
   };
   return { DB: db, ...extra } as never;
 }
-const locals = (env: unknown) => ({ runtime: { env } }) as never;
-const devUrl = (env: unknown) =>
-  devConfirm({ url: new URL("https://host/api/billing/dev-confirm?license_id=L1&plan=plus"), locals: locals(env) } as never);
-const checkoutReq = (env: unknown) =>
-  checkout({ request: new Request("https://host/api/billing/checkout", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ licenseId: "L1", plan: "plus" }) }), locals: locals(env) } as never);
+const devUrl = (env: Record<string, unknown>) => {
+  setEnv(env);
+  return devConfirm({ url: new URL("https://host/api/billing/dev-confirm?license_id=L1&plan=plus"), locals: {} } as never);
+};
+const checkoutReq = (env: Record<string, unknown>) => {
+  setEnv(env);
+  return checkout({ request: new Request("https://host/api/billing/checkout", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ licenseId: "L1", plan: "plus" }) }), locals: {} } as never);
+};
 
 test("dev-confirm：ENV未設定（本番）かつ Stripe未設定 → 403（fail-closed）", async () => {
   const r = await devUrl(fakeEnv({}));

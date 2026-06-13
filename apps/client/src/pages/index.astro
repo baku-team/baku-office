@@ -1,9 +1,9 @@
 ---
+import { env } from "cloudflare:workers";
 export const prerender = false;
 import App from "../layouts/App.astro";
 import Slot from "../components/Slot.astro";
 import { planLabel } from "@baku-office/shared";
-const env = Astro.locals.runtime.env;
 const { getSession } = await import("../lib/auth.ts");
 const ses = await getSession(env, Astro.request);
 if (!ses) return Astro.redirect("/login", 302);
@@ -26,7 +26,7 @@ const ym = new Date().toISOString().slice(0, 7);
 
 // ホスト疎通＋テレメトリ＋entitlement/notices キャッシュ更新は描画をブロックせず背景実行（体感速度の要）。
 const _apps = appCatalog().filter((a) => instSet.has(a.id)).map((a) => ({ id: a.id, version: a.version }));
-try { Astro.locals.runtime.ctx.waitUntil(pollHost(env, Astro.url.origin, _apps).catch(() => {})); }
+try { Astro.locals.cfContext.waitUntil(pollHost(env, Astro.url.origin, _apps).catch(() => {})); }
 catch { pollHost(env, Astro.url.origin, _apps).catch(() => {}); }
 
 // 軽量データは常に並列取得。重い KPI（残高・当月収支・承認待ち・ストレージ）は短期キャッシュ。
@@ -63,7 +63,7 @@ if (!kpi) {
   kpi = { balance: balanceRow?.b ?? 0, monthIncome: mi, monthExpense: me, pending, storage: st, at: nowSec() };
   const blob = JSON.stringify(kpi);
   // KV書き込み（kpi_cache）は失敗しても描画を止めない。上限超過時に put が同期例外/拒否のどちらでも500にしない。
-  try { Astro.locals.runtime.ctx.waitUntil(env.LICENSE.put("kpi_cache", blob).catch(() => {})); } catch { /* KV上限など：無視 */ }
+  try { Astro.locals.cfContext.waitUntil(env.LICENSE.put("kpi_cache", blob).catch(() => {})); } catch { /* KV上限など：無視 */ }
 }
 const balance = kpi.balance;
 const monthIncome = kpi.monthIncome, monthExpense = kpi.monthExpense;

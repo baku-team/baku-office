@@ -7,6 +7,8 @@ export default defineConfig({
   adapter: cloudflare({
     // ローカルdevで wrangler.jsonc のバインディングをエミュレート。
     platformProxy: { enabled: true, configPath: "wrangler.jsonc" },
+    // v13 既定の cloudflare-binding（IMAGES バインディング必須）は使わない。astro:assets 未使用のため compile に固定。
+    imageService: "compile",
   }),
   // 体感速度：リンクにホバー/タップした時点で次ページを先読み。
   prefetch: { prefetchAll: true, defaultStrategy: "hover" },

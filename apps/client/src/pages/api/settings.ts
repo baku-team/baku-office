@@ -12,13 +12,13 @@ import { setCustomDomain } from "../../core/custom-domain.ts";
 import { nowSec } from "../../lib/accounting.ts";
 import { appCatalog, installApp, uninstallApp, installedAppIds } from "../../core/apps.ts";
 import { fetchAndInstall, listExternalApps, uninstallExternal, listDrafts, submitDraft, deleteDraft } from "../../lib/external-apps.ts";
+import { env } from "cloudflare:workers";
 
 export const prerender = false;
 const json = (o: unknown, s = 200) => new Response(JSON.stringify(o), { status: s, headers: { "content-type": "application/json" } });
 
 // 高度なオプションの各種設定（管理者のみ）。
 export const POST: APIRoute = async ({ request, locals }) => {
-  const env = locals.runtime.env;
   const ses = await getSession(env, request);
   if (!ses || ses.role !== "admin" || ses.ctx !== "org") return json({ error: "管理者のみ" }, 403);
   const b = (await request.json().catch(() => ({}))) as { _action?: string; mb?: number; days?: number; engine?: string; prompt?: string; webhook?: string; limits?: Record<string, number>; parts?: string[]; theme?: unknown; nav?: { hidden?: string[]; labels?: Record<string, string>; order?: string[] }; appId?: string; draftId?: string; layout?: { order?: string[]; hidden?: string[] }; domain?: string; workersPaid?: boolean; on?: boolean; cfToken?: string; cfAccount?: string; ghToken?: string; ghRepo?: string };

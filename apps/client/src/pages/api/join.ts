@@ -1,6 +1,7 @@
 import type { APIRoute } from "astro";
 import { joinWithInvite } from "../../lib/users.ts";
 import { verifyPending } from "../../lib/auth.ts";
+import { env } from "cloudflare:workers";
 
 export const prerender = false;
 const json = (o: unknown, s = 200, headers: Record<string, string> = {}) =>
@@ -8,7 +9,6 @@ const json = (o: unknown, s = 200, headers: Record<string, string> = {}) =>
 
 // 招待コードで参加（§6.3）。OAuth経由（pending_oauth Cookie）= LINE/Discord、なければ local(id/pass)。
 export const POST: APIRoute = async ({ request, locals }) => {
-  const env = locals.runtime.env;
   const b = (await request.json().catch(() => ({}))) as { code?: string; name?: string; loginId?: string; password?: string };
   if (!b.code || !b.name) return json({ error: "code と name が必要" }, 400);
 

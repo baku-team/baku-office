@@ -1,5 +1,6 @@
 import type { APIRoute } from "astro";
 import { createMember } from "../../../lib/membership.ts";
+import { env } from "cloudflare:workers";
 
 export const prerender = false;
 const json = (o: unknown, s = 200) => new Response(JSON.stringify(o), { status: s, headers: { "content-type": "application/json" } });
@@ -7,7 +8,6 @@ const json = (o: unknown, s = 200) => new Response(JSON.stringify(o), { status: 
 // 公開HPの会員申込（認証不要）。会員管理に未払いで追加（現金/手動運用の既定）。
 // 公開フォームを show_join のページが出している前提。スパム対策は IP レート制限（無料枠KV）。将来 Turnstile。
 export const POST: APIRoute = async ({ request, locals }) => {
-  const env = locals.runtime.env;
   // IPレート制限（P2-4）：公開フォーム経由の会員レコード量産を抑止（apply.ts と同様の方式）。
   const ip = request.headers.get("cf-connecting-ip") ?? "unknown";
   const rlKey = `joinrl:${ip}`;

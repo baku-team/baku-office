@@ -1,12 +1,12 @@
 import type { APIRoute } from "astro";
 import { getSession } from "../../lib/auth.ts";
 import { getFileForSession } from "../../lib/storage.ts";
+import { env } from "cloudflare:workers";
 
 export const prerender = false;
 
 // ファイルダウンロード（ログイン必須＋所有者/ロール検査・P0-1）。
 export const GET: APIRoute = async ({ params, request, locals }) => {
-  const env = locals.runtime.env;
   const ses = await getSession(env, request);
   if (!ses) return new Response("ログインが必要", { status: 401 });
   const id = params.id;

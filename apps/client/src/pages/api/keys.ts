@@ -1,6 +1,7 @@
 import type { APIRoute } from "astro";
 import { saveApiKey, hasApiKey, validateApiKey } from "../../lib/client.ts";
 import { requireOrgAdmin } from "../../lib/auth.ts";
+import { env } from "cloudflare:workers";
 
 export const prerender = false;
 
@@ -12,7 +13,6 @@ type Field = (typeof FIELDS)[number];
 
 // GET：各キーの設定状態（マスク。値は返さない）。
 export const GET: APIRoute = async ({ request, locals }) => {
-  const env = locals.runtime.env;
   if (!(await requireOrgAdmin(env, request))) return json({ error: "管理者のみ" }, 403);
   const status: Record<string, boolean> = {};
   for (const f of FIELDS) status[f] = await hasApiKey(env, f);
@@ -21,7 +21,6 @@ export const GET: APIRoute = async ({ request, locals }) => {
 
 // POST：保存時バリデーション → AES-GCM 暗号化して KV 保存（§7.2/10.3）。
 export const POST: APIRoute = async ({ request, locals }) => {
-  const env = locals.runtime.env;
   if (!(await requireOrgAdmin(env, request))) return json({ error: "管理者のみ" }, 403);
   const b = (await request.json().catch(() => ({}))) as Partial<Record<Field, string>>;
   const result: Record<string, { ok: boolean; detail?: string }> = {};

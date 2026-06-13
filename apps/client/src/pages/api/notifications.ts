@@ -1,13 +1,14 @@
 import type { APIRoute } from "astro";
 import { getSession } from "../../lib/auth.ts";
 import { listNotifications, countUnread, markNotificationsRead } from "../../lib/notifications.ts";
+import { env } from "cloudflare:workers";
 
 export const prerender = false;
 const json = (o: unknown, s = 200) => new Response(JSON.stringify(o), { status: s, headers: { "content-type": "application/json" } });
 
 // アプリ内通知の取得（GET）／既読化（POST { _action:"read", id? }）。owner=ログインユーザーの uid（組織管理者は "org"）。
 export const GET: APIRoute = async ({ request, locals }) => {
-  const ses = await getSession(locals.runtime.env, request);
+  const ses = await getSession(env, request);
   if (!ses) return json({ error: "ログインが必要" }, 401);
   const items = await listNotifications(locals.ctx, ses.uid, { limit: 30 });
   const unread = await countUnread(locals.ctx, ses.uid);
@@ -15,7 +16,7 @@ export const GET: APIRoute = async ({ request, locals }) => {
 };
 
 export const POST: APIRoute = async ({ request, locals }) => {
-  const ses = await getSession(locals.runtime.env, request);
+  const ses = await getSession(env, request);
   if (!ses) return json({ error: "ログインが必要" }, 401);
   const b = (await request.json().catch(() => ({}))) as { _action?: string; id?: string };
   if (b._action === "read") {

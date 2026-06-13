@@ -1,9 +1,9 @@
 ---
+import { env } from "cloudflare:workers";
 export const prerender = false;
 import { getSession } from "../lib/auth.ts";
 import { HOST_TERMS, HOST_PRIVACY, IMPORTANT_NOTES, CONSENT_VERSION, needsConsent } from "../lib/consent.ts";
 
-const env = Astro.locals.runtime.env;
 const ses = await getSession(env, Astro.request);
 // 管理者以外がURL直打ちした場合はトップへ（同意は団体管理者の責務）。
 if (!ses || ses.ctx !== "org" || ses.role !== "admin") return Astro.redirect("/", 302);

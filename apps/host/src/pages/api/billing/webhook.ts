@@ -1,12 +1,12 @@
 import type { APIRoute } from "astro";
 import { verifyStripeSig, activateEntitlement } from "../../../lib/billing.ts";
 import type { Plan } from "@baku-office/shared";
+import { env } from "cloudflare:workers";
 
 export const prerender = false;
 
 // Stripe Webhook（§2.3：入金確認でエンタイトルメント昇格）。署名検証必須。
 export const POST: APIRoute = async ({ request, locals }) => {
-  const env = locals.runtime.env;
   if (!env.STRIPE_WEBHOOK_SECRET) return new Response("webhook未設定", { status: 400 });
   const payload = await request.text();
   const sig = request.headers.get("stripe-signature") ?? "";

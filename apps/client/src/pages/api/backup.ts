@@ -4,6 +4,7 @@ import { buildBackup, backupFileName, recordBackupDone, restoreBackup, getBackup
 import { uploadBufferToDrive, driveConnected } from "../../lib/drive.ts";
 import { audit } from "../../lib/storage.ts";
 import { logDiag } from "../../lib/diag.ts";
+import { env } from "cloudflare:workers";
 
 export const prerender = false;
 const json = (o: unknown, s = 200) => new Response(JSON.stringify(o), { status: s, headers: { "content-type": "application/json" } });
@@ -12,7 +13,6 @@ const asMode = (m: unknown): BackupMode => (m === "raw" ? "raw" : "decrypted");
 
 // ローカルダウンロード：アーカイブを添付ファイルとして返す（GET＝状態変更なし扱い。最終実行のみ記録）。
 export const GET: APIRoute = async ({ request, locals }) => {
-  const env = locals.runtime.env;
   const ses = await getSession(env, request);
   if (!isAdminOrg(ses)) return json({ error: "権限がありません（管理者のみ）" }, 403);
   const mode = asMode(new URL(request.url).searchParams.get("mode"));
@@ -35,7 +35,6 @@ export const GET: APIRoute = async ({ request, locals }) => {
 };
 
 export const POST: APIRoute = async ({ request, locals }) => {
-  const env = locals.runtime.env;
   const ses = await getSession(env, request);
   if (!isAdminOrg(ses)) return json({ error: "権限がありません（管理者のみ）" }, 403);
   const b = (await request.json().catch(() => ({}))) as { _action?: string; mode?: BackupMode; enabled?: boolean; archive?: unknown };

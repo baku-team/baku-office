@@ -1,7 +1,7 @@
 ---
+import { env } from "cloudflare:workers";
 export const prerender = false;
 import Host from "../layouts/Host.astro";
-const env = Astro.locals.runtime.env;
 let count = 0;
 try { count = (await env.DB.prepare("SELECT COUNT(*) AS n FROM licenses").first<{ n: number }>())?.n ?? 0; } catch { /* 未マイグレ */ }
 const applyUrl = env.APPLY_URL ?? "";

@@ -2,6 +2,7 @@ import type { APIRoute } from "astro";
 import { activateEntitlement, stripeEnabled } from "../../../lib/billing.ts";
 import { isDevEnv } from "../../../lib/hostauth.ts";
 import type { Plan } from "@baku-office/shared";
+import { env } from "cloudflare:workers";
 
 export const prerender = false;
 
@@ -9,7 +10,6 @@ export const prerender = false;
 // P0-2: ENV=development のときだけ有効。本番（ENV未設定/!=development）は Stripe 設定有無に関わらず 403＝fail-closed。
 // WHY: 本番で Stripe secret 未投入のまま公開されると、無認証 GET でライセンスID既知者が昇格できてしまうため。
 export const GET: APIRoute = async ({ url, locals }) => {
-  const env = locals.runtime.env;
   if (!isDevEnv(env)) return new Response("本番ではdev-confirmは無効（Stripe Webhookで昇格）", { status: 403 });
   if (stripeEnabled(env)) return new Response("Stripe設定時はdev-confirmは無効（Stripe Webhookで昇格）", { status: 403 });
   const licenseId = url.searchParams.get("license_id");

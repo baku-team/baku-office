@@ -1,7 +1,7 @@
 /// <reference path="../.astro/types.d.ts" />
 /// <reference types="astro/client" />
 
-interface Env {
+interface EnvVars {
   DB: D1Database;
   LICENSE: KVNamespace;
   MEDIA?: KVNamespace; // 専用ファイルKV（任意）。無ければ LICENSE を流用（配布は単一KV）。
@@ -46,11 +46,17 @@ interface Env {
   AI_MAX_JOB_USD?: string;
 }
 
-type Runtime = import("@astrojs/cloudflare").Runtime<Env>;
+// env: Env（関数引数の型）と cloudflare:workers の import { env }（Cloudflare.Env）を同一フィールドに揃える。
+interface Env extends EnvVars {}
+declare namespace Cloudflare {
+  interface Env extends EnvVars {}
+}
 
 declare namespace App {
-  interface Locals extends Runtime {
+  interface Locals {
     // ポータブルコアの実行コンテキスト（middleware で注入・移植性アーキ §7）。
     ctx: import("./core/ports").Ctx;
+    // @astrojs/cloudflare v13：実行コンテキスト（旧 runtime.ctx の後継。waitUntil 等）。
+    cfContext: ExecutionContext;
   }
 }

@@ -1,5 +1,6 @@
 import type { APIRoute } from "astro";
 import { getSession } from "../../lib/auth.ts";
+import { env } from "cloudflare:workers";
 
 export const prerender = false;
 const json = (o: unknown, s = 200) => new Response(JSON.stringify(o), { status: s, headers: { "content-type": "application/json", "cache-control": "no-store" } });
@@ -8,7 +9,6 @@ const trunc = (s: unknown) => { const t = String(s ?? ""); return t.length > 28 
 // バックグラウンド稼働中のAI/エージェントジョブ一覧（全ページ共通のマスコット表示用）。
 // 単一テナント前提。prompt 等の本文は自分のジョブのみ表示し、他者ジョブは種別のみ（プライバシー）。
 export const GET: APIRoute = async ({ request, locals }) => {
-  const env = locals.runtime.env;
   const ses = await getSession(env, request);
   if (!ses) return json({ active: 0, tasks: [] });
   const tasks: { kind: string; status: string; label: string; mine: boolean }[] = [];

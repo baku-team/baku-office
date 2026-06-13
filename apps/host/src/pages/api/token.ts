@@ -3,13 +3,13 @@ import { nowSec, issueLicenseToken, isSafeDeployUrl } from "../../lib/host.ts";
 import { isDevEnv } from "../../lib/hostauth.ts";
 import { deleteRepo } from "@baku-office/shared";
 import type { Entitlement } from "@baku-office/shared";
+import { env } from "cloudflare:workers";
 
 export const prerender = false;
 
 // コード交換（§4手順4）：アクティベーションコード → 署名済みライセンストークン。
 // dev 経路（/api/activate のコードを交換）。本番は Google relay（activate-by-email）のみ＝ENV で塞ぐ。
 export const POST: APIRoute = async ({ request, locals }) => {
-  const env = locals.runtime.env;
   if (!isDevEnv(env)) return json({ error: "本番は Google ログインで活性化してください" }, 403);
   const b = (await request.json().catch(() => ({}))) as { code?: string; deployUrl?: string };
   if (!b.code) return json({ error: "code が必要" }, 400);

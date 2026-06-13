@@ -3,13 +3,13 @@ import { getSession } from "../../lib/auth.ts";
 import { createSkill, setSkillEnabled, deleteSkill, generateSkill } from "../../lib/skills.ts";
 import { cachedEntitlement } from "../../lib/client.ts";
 import { atLeast } from "@baku-office/shared";
+import { env } from "cloudflare:workers";
 
 export const prerender = false;
 const json = (o: unknown, s = 200) => new Response(JSON.stringify(o), { status: s, headers: { "content-type": "application/json" } });
 
 // Agent Skills 管理（高度なオプション・管理者のみ）。任意コード実行を含むため承認制。
 export const POST: APIRoute = async ({ request, locals }) => {
-  const env = locals.runtime.env;
   const ses = await getSession(env, request);
   if (!ses || ses.role !== "admin" || ses.ctx !== "org") return json({ error: "管理者のみ" }, 403);
   const b = (await request.json().catch(() => ({}))) as { _action?: string; id?: string; name?: string; description?: string; skill_md?: string; mode?: string; enabled?: boolean; request?: string };

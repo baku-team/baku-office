@@ -7,6 +7,7 @@ import { needsConsent } from "./lib/consent.ts";
 import { buildCtx } from "./core/ctx.ts";
 import { resolveError, appendCode } from "./lib/errors.ts";
 import { logDiag } from "./lib/diag.ts";
+import { env } from "cloudflare:workers";
 
 // ログイン誘導を素通りさせる静的アセットの拡張子 allowlist。
 // WHY: 旧実装は「`.` を含む全パス」を exempt にしており /accounting/export.csv 等の動的ルートまで
@@ -65,7 +66,6 @@ function buildErrorResponse(status: number, code: string, message: string, pathn
 // ライセンス未保持なら /activate へ誘導（§4）。アプリ全体の前段でスキーマ自動適用も行う。
 export const onRequest = defineMiddleware(async (context, next) => {
   const { pathname } = context.url;
-  const env = context.locals.runtime.env;
   try {
 
   // ポータブルコアの実行コンテキストを注入（移植性アーキ §7）。以後 ctx.db/storage/ai/agent 経由で呼ぶ。

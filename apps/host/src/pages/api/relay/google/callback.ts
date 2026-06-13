@@ -1,6 +1,7 @@
 import type { APIRoute } from "astro";
 import { signEnvelope, importSignKey } from "@baku-office/shared";
 import { signingJwk, nowSec } from "../../../../lib/host.ts";
+import { env } from "cloudflare:workers";
 
 export const prerender = false;
 const redir = (loc: string) => new Response(null, { status: 302, headers: { location: loc } });
@@ -8,7 +9,6 @@ const redir = (loc: string) => new Response(null, { status: 302, headers: { loca
 // ログイン中継のコールバック：当社の Google OAuth で認証し、{sub,email,name} を Ed25519 署名して
 // クライアントの relay 受け口へ戻す。クライアントは公開鍵（VERIFY_PUBLIC_JWK）で検証してログインする。
 export const GET: APIRoute = async ({ url, locals }) => {
-  const env = locals.runtime.env;
   const code = url.searchParams.get("code");
   const stateRaw = url.searchParams.get("state");
   if (!code || !stateRaw) return new Response("code/state不正", { status: 400 });

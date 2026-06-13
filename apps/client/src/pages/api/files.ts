@@ -1,12 +1,12 @@
 import type { APIRoute } from "astro";
 import { getSession } from "../../lib/auth.ts";
 import { saveFile, softDeleteFileForSession, audit } from "../../lib/storage.ts";
+import { env } from "cloudflare:workers";
 
 export const prerender = false;
 const json = (o: unknown, s = 200) => new Response(JSON.stringify(o), { status: s, headers: { "content-type": "application/json" } });
 
 export const POST: APIRoute = async ({ request, locals }) => {
-  const env = locals.runtime.env;
   const ses = await getSession(env, request);
   if (!ses) return json({ error: "ログインが必要" }, 401);
 

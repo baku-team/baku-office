@@ -7,17 +7,17 @@
     "build": "astro build",
     "preview": "astro build && wrangler dev",
     "deploy": "astro build && wrangler deploy",
-    "deploy:prod": "astro build && wrangler deploy --env production",
+    "deploy:prod": "CLOUDFLARE_ENV=production astro build && wrangler deploy",
     "release": "node scripts/build-release.mjs",
     "typecheck": "astro check",
     "test": "node --experimental-strip-types --disable-warning=ExperimentalWarning --test test/*.test.ts"
   },
   "dependencies": {
     "@baku-office/shared": "*",
-    "astro": "^5"
+    "astro": "^6"
   },
   "devDependencies": {
-    "@astrojs/cloudflare": "^12",
+    "@astrojs/cloudflare": "^13",
     "@astrojs/check": "^0.9.4",
     "@cloudflare/workers-types": "^4",
     "typescript": "^5.9.3",

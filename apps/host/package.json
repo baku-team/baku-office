@@ -8,14 +8,14 @@
     "preview": "astro build && wrangler dev",
     "deploy": "astro build && wrangler deploy",
     "typecheck": "astro check",
-    "test": "node --experimental-strip-types --disable-warning=ExperimentalWarning --test test/*.test.ts"
+    "test": "node --import ./test/_cf-register.mjs --experimental-strip-types --disable-warning=ExperimentalWarning --test test/*.test.ts"
   },
   "dependencies": {
     "@baku-office/shared": "*",
-    "astro": "^5"
+    "astro": "^6"
   },
   "devDependencies": {
-    "@astrojs/cloudflare": "^12",
+    "@astrojs/cloudflare": "^13",
     "@astrojs/check": "^0.9.4",
     "@cloudflare/workers-types": "^4",
     "typescript": "^5.9.3",

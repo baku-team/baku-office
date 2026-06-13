@@ -3,7 +3,7 @@
   // クライアントアプリ（顧客の単一Worker）。Astro静的アセット＋API同居（設計書§3.4）。
   // top-level＝開発/動作確認（amber-links.jp）。env.production＝本番自社用（baku-llc.co.jp）。
   "name": "baku-office-app",
-  "main": "./dist/_worker.js/index.js",
+  "main": "@astrojs/cloudflare/entrypoints/server",
   "compatibility_date": "2025-04-01",
   "compatibility_flags": ["nodejs_compat"],
   "assets": { "binding": "ASSETS", "directory": "./dist" },
@@ -18,8 +18,9 @@
     { "binding": "MEDIA", "id": "e4a71bef0d99446a97df9d771a7d9768" },
     { "binding": "SESSION", "id": "bd3d1d9642514b30ad5d79bdd4baf9ff" }
   ],
-  // Workers AI（マスコット画像生成・将来のローカルAI）。アカウント単位のため id 不要。
-  "ai": { "binding": "AI" },
+  // Workers AI（マスコット画像生成・将来のローカルAI）は env.production のみで宣言する。
+  // WHY: AI は remote 専用バインディング＝top-level に置くと astro check/build が CFへ remote 接続を試み、
+  //   無認証・非対話の CI で失敗する。本番ビルドは CLOUDFLARE_ENV=production で env.production(AI有)を読む。
   "vars": {
     "HOST_BASE_URL": "https://baku-office-portal.baku-027.workers.dev"
   },

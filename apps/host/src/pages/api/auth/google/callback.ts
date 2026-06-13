@@ -1,10 +1,10 @@
 import type { APIRoute } from "astro";
 import { googleExchange, isAdminEmail, makeCookie, sessionExp } from "../../../../lib/hostauth.ts";
+import { env } from "cloudflare:workers";
 
 export const prerender = false;
 
 export const GET: APIRoute = async ({ url, request, locals }) => {
-  const env = locals.runtime.env;
   const code = url.searchParams.get("code");
   const state = url.searchParams.get("state");
   const cookieState = /host_oauth_state=([^;]+)/.exec(request.headers.get("cookie") ?? "")?.[1];

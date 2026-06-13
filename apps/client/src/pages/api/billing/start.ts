@@ -1,13 +1,13 @@
 import type { APIRoute } from "astro";
 import { getSession } from "../../../lib/auth.ts";
 import { getLicenseId, hostFetch } from "../../../lib/client.ts";
+import { env } from "cloudflare:workers";
 
 export const prerender = false;
 const json = (o: unknown, s = 200) => new Response(JSON.stringify(o), { status: s, headers: { "content-type": "application/json" } });
 
 // アップグレード開始：licenseId を server-side で添えて host の checkout を呼ぶ（§2.4）。
 export const POST: APIRoute = async ({ request, locals }) => {
-  const env = locals.runtime.env;
   const ses = await getSession(env, request);
   if (!ses || ses.role !== "admin" || ses.ctx !== "org") return json({ error: "管理者のみ" }, 403);
   const b = (await request.json().catch(() => ({}))) as { plan?: string };

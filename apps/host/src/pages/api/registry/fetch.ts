@@ -1,13 +1,13 @@
 import type { APIRoute } from "astro";
 import { getApp, signAppPackage, callerFromToken, recordDownload } from "../../../lib/registry.ts";
 import { atLeast, type Entitlement } from "@baku-office/shared";
+import { env } from "cloudflare:workers";
 
 export const prerender = false;
 const json = (o: unknown, s = 200) => new Response(JSON.stringify(o), { status: s, headers: { "content-type": "application/json" } });
 
 // 署名付きアプリ取り込み（token必須）。承認済み＋DL可能な最低プラン充足のみ。DL を記録。
 export const POST: APIRoute = async ({ request, locals }) => {
-  const env = locals.runtime.env;
   const b = (await request.json().catch(() => ({}))) as { token?: string; id?: string };
   const caller = await callerFromToken(env, b.token);
   if (!caller) return json({ error: "有効なライセンスが必要" }, 401);

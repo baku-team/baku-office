@@ -2,6 +2,7 @@ import type { APIRoute } from "astro";
 import { getApiKey } from "../../../lib/client.ts";
 import { nowSec } from "../../../lib/accounting.ts";
 import { verifyStripeSig } from "@baku-office/shared"; // §5：署名検証は shared に一本化
+import { env } from "cloudflare:workers";
 
 export const prerender = false;
 
@@ -9,7 +10,6 @@ export const prerender = false;
 // checkout.session.completed→該当会員(stripe_customer一致)を fee_status=paid、
 // customer.subscription.deleted→fee_status=withdrawn に更新する。
 export const POST: APIRoute = async ({ request, locals }) => {
-  const env = locals.runtime.env;
   const secret = await getApiKey(env, "stripe_webhook");
   if (!secret) return new Response("Stripe未設定（現金/手動運用）", { status: 400 });
 

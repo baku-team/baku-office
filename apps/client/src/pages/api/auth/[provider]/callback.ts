@@ -2,6 +2,7 @@ import type { APIRoute } from "astro";
 import { exchange, type Provider } from "../../../../lib/oauth.ts";
 import { makeSessionCookie, sessionExp, signPending } from "../../../../lib/auth.ts";
 import type { Role } from "@baku-office/shared";
+import { env } from "cloudflare:workers";
 
 export const prerender = false;
 const redir = (loc: string, cookie?: string) =>
@@ -9,7 +10,6 @@ const redir = (loc: string, cookie?: string) =>
 
 // OAuthコールバック：state検証 → コード交換 →（組織=Google管理者 / 個人=LINE/Discord）セッション確立。
 export const GET: APIRoute = async ({ params, url, request, locals }) => {
-  const env = locals.runtime.env;
   const p = params.provider as Provider;
   const code = url.searchParams.get("code");
   const state = url.searchParams.get("state");

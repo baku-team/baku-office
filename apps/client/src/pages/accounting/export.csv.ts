@@ -1,12 +1,12 @@
 import type { APIRoute } from "astro";
 import { currentPeriod } from "../../lib/accounting.ts";
 import { getSession, canAccess } from "../../lib/auth.ts";
+import { env } from "cloudflare:workers";
 
 export const prerender = false;
 
 // 取引明細のCSV出力（§8.1：出力はPDF/CSV）。Excelで開けるよう BOM 付き UTF-8。
 export const GET: APIRoute = async ({ request, locals }) => {
-  const env = locals.runtime.env;
   // 摘要に氏名・取引先等のPIIが入り得るため閲覧権限を必須化（admin / accounting のみ・P0-1）。
   // 本ルートはパスに "." を含み旧middlewareのログイン誘導を素通りしていた＝ルート内で必ず認可する。
   const ses = await getSession(env, request);

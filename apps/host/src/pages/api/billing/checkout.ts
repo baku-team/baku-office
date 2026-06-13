@@ -2,6 +2,7 @@ import type { APIRoute } from "astro";
 import { createCheckout, stripeEnabled } from "../../../lib/billing.ts";
 import { isDevEnv } from "../../../lib/hostauth.ts";
 import type { Plan } from "@baku-office/shared";
+import { env } from "cloudflare:workers";
 
 export const prerender = false;
 const json = (o: unknown, s = 200) => new Response(JSON.stringify(o), { status: s, headers: { "content-type": "application/json" } });
@@ -9,7 +10,6 @@ const json = (o: unknown, s = 200) => new Response(JSON.stringify(o), { status: 
 // アップグレード起点（§2.4）：licenseId＋plan → Stripe Checkout URL。
 // Stripe未設定のdevでは dev-confirm URL（入金シミュレート）を返す。
 export const POST: APIRoute = async ({ request, locals }) => {
-  const env = locals.runtime.env;
   const b = (await request.json().catch(() => ({}))) as { licenseId?: string; plan?: Plan; returnUrl?: string };
   if (!b.licenseId || !["plus", "pro"].includes(b.plan ?? "")) return json({ error: "licenseId と plan(plus/pro) が必要" }, 400);
 

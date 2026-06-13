@@ -1,13 +1,13 @@
 import type { APIRoute } from "astro";
 import { getSession } from "../../lib/auth.ts";
 import { listSessions, createSession, deleteSession, getMessages, ownedSession } from "../../lib/chat-sessions.ts";
+import { env } from "cloudflare:workers";
 
 export const prerender = false;
 const json = (o: unknown, s = 200) => new Response(JSON.stringify(o), { status: s, headers: { "content-type": "application/json" } });
 
 // チャットのセッション一覧/メッセージ取得（GET）と 作成/削除（POST）。owner スコープ。
 export const GET: APIRoute = async ({ request, url, locals }) => {
-  const env = locals.runtime.env;
   const ses = await getSession(env, request);
   if (!ses) return json({ error: "ログインが必要" }, 401);
   const id = url.searchParams.get("id");
@@ -19,7 +19,6 @@ export const GET: APIRoute = async ({ request, url, locals }) => {
 };
 
 export const POST: APIRoute = async ({ request, locals }) => {
-  const env = locals.runtime.env;
   const ses = await getSession(env, request);
   if (!ses) return json({ error: "ログインが必要" }, 401);
   const b = (await request.json().catch(() => ({}))) as { _action?: string; id?: string; model?: string };
