@@ -71,7 +71,7 @@ export async function googleConfigured(env: Env): Promise<boolean> {
   return !!(await clientId(env)) && !!(await clientSecret(env));
 }
 // 付与グループからスコープ文字列を作る（SA/OAuth 共通）。空なら非Restrictedの既定。
-async function grantedScopeString(env: Env): Promise<string> {
+export async function grantedScopeString(env: Env): Promise<string> {
   const groups = await grantedGroups(env);
   return scopesFor(groups.length ? groups : DEFAULT_GROUPS);
 }
