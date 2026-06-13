@@ -7,10 +7,10 @@ const code = Astro.url.searchParams.get("code") ?? "";
   <h1 style="margin-top:1rem">組織に参加</h1>
   <p class="muted">招待コードで参加します。登録後は<strong>管理者の承認</strong>で利用開始（§6.3）。</p>
   <div class="card">
-    <div class="field"><label>招待コード</label><input id="code" value={code} /></div>
-    <div class="field"><label>氏名・役職</label><input id="name" placeholder="例：山田太郎 / 会計" /></div>
-    <div class="field"><label>ログインID</label><input id="lid" placeholder="半角" /></div>
-    <div class="field"><label>パスワード</label><input id="pw" type="password" /></div>
+    <div class="field"><label for="code">招待コード</label><input id="code" value={code} /></div>
+    <div class="field"><label for="name">氏名・役職</label><input id="name" placeholder="例：山田太郎 / 会計" /></div>
+    <div class="field"><label for="lid">ログインID</label><input id="lid" placeholder="半角" /></div>
+    <div class="field"><label for="pw">パスワード</label><input id="pw" type="password" /></div>
     <button class="btn btn-primary" id="join">参加申請する</button>
   </div>
   <script slot="scripts" is:inline>
