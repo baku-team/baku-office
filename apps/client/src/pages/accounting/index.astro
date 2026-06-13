@@ -150,6 +150,22 @@ const closureRows = closuresRaw.map((c) => {
     </details>
   </div>
 
+  {isOrgAdmin && (
+    <details class="adv" style="margin:.6rem 0">
+      <summary>明細を取り込む（銀行・カード・レジのCSV）</summary>
+      <div class="card">
+        <p class="muted" style="font-size:.88rem">銀行・クレジットカード・レジ（スマレジ等）が書き出した明細CSVを取り込み、手入力なしで記録します。1行目に見出し（日付／内容／金額、または 入金・出金）がある形式に対応します。まず「内容を確認」で中身を見てから取り込めます。取り込んだ明細は科目「口座取込（要確認）」に入るので、あとで分類を見直せます。</p>
+        <div class="row">
+          <div style="flex:1"><label for="imp-wallet">取り込み先の口座</label><select id="imp-wallet">{wallets.map((w)=>(<option value={w.id}>{w.name}</option>))}</select></div>
+          <div style="flex:0 0 auto;align-self:flex-end"><input id="imp-file" type="file" accept=".csv,text/csv" aria-label="明細CSVファイル" /></div>
+        </div>
+        <div class="field" style="margin-top:.5rem"><label for="imp-csv">またはCSVを貼り付け</label><textarea id="imp-csv" rows="5" placeholder="日付,内容,入金,出金&#10;2026-06-01,会費 6月,3000,&#10;2026-06-02,文具,,500" style="width:100%;font-family:monospace;font-size:.82rem"></textarea></div>
+        <div class="row"><button class="btn" id="imp-preview" type="button">内容を確認</button><button class="btn btn-primary" id="imp-run" type="button" disabled>この内容で取り込む</button></div>
+        <div id="imp-out" hidden style="margin-top:.6rem"></div>
+      </div>
+    </details>
+  )}
+
   <h2>収支のまとめ <a class="btn btn-sm btn-ghost" href="/accounting/export.csv">Excel用に保存</a> <a class="btn btn-sm btn-ghost" href="/accounting/yayoi.csv">弥生会計へ書き出し</a></h2>
   {is && (
     <div class="grid">
@@ -348,6 +364,39 @@ const closureRows = closuresRaw.map((c) => {
       const r=await window.bo.api("/api/tx",{_action:"delete",id:e.target.dataset.del},{btn:e.target,successMsg:"削除しました"});
       if(r.ok)setTimeout(()=>location.reload(),500);
     }));
+    // 明細CSVの取込（管理者）。確認→取り込み。
+    (function(){
+      const fileEl=document.getElementById("imp-file"),csvEl=document.getElementById("imp-csv"),outEl=document.getElementById("imp-out"),runBtn=document.getElementById("imp-run");
+      if(!csvEl)return;
+      const yen=(n)=>"¥"+(n||0).toLocaleString("ja-JP");
+      const esc=(s)=>String(s).replace(/[&<>"]/g,(c)=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+      fileEl?.addEventListener("change",async()=>{const f=fileEl.files?.[0];if(f)csvEl.value=await f.text();});
+      const getCsv=()=>csvEl.value.trim();
+      document.getElementById("imp-preview")?.addEventListener("click",async(e)=>{
+        if(!getCsv()){window.bo.toast("CSVを貼り付けるかファイルを選んでください","err");return;}
+        const r=await window.bo.api("/api/accounting/import-csv",{_action:"preview",csv:getCsv()},{btn:e.currentTarget,successMsg:null});
+        if(!r.ok)return;
+        const d=r.data;outEl.hidden=false;
+        let h="";
+        if(d.warnings&&d.warnings.length)h+='<div class="banner banner-warn">'+d.warnings.map(esc).join("<br>")+"</div>";
+        h+="<p class=\"muted\" style=\"font-size:.85rem\">取り込める明細："+d.total+" 件"+(d.skipped?("／読み飛ばし "+d.skipped+" 件（日付や金額が無い行）"):"")+"</p>";
+        if(d.rows&&d.rows.length){
+          h+='<div class="table-wrap"><table><thead><tr><th>日付</th><th>内容</th><th>区分</th><th class="r">金額</th></tr></thead><tbody>';
+          for(const row of d.rows.slice(0,30))h+="<tr><td>"+esc(row.date)+"</td><td>"+esc(row.description)+"</td><td>"+(row.kind==="income"?"入金":"出金")+'</td><td class="r">'+yen(row.amount)+"</td></tr>";
+          h+="</tbody></table></div>";
+          if(d.total>30)h+='<p class="muted" style="font-size:.82rem">（先頭30件のみ表示）</p>';
+        }
+        outEl.innerHTML=h;
+        if(runBtn)runBtn.disabled=!(d.total>0);
+      });
+      runBtn?.addEventListener("click",async(e)=>{
+        const wallet_id=document.getElementById("imp-wallet").value;
+        if(!getCsv()){window.bo.toast("先に内容を確認してください","err");return;}
+        if(!(await window.bo.confirm("この明細を「"+(document.getElementById("imp-wallet").selectedOptions[0]?.textContent||"")+"」に取り込みます。よろしいですか？",{confirmLabel:"取り込む"})))return;
+        const r=await window.bo.api("/api/accounting/import-csv",{_action:"import",csv:getCsv(),wallet_id},{btn:e.currentTarget,successMsg:null});
+        if(r.ok){window.bo.toast(r.data.imported+" 件を取り込みました"+(r.data.skipped?("（"+r.data.skipped+" 件は読み飛ばし）"):""));setTimeout(()=>location.reload(),1200);}
+      });
+    })();
     // お金の種類（口座）の追加・削除（管理者）。
     document.getElementById("wl-add")?.addEventListener("click",async(e)=>{
       const name=document.getElementById("wl-name").value.trim();
