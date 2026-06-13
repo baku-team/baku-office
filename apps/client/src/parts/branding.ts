@@ -8,5 +8,6 @@ export const brandingPart: Part = {
   category: "カスタマイズ",
   description: "ブランド名・ロゴ・配色を団体ごとに上書き。",
   minPlan: "plus",
+  orgOnly: true,
   menu: [{ href: "/settings/theme", label: "ブランド設定" }],
 };

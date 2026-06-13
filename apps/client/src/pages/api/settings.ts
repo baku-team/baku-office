@@ -21,7 +21,7 @@ const json = (o: unknown, s = 200) => new Response(JSON.stringify(o), { status: 
 export const POST: APIRoute = async ({ request, locals }) => {
   const ses = await getSession(env, request);
   if (!ses || ses.role !== "admin" || ses.ctx !== "org") return json({ error: "管理者のみ" }, 403);
-  const b = (await request.json().catch(() => ({}))) as { _action?: string; mb?: number; days?: number; engine?: string; model?: string; mode?: string; prompt?: string; webhook?: string; limits?: Record<string, number>; parts?: string[]; theme?: unknown; nav?: { hidden?: string[]; labels?: Record<string, string>; order?: string[] }; appId?: string; draftId?: string; layout?: { order?: string[]; hidden?: string[] }; domain?: string; workersPaid?: boolean; on?: boolean; cfToken?: string; cfAccount?: string; ghToken?: string; ghRepo?: string };
+  const b = (await request.json().catch(() => ({}))) as { _action?: string; mb?: number; days?: number; engine?: string; model?: string; mode?: string; prompt?: string; webhook?: string; limits?: Record<string, number>; parts?: string[]; theme?: unknown; nav?: { hidden?: string[]; labels?: Record<string, string>; order?: string[] }; appId?: string; draftId?: string; layout?: { order?: string[]; hidden?: string[] }; domain?: string; workersPaid?: boolean; on?: boolean; cfToken?: string; cfAccount?: string; ghToken?: string; ghRepo?: string; guides?: { title?: string; url?: string }[] };
   if (b._action === "max_upload") {
     const v = await setMaxUploadMb(env, Number(b.mb));
     return json({ ok: true, mb: v });
@@ -86,8 +86,26 @@ export const POST: APIRoute = async ({ request, locals }) => {
   }
   // UIテーマ（第1層）。
   if (b._action === "ui_theme") {
-    const v = await setTheme(locals.ctx, b.theme);
-    return json({ ok: true, theme: v });
+    try {
+      const v = await setTheme(locals.ctx, b.theme);
+      return json({ ok: true, theme: v });
+    } catch (e) {
+      return json({ error: "テーマの保存に失敗しました：" + (e as Error).message }, 500);
+    }
+  }
+  // オンボーディング：はじめの設定ガイドの動画・資料リンク（管理者が登録）。
+  if (b._action === "onboarding_guides") {
+    const guides = (Array.isArray(b.guides) ? b.guides : [])
+      .map((g) => ({ title: String(g?.title ?? "").slice(0, 80).trim(), url: String(g?.url ?? "").trim() }))
+      .filter((g) => g.title && /^https?:\/\//.test(g.url))
+      .slice(0, 20);
+    await env.LICENSE.put("onboarding_guides", JSON.stringify(guides));
+    return json({ ok: true, guides });
+  }
+  // オンボーディング：はじめの設定の案内バナーを今後出さない。
+  if (b._action === "onboarding_dismiss") {
+    await env.LICENSE.put("onboarding_dismissed", "1");
+    return json({ ok: true });
   }
   // ナビ上書き（第2層）。
   if (b._action === "nav_overrides") {

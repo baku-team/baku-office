@@ -34,7 +34,8 @@ export function sanitizeTheme(input: unknown): ThemeConfig {
   const o = (input ?? {}) as ThemeConfig;
   const out: ThemeConfig = {};
   if (typeof o.brand === "string" && o.brand.trim()) out.brand = o.brand.trim().slice(0, 40);
-  if (typeof o.logoUrl === "string" && /^https?:\/\//.test(o.logoUrl.trim())) out.logoUrl = o.logoUrl.trim().slice(0, 400);
+  // ロゴ：外部URL（http/https）か同一オリジンの相対パス（アップロード時の /api/logo?... 等）のみ許可。
+  if (typeof o.logoUrl === "string") { const u = o.logoUrl.trim(); if (/^https?:\/\//.test(u) || /^\/[\w./?=&-]+$/.test(u)) out.logoUrl = u.slice(0, 400); }
   // 相棒画像：外部URL（https）か同一オリジンの相対パス（/mascot/... 等）のみ許可。
   if (typeof o.mascotUrl === "string") { const u = o.mascotUrl.trim(); if (/^https:\/\//.test(u) || /^\/[\w./?=&-]+$/.test(u)) out.mascotUrl = u.slice(0, 400); }
   const colors: ThemeColors = {};

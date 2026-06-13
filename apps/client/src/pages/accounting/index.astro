@@ -123,15 +123,20 @@ const closureRows = closuresRaw.map((c) => {
         <div style="flex:1"><label for="wallet">口座</label><select id="wallet">{wallets.map((w)=>(<option value={w.id}>{w.name}</option>))}</select></div>
       </div>
       <div class="row" style="margin-top:.5rem">
-        <div id="catBox" style="flex:1"><label for="cat">分類（科目）</label><select id="cat">{categories.map((c)=>(<option value={c.id} data-kind={c.kind}>{c.name}</option>))}</select></div>
+        <div id="catBox" style="flex:1"><label for="cat">分類（科目）</label>
+          <input id="cat" list="cat-list-income" placeholder="自由に入力（過去の科目から選べます）例：会費収入" autocomplete="off" />
+          <datalist id="cat-list-income">{categories.filter((c)=>c.kind==="income").map((c)=>(<option value={c.name}></option>))}</datalist>
+          <datalist id="cat-list-expense">{categories.filter((c)=>c.kind==="expense").map((c)=>(<option value={c.name}></option>))}</datalist>
+        </div>
         <div id="counterBox" style="flex:1;display:none"><label for="counter">振替先の口座</label><select id="counter">{wallets.map((w)=>(<option value={w.id}>{w.name}</option>))}</select></div>
         <div style="flex:1"><label for="amount">金額（円）</label><input id="amount" type="number" min="1" inputmode="numeric" placeholder="0" /></div>
       </div>
       <div class="field"><label for="desc">内容（メモ）</label><input id="desc" placeholder="例：6月分の会費" /></div>
       <div id="acctBox" class="row" style="align-items:flex-end">
         <div style="flex:2"><label for="acct">勘定科目（freee用・任意）</label><select id="acct"><option value="">（指定しない＝分類から自動）</option>{accountItems.map((a)=>(<option value={a.id} data-code={a.code}>{a.code} {a.name}</option>))}</select></div>
-        <div style="flex:0 0 auto"><button class="btn" type="button" id="acctAi">AIでおすすめ</button></div>
+        <div style="flex:0 0 auto"><button class="btn" type="button" id="acctAi" title="「内容（メモ）」の文章をもとに、AIが当てはまりそうな勘定科目を提案します">AIで提案（メモから判断）</button></div>
       </div>
+      <div class="muted" style="font-size:.8rem;margin-top:2px">↑「内容（メモ）」に書いた文章をAIが読み、ふさわしい勘定科目を提案します（最終的にはご自身で選べます）。</div>
       <input type="hidden" id="kind" value="income" />
       <div class="row">
         <button class="btn btn-primary btn-lg" id="reg" style="flex:1">この内容で記録する</button>
@@ -144,6 +149,22 @@ const closureRows = closuresRaw.map((c) => {
       <button type="button" class="btn" data-kind="transfer">口座間の移動を記録する</button>
     </details>
   </div>
+
+  {isOrgAdmin && (
+    <details class="adv" style="margin:.6rem 0">
+      <summary>明細を取り込む（銀行・カード・レジのCSV）</summary>
+      <div class="card">
+        <p class="muted" style="font-size:.88rem">銀行・クレジットカード・レジ（スマレジ等）が書き出した明細CSVを取り込み、手入力なしで記録します。1行目に見出し（日付／内容／金額、または 入金・出金）がある形式に対応します。まず「内容を確認」で中身を見てから取り込めます。取り込んだ明細は科目「口座取込（要確認）」に入るので、あとで分類を見直せます。</p>
+        <div class="row">
+          <div style="flex:1"><label for="imp-wallet">取り込み先の口座</label><select id="imp-wallet">{wallets.map((w)=>(<option value={w.id}>{w.name}</option>))}</select></div>
+          <div style="flex:0 0 auto;align-self:flex-end"><input id="imp-file" type="file" accept=".csv,text/csv" aria-label="明細CSVファイル" /></div>
+        </div>
+        <div class="field" style="margin-top:.5rem"><label for="imp-csv">またはCSVを貼り付け</label><textarea id="imp-csv" rows="5" placeholder="日付,内容,入金,出金&#10;2026-06-01,会費 6月,3000,&#10;2026-06-02,文具,,500" style="width:100%;font-family:monospace;font-size:.82rem"></textarea></div>
+        <div class="row"><button class="btn" id="imp-preview" type="button">内容を確認</button><button class="btn btn-primary" id="imp-run" type="button" disabled>この内容で取り込む</button></div>
+        <div id="imp-out" hidden style="margin-top:.6rem"></div>
+      </div>
+    </details>
+  )}
 
   <h2>収支のまとめ <a class="btn btn-sm btn-ghost" href="/accounting/export.csv">Excel用に保存</a> <a class="btn btn-sm btn-ghost" href="/accounting/yayoi.csv">弥生会計へ書き出し</a></h2>
   {is && (
@@ -312,8 +333,9 @@ const closureRows = closuresRaw.map((c) => {
       kindEl.value=k;recLabel.textContent=LABELS[k]||"";recForm.hidden=false;
       catBox.style.display=k==="transfer"?"none":"";counterBox.style.display=k==="transfer"?"":"none";
       if(acctBox)acctBox.style.display=k==="transfer"?"none":"flex";
-      for(const o of document.querySelectorAll("#cat option")){const kk=o.dataset.kind;o.hidden=(k==="income"&&kk!=="income")||(k==="expense"&&kk!=="expense");}
-      const v=[...document.querySelectorAll("#cat option")].find(o=>!o.hidden);if(v)v.selected=true;
+      // 科目は自由記述。種別に応じて候補（過去の科目）の datalist を切り替え、別種別の値が残らないよう必要に応じクリア。
+      const catEl=document.getElementById("cat");
+      if(catEl&&k!=="transfer"){catEl.setAttribute("list",k==="expense"?"cat-list-expense":"cat-list-income");}
       document.querySelectorAll(".rec-mode").forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.kind===k)));
       recForm.scrollIntoView({behavior:"smooth",block:"nearest"});
       const amt=document.getElementById("amount");if(amt)setTimeout(()=>amt.focus(),200);
@@ -328,10 +350,11 @@ const closureRows = closuresRaw.map((c) => {
       else if(r.ok){window.bo.toast("おすすめ科目が見つかりませんでした。手動で選んでください","info");}
     });
     document.getElementById("reg").addEventListener("click",async(e)=>{
-      const body={date:document.getElementById("date").value,kind:kindEl.value,wallet_id:document.getElementById("wallet").value,category_id:document.getElementById("cat").value,counter_wallet_id:document.getElementById("counter").value,amount:document.getElementById("amount").value,description:document.getElementById("desc").value,account_item_id:document.getElementById("acct").value};
+      const body={date:document.getElementById("date").value,kind:kindEl.value,wallet_id:document.getElementById("wallet").value,category_name:document.getElementById("cat").value,counter_wallet_id:document.getElementById("counter").value,amount:document.getElementById("amount").value,description:document.getElementById("desc").value,account_item_id:document.getElementById("acct").value};
       if(!body.date){window.bo.toast("日付を入力してください","err");return;}
       if(!(Number(body.amount)>0)){window.bo.toast("金額は1以上で入力してください","err");return;}
       if(!body.wallet_id){window.bo.toast("口座を選択してください","err");return;}
+      if(body.kind!=="transfer"&&!body.category_name.trim()){window.bo.toast("分類（科目）を入力してください","err");return;}
       if(body.kind==="transfer"&&body.wallet_id===body.counter_wallet_id){window.bo.toast("振替元と振替先が同じ口座です","err");return;}
       const r=await window.bo.api("/api/tx",body,{btn:e.currentTarget,successMsg:"記録しました"});
       if(r.ok)setTimeout(()=>location.reload(),600);
@@ -341,6 +364,39 @@ const closureRows = closuresRaw.map((c) => {
       const r=await window.bo.api("/api/tx",{_action:"delete",id:e.target.dataset.del},{btn:e.target,successMsg:"削除しました"});
       if(r.ok)setTimeout(()=>location.reload(),500);
     }));
+    // 明細CSVの取込（管理者）。確認→取り込み。
+    (function(){
+      const fileEl=document.getElementById("imp-file"),csvEl=document.getElementById("imp-csv"),outEl=document.getElementById("imp-out"),runBtn=document.getElementById("imp-run");
+      if(!csvEl)return;
+      const yen=(n)=>"¥"+(n||0).toLocaleString("ja-JP");
+      const esc=(s)=>String(s).replace(/[&<>"]/g,(c)=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+      fileEl?.addEventListener("change",async()=>{const f=fileEl.files?.[0];if(f)csvEl.value=await f.text();});
+      const getCsv=()=>csvEl.value.trim();
+      document.getElementById("imp-preview")?.addEventListener("click",async(e)=>{
+        if(!getCsv()){window.bo.toast("CSVを貼り付けるかファイルを選んでください","err");return;}
+        const r=await window.bo.api("/api/accounting/import-csv",{_action:"preview",csv:getCsv()},{btn:e.currentTarget,successMsg:null});
+        if(!r.ok)return;
+        const d=r.data;outEl.hidden=false;
+        let h="";
+        if(d.warnings&&d.warnings.length)h+='<div class="banner banner-warn">'+d.warnings.map(esc).join("<br>")+"</div>";
+        h+="<p class=\"muted\" style=\"font-size:.85rem\">取り込める明細："+d.total+" 件"+(d.skipped?("／読み飛ばし "+d.skipped+" 件（日付や金額が無い行）"):"")+"</p>";
+        if(d.rows&&d.rows.length){
+          h+='<div class="table-wrap"><table><thead><tr><th>日付</th><th>内容</th><th>区分</th><th class="r">金額</th></tr></thead><tbody>';
+          for(const row of d.rows.slice(0,30))h+="<tr><td>"+esc(row.date)+"</td><td>"+esc(row.description)+"</td><td>"+(row.kind==="income"?"入金":"出金")+'</td><td class="r">'+yen(row.amount)+"</td></tr>";
+          h+="</tbody></table></div>";
+          if(d.total>30)h+='<p class="muted" style="font-size:.82rem">（先頭30件のみ表示）</p>';
+        }
+        outEl.innerHTML=h;
+        if(runBtn)runBtn.disabled=!(d.total>0);
+      });
+      runBtn?.addEventListener("click",async(e)=>{
+        const wallet_id=document.getElementById("imp-wallet").value;
+        if(!getCsv()){window.bo.toast("先に内容を確認してください","err");return;}
+        if(!(await window.bo.confirm("この明細を「"+(document.getElementById("imp-wallet").selectedOptions[0]?.textContent||"")+"」に取り込みます。よろしいですか？",{confirmLabel:"取り込む"})))return;
+        const r=await window.bo.api("/api/accounting/import-csv",{_action:"import",csv:getCsv(),wallet_id},{btn:e.currentTarget,successMsg:null});
+        if(r.ok){window.bo.toast(r.data.imported+" 件を取り込みました"+(r.data.skipped?("（"+r.data.skipped+" 件は読み飛ばし）"):""));setTimeout(()=>location.reload(),1200);}
+      });
+    })();
     // お金の種類（口座）の追加・削除（管理者）。
     document.getElementById("wl-add")?.addEventListener("click",async(e)=>{
       const name=document.getElementById("wl-name").value.trim();

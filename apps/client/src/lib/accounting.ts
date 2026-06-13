@@ -78,6 +78,20 @@ export async function softDeleteWallet(env: Env, id: string): Promise<void> {
 export async function listCategories(env: Env): Promise<Category[]> {
   return (await env.DB.prepare("SELECT * FROM categories ORDER BY kind, sort_order").all<Category>()).results;
 }
+// 科目を名称＋種別で検索し、無ければ作成して id を返す（自由記述入力の受け皿）。
+// 同名・同種別は1つに収斂（履歴からの再入力で重複を作らない）。
+export async function findOrCreateCategory(env: Env, name: string, kind: "income" | "expense"): Promise<string | null> {
+  const nm = name.trim().slice(0, 40);
+  if (!nm) return null;
+  const existing = await env.DB.prepare("SELECT id FROM categories WHERE name=? AND kind=? LIMIT 1").bind(nm, kind).first<{ id: string }>();
+  if (existing) return existing.id;
+  const id = randomId();
+  const max = await env.DB.prepare("SELECT COALESCE(MAX(sort_order),-1) AS m FROM categories WHERE kind=?").bind(kind).first<{ m: number }>();
+  await env.DB.prepare("INSERT INTO categories (id,name,kind,parent_id,sort_order) VALUES (?,?,?,NULL,?)").bind(id, nm, kind, (max?.m ?? -1) + 1).run();
+  // 新科目に勘定科目（複式の借方/貸方解決用）を橋渡し（名称一致 or 既定）。
+  await ensureCategoryAccountLinks(env).catch(() => {});
+  return id;
+}
 // 各口座の現在残高（opening_balance＋当期の入出金・振替）。会計画面の残高カード用に一括集計。
 export async function walletBalances(env: Env, periodId: string): Promise<(Wallet & { balance: number })[]> {
   const wallets = await listWallets(env);

@@ -12,7 +12,11 @@ const members = await listMembers(env, q);
 const stats = await memberStats(env);
 const opt = (cur: string, v: string) => ({ value: v, selected: cur === v });
 const fmt = (s: number | null) => (s ? new Date(s * 1000).toISOString().slice(0, 10) : "—");
-const cols = canEdit ? 7 : 6;
+const yen = (n: number | null) => (n != null ? "¥" + n.toLocaleString("ja-JP") : "—");
+// 任意項目・ランクの入力履歴（過去の値から選べるよう datalist の候補にする）。
+const extraHistory = [...new Set(members.map((m) => m.extra).filter((x): x is string => !!x && x.trim() !== ""))].slice(0, 50);
+const rankHistory = [...new Set(members.map((m) => m.rank).filter((x): x is string => !!x && x.trim() !== ""))].slice(0, 50);
+const cols = canEdit ? 9 : 8;
 ---
 <App title="名簿" active="/membership">
   <h1>名簿</h1>
@@ -28,23 +32,30 @@ const cols = canEdit ? 7 : 6;
       <h2 style="margin-top:0;border:0">会員を追加</h2>
       <div class="row"><input id="m-name" placeholder="氏名" aria-label="氏名" /><input id="m-contact" placeholder="連絡先（電話/メール）" aria-label="連絡先" /></div>
       <div class="row"><select id="m-fee" aria-label="会費の状態">{FEE_STATUSES.map((s) => (<option value={s}>{FEE_LABEL[s]}</option>))}</select><input id="m-paid" placeholder="支払い日時（任意）" aria-label="支払い日時" /></div>
-      <div class="field"><input id="m-extra" placeholder="任意項目（メモ・自由記述。例：所属=A班, 区分=正会員）" aria-label="任意項目" /></div>
+      <div class="row"><input id="m-amount" type="number" min="0" inputmode="numeric" placeholder="会費の金額（円・任意）" aria-label="会費の金額" /><input id="m-rank" list="rank-history" placeholder="ランク・区分（例：正会員／賛助会員）" aria-label="ランク・区分" /></div>
+      <div class="field"><input id="m-extra" list="extra-history" placeholder="任意項目（メモ・自由記述。例：所属=A班, 区分=正会員）" aria-label="任意項目" /></div>
       <button class="btn btn-primary" id="m-add">追加</button>
+      <p class="muted" style="font-size:.82rem;margin:.4rem 0 0">会費を「支払済」にして金額を入れると、<a href="/accounting">お金の記録</a>へ「会費収入」として自動で計上されます（支払済を解除すると取り消し）。</p>
     </div>
   )}
 
+  <datalist id="extra-history">{extraHistory.map((v) => (<option value={v}></option>))}</datalist>
+  <datalist id="rank-history">{rankHistory.map((v) => (<option value={v}></option>))}</datalist>{/* 任意項目・ランクの過去入力を候補表示（履歴からの引用）。 */}
+
   <form method="get" class="row" style="margin:.5rem 0"><input name="q" value={q} placeholder="氏名・連絡先で検索" aria-label="氏名・連絡先で検索" /><button class="btn" type="submit" style="flex:0 0 auto">検索</button></form>
   <div class="table-wrap"><table>
-    <thead><tr><th>氏名</th><th>連絡先</th><th>会費</th><th>支払日時</th><th>変更日</th><th>任意項目</th>{canEdit && <th>操作</th>}</tr></thead>
+    <thead><tr><th>氏名</th><th>連絡先</th><th>会費</th><th>金額</th><th>ランク</th><th>支払日時</th><th>変更日</th><th>任意項目</th>{canEdit && <th>操作</th>}</tr></thead>
     <tbody>
       {members.map((m) => (
         <tr data-id={m.id}>
           <td>{canEdit ? <input class="e-name" value={m.name} aria-label="氏名" /> : m.name}</td>
           <td>{canEdit ? <input class="e-contact" value={m.contact ?? ""} aria-label="連絡先" /> : (m.contact ?? "—")}</td>
           <td>{canEdit ? <select class="e-fee" aria-label="会費の状態">{FEE_STATUSES.map((s) => (<option {...opt(m.fee_status, s)}>{FEE_LABEL[s]}</option>))}</select> : (FEE_LABEL[m.fee_status] ?? m.fee_status)}</td>
+          <td>{canEdit ? <input class="e-amount" type="number" min="0" inputmode="numeric" value={m.fee_amount ?? ""} aria-label="会費の金額" style="max-width:6.5rem" /> : yen(m.fee_amount)}</td>
+          <td>{canEdit ? <input class="e-rank" list="rank-history" value={m.rank ?? ""} aria-label="ランク・区分" style="max-width:8rem" /> : (m.rank ?? "—")}</td>
           <td>{canEdit ? <input class="e-paid" value={m.paid_at ?? ""} aria-label="支払い日時" /> : (m.paid_at ?? "—")}</td>
           <td class="muted">{fmt(m.status_changed_at)}</td>
-          <td>{canEdit ? <input class="e-extra" value={m.extra ?? ""} aria-label="任意項目" /> : (m.extra ?? "—")}</td>
+          <td>{canEdit ? <input class="e-extra" list="extra-history" value={m.extra ?? ""} aria-label="任意項目" /> : (m.extra ?? "—")}</td>
           {canEdit && (<td style="white-space:nowrap"><button class="btn btn-sm btn-primary e-save">保存</button> <button class="btn btn-sm btn-danger e-del">削除</button></td>)}
         </tr>
       ))}
@@ -59,13 +70,13 @@ const cols = canEdit ? 7 : 6;
       if (add) add.addEventListener("click", async (e) => {
         const name = document.getElementById("m-name").value.trim();
         if (!name) { window.bo.toast("氏名を入力してください", "err"); return; }
-        const r = await api({ _action: "create", name, contact: document.getElementById("m-contact").value, fee_status: document.getElementById("m-fee").value, paid_at: document.getElementById("m-paid").value, extra: document.getElementById("m-extra").value }, e.currentTarget);
+        const r = await api({ _action: "create", name, contact: document.getElementById("m-contact").value, fee_status: document.getElementById("m-fee").value, paid_at: document.getElementById("m-paid").value, extra: document.getElementById("m-extra").value, fee_amount: document.getElementById("m-amount").value || undefined, rank: document.getElementById("m-rank").value }, e.currentTarget);
         if (r.ok) { window.bo.toast("追加しました"); setTimeout(() => location.reload(), 600); }
       });
       document.querySelectorAll("tr[data-id]").forEach((tr) => {
         const id = tr.dataset.id;
         tr.querySelector(".e-save")?.addEventListener("click", async (e) => {
-          const r = await api({ _action: "update", id, name: tr.querySelector(".e-name").value, contact: tr.querySelector(".e-contact").value, fee_status: tr.querySelector(".e-fee").value, paid_at: tr.querySelector(".e-paid").value, extra: tr.querySelector(".e-extra").value }, e.currentTarget);
+          const r = await api({ _action: "update", id, name: tr.querySelector(".e-name").value, contact: tr.querySelector(".e-contact").value, fee_status: tr.querySelector(".e-fee").value, paid_at: tr.querySelector(".e-paid").value, extra: tr.querySelector(".e-extra").value, fee_amount: tr.querySelector(".e-amount").value || "", rank: tr.querySelector(".e-rank").value }, e.currentTarget);
           if (r.ok) { window.bo.toast("更新しました"); setTimeout(() => location.reload(), 500); }
         });
         tr.querySelector(".e-del")?.addEventListener("click", async (e) => {

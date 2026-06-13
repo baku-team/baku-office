@@ -78,6 +78,56 @@ async function deleteEvent(ctx: Ctx, a: { event_id: string }): Promise<string> {
   return "予定を削除しました。";
 }
 
+// --- 双方向同期用（構造化）。schedule 画面/同期APIから使う。 ---
+// Google の dateTime（オフセット付き）/ date（終日）を JST のナイーブ文字列 YYYY-MM-DDTHH:MM に変換。
+function toJstNaive(v: { dateTime?: string; date?: string } | undefined): string {
+  if (!v) return "";
+  if (v.date && !v.dateTime) return `${v.date}T00:00`;
+  const iso = v.dateTime ?? "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso.slice(0, 16);
+  const parts = new Intl.DateTimeFormat("en-CA", { timeZone: TZ, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false }).formatToParts(d);
+  const g = (t: string) => parts.find((p) => p.type === t)?.value ?? "";
+  const hh = g("hour") === "24" ? "00" : g("hour");
+  return `${g("year")}-${g("month")}-${g("day")}T${hh}:${g("minute")}`;
+}
+
+export type RawEvent = { id: string; summary: string; description: string; start: string; end: string };
+// 構造化イベント取得（同期の取り込み元）。
+export async function listEventsRaw(ctx: Ctx, a: { time_min?: string; time_max?: string; max?: number }): Promise<{ ok: boolean; events: RawEvent[]; error?: string }> {
+  const u = new URL(CAL);
+  u.searchParams.set("singleEvents", "true");
+  u.searchParams.set("orderBy", "startTime");
+  u.searchParams.set("maxResults", String(Math.min(a.max ?? 250, 250)));
+  u.searchParams.set("timeMin", a.time_min || new Date().toISOString());
+  if (a.time_max) u.searchParams.set("timeMax", a.time_max);
+  const r = await ctx.google.fetch(u.toString());
+  if (!r) return { ok: false, events: [], error: NEED_CONNECT };
+  if (!r.ok) return { ok: false, events: [], error: `カレンダー取得に失敗しました（${r.status}）。` };
+  const d = (await r.json()) as { items?: GEvent[] };
+  const events = (d.items ?? []).filter((e) => e.id && (e.start?.dateTime || e.start?.date)).map((e) => ({
+    id: e.id!, summary: e.summary ?? "(無題)", description: e.description ?? "",
+    start: toJstNaive(e.start), end: toJstNaive(e.end),
+  }));
+  return { ok: true, events };
+}
+
+// 構造化作成（作成した Google イベントID を返す＝内部行に対応付ける）。
+export async function createEventStructured(ctx: Ctx, a: { title: string; start: string; end: string; description?: string }): Promise<{ ok: boolean; id?: string; error?: string }> {
+  const body = { summary: a.title, description: a.description ?? undefined, start: { dateTime: a.start, timeZone: TZ }, end: { dateTime: a.end, timeZone: TZ } };
+  const r = await ctx.google.fetch(CAL, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+  if (!r) return { ok: false, error: NEED_CONNECT };
+  if (!r.ok) return { ok: false, error: `予定作成に失敗しました（${r.status}）。` };
+  const e = (await r.json()) as GEvent;
+  return { ok: true, id: e.id };
+}
+
+// 既存イベントの削除（同期での内部→Google 伝播に使う・薄いラッパ）。
+export async function deleteEventById(ctx: Ctx, eventId: string): Promise<boolean> {
+  const res = await deleteEvent(ctx, { event_id: eventId });
+  return res === "予定を削除しました。";
+}
+
 const ISO = { type: "string", description: "ISO8601日時（例 2026-06-20T10:00:00）" };
 
 export const calendarPart: Part = {

@@ -8,5 +8,6 @@ export const sitePart: Part = {
   category: "公開",
   description: "サイト/LP の公開・会員申込フォーム。",
   minPlan: "pro",
+  orgOnly: true,
   menu: [{ href: "/settings/site", label: "HP/LP 公開" }],
 };

@@ -11,6 +11,9 @@ const { googleConfigured, SCOPE_GROUPS } = await import("../../lib/google.ts");
 const { hasApiKey } = await import("../../lib/client.ts");
 const configured = isAdmin ? await googleConfigured(env) : false;
 const bySecret = { id: !!env.GOOGLE_CLIENT_ID, secret: !!env.GOOGLE_CLIENT_SECRET };
+// ID・シークレットとも Worker Secret 投入済み＝画面の入力欄は両方 disabled になり、
+// 保存ボタンを押しても変更しようがない。ボタン自体を無効化して「押せない理由」を明示する。
+const allGoogleBySecret = bySecret.id && bySecret.secret;
 const status = {
   id: bySecret.id || (await hasApiKey(env, "google_client_id")),
   secret: bySecret.secret || (await hasApiKey(env, "google_client_secret")),
@@ -80,7 +83,7 @@ const allScopes = (Object.keys(SCOPE_GROUPS) as (keyof typeof SCOPE_GROUPS)[]).f
             <div class="field"><label>クライアントID <span class="muted">（{status.id ? "✓ 設定済み" : "未設定"}{bySecret.id ? "・Worker Secret" : ""}）</span></label><input id="gcid" name="google_client_id" type="text" placeholder="xxxxx.apps.googleusercontent.com" autocomplete="off" disabled={bySecret.id} /></div>
             <div class="field"><label>クライアントシークレット <span class="muted">（{status.secret ? "✓ 設定済み" : "未設定"}{bySecret.secret ? "・Worker Secret" : ""}）</span></label><input id="gcsec" name="google_client_secret" type="password" placeholder="GOCSPX-..." autocomplete="off" disabled={bySecret.secret} /></div>
             {(bySecret.id || bySecret.secret) && (<p class="muted">Worker Secret で投入済みの項目は画面から変更できません（Secret が優先されます）。</p>)}
-            <button class="btn btn-primary" id="saveGoogle">保存</button>
+            <button class="btn btn-primary" id="saveGoogle" disabled={allGoogleBySecret} title={allGoogleBySecret ? "ID・シークレットは Worker Secret で設定済みのため、画面からは変更できません" : ""}>保存</button>
           </div>
         </li>
       </ol>
@@ -101,9 +104,16 @@ scripts/google-oauth-setup.sh</code></pre>
           catch { t.select(); document.execCommand("copy"); }
         });
         document.getElementById("saveGoogle")?.addEventListener("click", async (e) => {
+          const inputs = ["gcid", "gcsec"].map((id) => document.getElementById(id)).filter(Boolean);
+          const editable = inputs.filter((i) => !i.disabled);
           const data = {};
-          ["gcid", "gcsec"].forEach((id) => { const i = document.getElementById(id); if (i && i.value && !i.disabled) data[i.name] = i.value; });
-          if (!Object.keys(data).length) { window.bo.toast("入力がありません", "info"); return; }
+          editable.forEach((i) => { if (i.value) data[i.name] = i.value; });
+          if (!Object.keys(data).length) {
+            // 入力可能な欄が無い＝Secret 投入済み。空欄のまま押した場合は入力を促す。
+            if (!editable.length) window.bo.toast("ID・シークレットは Worker Secret で設定済みのため、画面からは変更できません。", "info");
+            else window.bo.toast("クライアントID とシークレットを入力してください。", "err");
+            return;
+          }
           const { ok, data: j } = await window.bo.api("/api/keys", data, { btn: e.currentTarget, successMsg: null });
           if (!ok) return;
           const res = j.result || {};
