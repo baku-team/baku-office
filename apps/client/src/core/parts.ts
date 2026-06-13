@@ -5,6 +5,7 @@ import type { Ctx } from "./ports.ts";
 import type { Role, Entitlement } from "@baku-office/shared";
 import type { NavItem } from "./nav.ts";
 import type { Permission, AppAction } from "./apps.ts";
+import { scopeCtx } from "./capability.ts";
 
 export interface AgentTool {
   name: string;
@@ -44,6 +45,13 @@ export interface Part {
 export function widgetsOf(parts: Part[]): AppWidget[] {
   return parts.flatMap((p) => p.widgets ?? []);
 }
+// ホームウィジェットを各パーツの宣言 permission でスコープして集約（描画時に capability を適用）。
+export function scopedWidgets(parts: Part[]): AppWidget[] {
+  return parts.flatMap((p) => (p.widgets ?? []).map((wdg) => ({
+    ...wdg,
+    run: (ctx: Ctx, owner: string) => wdg.run(scopeCtx(ctx, p.permissions) as unknown as Ctx, owner),
+  })));
+}
 
 // 有効パーツが提供するナビ項目を集約（第2層）。
 export function partMenuItems(enabledIds: readonly string[] | null): NavItem[] {
@@ -62,6 +70,10 @@ export function allAgentTools(): AgentTool[] {
 }
 export function findAgentTool(name: string): AgentTool | undefined {
   return allAgentTools().find((t) => t.name === name);
+}
+// 道具名から所有パーツを引く（capability scoping で実行時にそのパーツの宣言権限を適用するため）。
+export function partOfTool(name: string): Part | undefined {
+  return registeredParts().find((p) => (p.agentTools ?? []).some((t) => t.name === name));
 }
 
 // ---- Phase 5：団体ごとの「有効パーツ集合」（移植性アーキ §5/§13.5）----

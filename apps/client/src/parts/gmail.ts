@@ -115,7 +115,8 @@ export const gmailPart: Part = {
   version: "1.0.0",
   category: "庶務",
   description: "Gmail のメールを一覧・検索・閲覧・送信。",
-  permissions: ["net"],
+  permissions: ["net", "storage:write"], // 添付の保存に storage:write が必要。
+
   minPlan: "pro",
   menu: [{ href: "/gmail", label: "Gmail" }],
   agentTools: [

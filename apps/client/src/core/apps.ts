@@ -4,6 +4,7 @@
 // 他テナントには到達不可。アプリ間呼び出しは宣言した permission の範囲だけ許可（破壊・認証回避は構造的に拒絶）。
 import type { Ctx } from "./ports.ts";
 import { registeredParts, enabledPartIds, setEnabledPartIds } from "./parts.ts";
+import { scopeCtx } from "./capability.ts";
 import { disabledBuiltins } from "../lib/client.ts";
 
 // アプリが要求できる能力（マニフェストで宣言→許可分のみ付与）。
@@ -73,7 +74,8 @@ export function makeAppsApi(ctx: Ctx): AppsApi {
         const granted = callerApp?.permissions ?? [];
         if (!granted.includes(act.requiredPermission)) throw new Error(`権限がありません: ${caller} は ${act.requiredPermission} を保有していません`);
       }
-      return act.run(ctx, args, caller);
+      // target アプリには宣言 permission に絞った PartCtx を注入（生env・未宣言Portへは到達不可）。
+      return act.run(scopeCtx(ctx, app.permissions) as unknown as Ctx, args, caller);
     },
   };
 }
