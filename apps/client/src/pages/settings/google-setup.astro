@@ -42,7 +42,7 @@ const allScopes = (Object.keys(SCOPE_GROUPS) as (keyof typeof SCOPE_GROUPS)[]).f
   {isAdmin && (
     <Fragment>
       <div class="banner banner-info">
-        Google は OAuth クライアントID/シークレットの自動発行を許可していないため、<strong>Google Cloud Console での作成手順は手動</strong>です。本ページは各ステップへの直接リンクと貼り付け用の値で、その手間を最小化します。
+        連携方法は2つあります。<strong>Google Workspace をお使いなら「サービスアカウント」方式がおすすめ</strong>です（下のボタンの <strong>Cloud Shell でほぼ自動</strong>・残る手動は管理コンソールでの委任承認1回のみ）。個人 Gmail など Workspace 以外は「OAuth」方式（クライアントID/シークレットの作成だけ手動）。<strong>下のタブで方法を選んでください。</strong>
       </div>
       {configured ? (
         <div class="banner banner-ok">✅ すでに Google 連携は設定済みです（方式：{gstatus?.mode === "sa" ? "サービスアカウント" : gstatus?.mode === "oauth" ? "OAuth" : "—"}）。各機能の連携は <a href="/calendar">カレンダー</a> / <a href="/gmail">Gmail</a> / <a href="/meet">Meet</a> の画面から行えます。</div>
