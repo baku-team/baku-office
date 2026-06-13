@@ -21,6 +21,20 @@ function toPrompt(system: string, history: Turn[]): string {
   return `${system}\n\n${lines.join("\n")}\nAssistant:`;
 }
 
+// 軽量モデルは自分の回答後に "User:"/"Assistant:" 等の偽ターンを捏造して続け、1メッセージ内で
+// 会話をループさせがち（stopトークン非対応のモデルがある）。最初のロールマーカー以降を切り捨て、
+// 当該ターンのアシスタント応答だけを残す。WHY: stop 指定が効かないモデルでも確実に止める保険。
+const ROLE_MARKERS = ["\nUser:", "\nAssistant:", "\nTool(", "\nSystem:", "\nuser:", "\nassistant:"];
+const STOP_SEQUENCES = ["\nUser:", "\nAssistant:", "\nTool(", "User:", "Assistant:"];
+function firstTurnOnly(text: string): string {
+  let cut = text.length;
+  for (const m of ROLE_MARKERS) {
+    const i = text.indexOf(m);
+    if (i >= 0 && i < cut) cut = i;
+  }
+  return text.slice(0, cut).trim();
+}
+
 export function workersAiChatModel(ai: AiBinding, model: string): ChatModel {
   return {
     name: `workers-ai:${model}`,
@@ -28,7 +42,7 @@ export function workersAiChatModel(ai: AiBinding, model: string): ChatModel {
     async turn(system, history, _tools: ToolDecl[]) {
       let resp: AiResp;
       try {
-        resp = (await ai.run(model, { prompt: toPrompt(system, history), max_tokens: 1024, stream: false })) as AiResp;
+        resp = (await ai.run(model, { prompt: toPrompt(system, history), max_tokens: 1024, stream: false, stop: STOP_SEQUENCES, repetition_penalty: 1.1 })) as AiResp;
       } catch (e) {
         const msg = (e as Error)?.message ?? String(e);
         console.log("[workers-ai]", msg);
@@ -36,7 +50,7 @@ export function workersAiChatModel(ai: AiBinding, model: string): ChatModel {
       }
       const data: AiResp = resp?.result ? { ...resp, ...resp.result } : resp;
       const usage: TokenUsage = { inputTokens: data.usage?.prompt_tokens ?? 0, outputTokens: data.usage?.completion_tokens ?? 0 };
-      return { text: (data.response ?? "").trim(), usage };
+      return { text: firstTurnOnly(data.response ?? ""), usage };
     },
   };
 }
