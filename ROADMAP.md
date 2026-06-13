@@ -1,6 +1,6 @@
 # ROADMAP — baku-office ベータ版 → 正式リリース
 
-最終更新：2026-06-13 / 起点：第三者レビュー報告書 `reports/third-party-review-2026-06-10/`（004／005）＋ 006 再評価（2026-06-11・総合 **78 → 86 / 100**）。2026-06-13：**Astro 6＋アダプタ13へ更新完了（P2-1）**・Workers AI モデル廃止対応・クラウドAIモデル選択・KV書込量の可視化を本番反映（PR #85〜#91）。
+最終更新：2026-06-13 / 起点：第三者レビュー報告書 `reports/third-party-review-2026-06-10/`（004／005）＋ 006 再評価（2026-06-11・総合 **78 → 86 / 100**）。2026-06-13：**Astro 6＋アダプタ13へ更新完了（P2-1）**・Workers AI モデル廃止対応・クラウドAIモデル選択・KV書込量の可視化を本番反映（PR #85〜#91）。2026-06-13（後続）：脆弱性報告窓口（`SECURITY.md`/`security.txt`）・単価未登録APIの「推定不可」表示・IDORテストの chat-sessions 横展開・バックアップ画面の Time Travel/CSV 案内・OPERATIONS ロールバック手順を追加し**本番反映＋配布 v0.2.2 署名リリース公開**（PR #99）。あわせて全資料の社名表記を「合同会社貘」へ統一。
 
 本書は「ベータ運用中」から「正式リリース（GA）」までの道筋を、Go/No-Go 判定基準つきで示す。
 設計思想（クライアント主権・ポータブルコア・低コスト・承認ゲート）を崩さない範囲での対策のみを採る。
@@ -58,7 +58,7 @@
 | **4-2（実装済み）** | 公開LP XSS が自作サニタイザ一枚 | **✅ 完了**：公開LP（`SitePublic.astro`）を **nonce ベース CSP** へ移行。script-src から `'unsafe-inline'` を外し、申込フォームのインライン script のみ nonce 許可（サニタイザのバイパスに備えた多層化） | ✅ |
 | **4-3（実装済み）** | deploy_code 先勝ちDoS（host `/api/deploy-report`） | **✅ 完了**：`deploy_url_verified` 列を追加し、deploy-report は**仮登録**（未確定時のみ）＋IPレート制限、`activate-by-email`（Googleログイン突合）が**確定**（verified=1・上書き）。攻撃者の仮登録は認証経路で是正される | ✅ |
 | **5（実装済み）** | `verifyStripeSig` が host/client で重複 | **✅ 完了**：`packages/shared/src/stripe.ts` へ一本化（now を内部計算し依存排除）。host `billing.ts` は再エクスポート、client `stripe-webhook.ts` は shared を import。重複を排除し乖離リスクを解消 | ✅ |
-| **5** | 静的認可テストの限界 | files の IDOR ランタイムテスト方式を他ルートへ展開 | 低 |
+| **5（実装済み）** | 静的認可テストの限界 | **✅ 完了（2026-06-13）**：files の IDOR ランタイムテスト方式を **chat-sessions** へ横展開（owner越え読取/削除の拒否・履歴連動削除・`getMessages` の呼出側ガード契約を固定）。`test/chat-sessions-idor.contract.test.ts` | ✅ |
 
 ---
 
@@ -115,10 +115,10 @@
 - [ ] スモーク：ログイン（org/personal）・会計記帳・ファイル添付・承認フロー・Stripe/LINE webhook・**権限変更→旧セッション即失効**・**admin 初回の同意ゲート表示**。
 
 **体制・文書（★ 006 追加）**
-- [ ] ★ **脆弱性報告窓口**：公開配布リポに `SECURITY.md`（＋可能なら `/.well-known/security.txt`）。連絡先・対応方針・謝辞ポリシー。自己ホスト製品は顧客環境での発見報告が必ず来る。
+- [x] ★ **脆弱性報告窓口（実装済み・2026-06-13）**：公開配布リポに `SECURITY.md` ＋ `apps/client/public/.well-known/security.txt`（`.txt`＝未認証配信）。連絡先（`baku@baku-llc.co.jp`・暫定／専用窓口があれば差替）・協調的開示方針・自己ホスト型の責任分界・謝辞ポリシーを明記。
 - [ ] ★ **ベータ規約**：同意ゲートのドラフトに「ベータ提供・無保証・サポート範囲・データ取扱・終了条件」を反映（弁護士確定は Phase 3 でよいが、ベータ参加者への提示文は今必要）。
-- [ ] ★ **バックアップ方針の顧客向け明示**：「バックアップは団体責任」を README だけでなく**アプリ内（設定/運用画面）に表示**。D1 Time Travel（30日）と会計 CSV エクスポートの存在を案内。
-- [ ] ★ **ロールバック手順の文書化**：署名リリースはバージョン比較で前進のみ。障害時は「**旧コードを新バージョン番号で再リリース**」が正規手順であることを OPERATIONS に明記。
+- [x] ★ **バックアップ方針の顧客向け明示（実装済み・2026-06-13）**：「バックアップは団体責任」をアプリ内（`/backup`）に表示済み（取得/復元/定期/7日アラート）。今回 **D1 Time Travel（30日）と会計 CSV 書き出しの案内**を補足カードとして追加（合同会社貘は業務データを預からない旨も明記）。
+- [x] ★ **ロールバック手順の文書化（実装済み・2026-06-13）**：署名リリースは前進のみ。障害時は「**旧コードを新バージョン番号で再リリース**」（ロールフォワード方式）が正規手順である旨を OPERATIONS A-8 ③へ明記（VERSION 採番・マイグレーション後方互換の注意含む）。
 - [ ] ★ **ベータ参加団体の選定**：2〜5 団体。NPO/PTA/小規模事業の業種分散、データ規模上限（目安：会員 500 名以下）、サポートチャネル（LINE or メール）と応答目標（例：営業日 24h 以内）を合意。
 
 **Go 条件**：上記すべて ✓ ＋ `npm audit --omit=dev --audit-level=high` が 0 件（現状達成済み）。
@@ -154,7 +154,7 @@
 
 ### 3-1. 依存・コード（中）
 - [x] **P2-1 Astro 更新（完了・2026-06-13）**：`astro@6`＋`@astrojs/cloudflare@13` へ更新し**本番反映済み**。保留要因だった「アダプタ13の `@cloudflare/vite-plugin` が config 解決時に wrangler `main` を要求しビルド不可」は、**v13公式の配布構成への移行で解決**：ビルド成果物を `server/`（`entry.mjs`＋事前バンドル）＋`client/`（静的アセット）に分離し、`wrangler.release.jsonc` を `main: ./server/entry.mjs`・`base_dir: ./server`・`no_bundle: true`・`assets: ./client` に再構成。本番デプロイは `deploy:prod`（`CLOUDFLARE_ENV=production astro build && wrangler deploy`／v13が `dist/server/wrangler.json` のリダイレクト設定を生成）。env アクセスは `import { env } from "cloudflare:workers"`、実行コンテキストは `Astro.locals.cfContext`（旧 `Astro.locals.runtime.env`/`runtime.ctx` は廃止のため全面移行）。型/テスト/ビルドすべて通過、`npm audit`（--omit=dev）clean。PR #87〜#89。
-- [ ] **コスト単価既定値の最新化**：主要 provider 単価を更新し、未登録時は UI で「推定不可」を明示（0 と誤認させない）。
+- [x] **コスト単価既定値の最新化（実装済み・2026-06-13）**：主要 provider 単価は 2026-06 公式価格で最新化済み。単価未登録の provider（Web検索/画像/音声/動画/任意API）を UI で「**推定不可**」と明示（`hasPricing()`・$0=無料との誤認を排除・USD 上限入力を無効化・推定費用合計から除外を注記）。
 - [ ] **P2-3 DNS リバインディング（低・任意）**：A2A 宛先にユーザー任意 URL を許す拡張を入れる場合のみ、解決IPの allowlist 検査を併設。現状は相互同意済み deploy_url 限定のため据え置き可。
 
 ### 3-2. 法務・コンプライアンス
