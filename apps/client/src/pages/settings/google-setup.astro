@@ -7,9 +7,17 @@ const ses = await getSession(env, Astro.request);
 if (!ses) return Astro.redirect("/login", 302);
 const isAdmin = ses.role === "admin" && ses.ctx === "org";
 
-const { googleConfigured, SCOPE_GROUPS } = await import("../../lib/google.ts");
+const { googleConfigured, googleStatus, SCOPE_GROUPS } = await import("../../lib/google.ts");
+type ScopeGroupId = keyof typeof SCOPE_GROUPS;
 const { hasApiKey } = await import("../../lib/client.ts");
 const configured = isAdmin ? await googleConfigured(env) : false;
+// サービスアカウント(DWD)連携の状態・情報。
+const { getServiceAccountInfo } = await import("../../lib/google-sa.ts");
+const saInfo = isAdmin ? await getServiceAccountInfo(env).catch(() => null) : null;
+const gstatus = isAdmin ? await googleStatus(env).catch(() => null) : null;
+const grantedSet = new Set(gstatus?.groups ?? []);
+// 利用機能グループ（DWDに登録するスコープの提示にも使う）。
+const groupList = (Object.keys(SCOPE_GROUPS) as ScopeGroupId[]).map((g) => ({ id: g, label: SCOPE_GROUPS[g].label, restricted: SCOPE_GROUPS[g].restricted, scopes: SCOPE_GROUPS[g].scopes.join(" ") }));
 const bySecret = { id: !!env.GOOGLE_CLIENT_ID, secret: !!env.GOOGLE_CLIENT_SECRET };
 // ID・シークレットとも Worker Secret 投入済み＝画面の入力欄は両方 disabled になり、
 // 保存ボタンを押しても変更しようがない。ボタン自体を無効化して「押せない理由」を明示する。
@@ -33,11 +41,58 @@ const allScopes = (Object.keys(SCOPE_GROUPS) as (keyof typeof SCOPE_GROUPS)[]).f
         Google は OAuth クライアントID/シークレットの自動発行を許可していないため、<strong>Google Cloud Console での作成手順は手動</strong>です。本ページは各ステップへの直接リンクと貼り付け用の値で、その手間を最小化します。
       </div>
       {configured ? (
-        <div class="banner banner-ok">✅ すでに Google 連携の資格情報は設定済みです。各機能の連携は <a href="/calendar">カレンダー</a> / <a href="/gmail">Gmail</a> / <a href="/meet">Meet</a> の画面から行えます。</div>
+        <div class="banner banner-ok">✅ すでに Google 連携は設定済みです（方式：{gstatus?.mode === "sa" ? "サービスアカウント" : gstatus?.mode === "oauth" ? "OAuth" : "—"}）。各機能の連携は <a href="/calendar">カレンダー</a> / <a href="/gmail">Gmail</a> / <a href="/meet">Meet</a> の画面から行えます。</div>
       ) : (
-        <div class="banner banner-warn">未設定です。以下の手順で設定してください（所要 5〜10 分）。</div>
+        <div class="banner banner-warn">未設定です。下のいずれかの方法で設定してください。</div>
       )}
 
+      <div class="seg" id="gmethod" role="group" aria-label="連携方法の選択" style="margin:.6rem 0">
+        <button class="seg-opt on" type="button" data-m="sa">サービスアカウント（Workspace・おすすめ）</button>
+        <button class="seg-opt" type="button" data-m="oauth">OAuthクライアント（個人Gmail等）</button>
+      </div>
+
+      {/* 方法A：サービスアカウント＋ドメイン全体の委任(DWD)。クライアントID/シークレット・同意画面が不要で、資格情報の発行をほぼ自動化できる。 */}
+      <div class="gpanel" data-panel="sa">
+        <div class="banner banner-info">Google Workspace を使う組織向け。<strong>OAuth クライアントID/シークレットや同意画面は不要</strong>です。サービスアカウントの鍵（gcloud で自動生成可）を登録し、管理コンソールで「ドメイン全体の委任」を<strong>一度だけ</strong>承認すれば連携できます。</div>
+        {saInfo && (<div class="banner banner-ok">✅ サービスアカウント設定済み（代理ユーザー：{saInfo.subject}）。接続が不安定なら下の「接続テスト」で確認してください。</div>)}
+        <ol class="steps">
+          <li>
+            <h3>1. サービスアカウントと鍵を作成（自動）</h3>
+            <p class="muted">技術者の環境で gcloud を使い、プロジェクト作成・API有効化・サービスアカウント作成・鍵(JSON)発行までを自動化します。</p>
+            <pre style="background:#0f172a;color:#e2e8f0;padding:.8rem;border-radius:8px;overflow:auto;font-size:.8rem"><code>gcloud auth login
+scripts/google-service-account-setup.sh</code></pre>
+            <p class="muted">完了すると、鍵ファイル（<code>*.json</code>）と、次の手順で使う<strong>クライアントID</strong>・<strong>スコープ</strong>が出力されます。</p>
+          </li>
+          <li>
+            <h3>2. 鍵ファイルと代理ユーザーを登録</h3>
+            <p class="muted">発行した鍵(JSON)を選び、Google の予定・メール等を「誰として」操作するか（Workspace 内のユーザーのメール）を入力します。</p>
+            <div class="field"><label for="sa-file">サービスアカウント鍵（JSON）</label><input id="sa-file" type="file" accept="application/json,.json" /></div>
+            <div class="field"><label for="sa-subject">代理するユーザーのメール（Workspace）</label><input id="sa-subject" type="email" placeholder="admin@yourdomain.co.jp" value={saInfo?.subject ?? ""} autocomplete="off" /></div>
+            <fieldset style="border:1px solid #dde3ea;border-radius:6px;padding:.5rem .8rem">
+              <legend class="muted" style="font-size:.85rem">利用する機能（委任するスコープ）</legend>
+              {groupList.map((g) => (
+                <label style="display:block;margin:.2rem 0"><input type="checkbox" class="sa-grp" value={g.id} data-scopes={g.scopes} checked={grantedSet.has(g.id) || g.id === "calendar"} /> {g.label}{g.restricted ? <span class="pill" style="background:#fee2e2;color:#b91c1c;margin-left:4px">審査対象</span> : ""}</label>
+              ))}
+            </fieldset>
+            <button class="btn btn-primary" id="sa-save" style="margin-top:.5rem">この内容で登録</button>
+          </li>
+          <li>
+            <h3>3. 管理コンソールで「ドメイン全体の委任」を承認（1回のみ）</h3>
+            <p class="muted">Google Workspace の超管理者が、下のクライアントIDと利用スコープを委任先として登録します（これは Google がセキュリティ上、人による承認を必須にしているため省略できません）。</p>
+            <div class="field"><label>クライアントID（委任先）</label><div class="row"><input id="sa-cid" type="text" readonly value={saInfo?.clientId ?? "（手順2を登録すると表示されます）"} style="flex:1;font-family:monospace;font-size:.82rem" /><button class="btn" id="sa-copy-cid" type="button" disabled={!saInfo}>コピー</button></div></div>
+            <div class="field"><label>OAuth スコープ（カンマ区切り・選択中の機能から自動生成）</label><div class="row"><input id="sa-scopes" type="text" readonly value="" style="flex:1;font-family:monospace;font-size:.78rem" /><button class="btn" id="sa-copy-scopes" type="button">コピー</button></div></div>
+            <a class="btn btn-primary" href="https://admin.google.com/ac/owl/domainwidedelegation" target="_blank" rel="noopener">ドメイン全体の委任の設定を開く ↗</a>
+          </li>
+          <li>
+            <h3>4. 接続テスト</h3>
+            <p class="muted">委任の承認後にテストします。成功すれば連携完了です。</p>
+            <div class="row"><button class="btn btn-primary" id="sa-test" type="button" disabled={!saInfo}>接続テスト</button>{saInfo && (<button class="btn btn-ghost" id="sa-disconnect" type="button">連携を解除</button>)}</div>
+          </li>
+        </ol>
+      </div>
+
+      {/* 方法B：従来の OAuth クライアント連携。 */}
+      <div class="gpanel" data-panel="oauth" hidden>
       <ol class="steps">
         <li>
           <h3>1. プロジェクトを作成（または選択）</h3>
@@ -96,8 +151,47 @@ const allScopes = (Object.keys(SCOPE_GROUPS) as (keyof typeof SCOPE_GROUPS)[]).f
 scripts/google-oauth-setup.sh</code></pre>
         <p class="muted">完了後、残りの手動ステップへのリンクと貼り付け用リダイレクト URI が出力されます。</p>
       </details>
+      </div>{/* /gpanel oauth */}
 
       <script slot="scripts" is:inline>
+        // 連携方法の切替（サービスアカウント / OAuth）。
+        (function () {
+          const seg = document.getElementById("gmethod");
+          const panels = [...document.querySelectorAll(".gpanel")];
+          seg?.querySelectorAll(".seg-opt").forEach((b) => b.addEventListener("click", () => {
+            seg.querySelectorAll(".seg-opt").forEach((x) => x.classList.toggle("on", x === b));
+            panels.forEach((p) => { p.hidden = p.dataset.panel !== b.dataset.m; });
+          }));
+        })();
+        // サービスアカウント(DWD)連携。
+        (function () {
+          const grps = () => [...document.querySelectorAll(".sa-grp")].filter((c) => c.checked);
+          const syncScopes = () => { const el = document.getElementById("sa-scopes"); if (el) el.value = grps().map((c) => c.dataset.scopes).join(" ").split(" ").filter(Boolean).join(", "); };
+          document.querySelectorAll(".sa-grp").forEach((c) => c.addEventListener("change", syncScopes));
+          syncScopes();
+          let keyJson = "";
+          document.getElementById("sa-file")?.addEventListener("change", async (e) => { const f = e.target.files?.[0]; if (f) keyJson = await f.text(); });
+          const copy = async (id) => { const t = document.getElementById(id); try { await navigator.clipboard.writeText(t.value); window.bo?.toast?.("コピーしました"); } catch { t.select(); document.execCommand("copy"); } };
+          document.getElementById("sa-copy-cid")?.addEventListener("click", () => copy("sa-cid"));
+          document.getElementById("sa-copy-scopes")?.addEventListener("click", () => copy("sa-scopes"));
+          document.getElementById("sa-save")?.addEventListener("click", async (e) => {
+            const subject = document.getElementById("sa-subject").value.trim();
+            if (!keyJson) { window.bo.toast("サービスアカウント鍵（JSON）を選んでください", "err"); return; }
+            if (!subject) { window.bo.toast("代理するユーザーのメールを入力してください", "err"); return; }
+            const groups = grps().map((c) => c.value);
+            const r = await window.bo.api("/api/google", { _action: "connect_sa", keyJson, subject, groups }, { btn: e.currentTarget, successMsg: null });
+            if (r.ok) { window.bo.toast("登録しました。手順3のドメイン全体の委任を承認してください。"); setTimeout(() => location.reload(), 900); }
+          });
+          document.getElementById("sa-test")?.addEventListener("click", async (e) => {
+            const r = await window.bo.api("/api/google", { _action: "test_sa" }, { btn: e.currentTarget, successMsg: null });
+            if (r.ok) window.bo.toast("接続できました。連携完了です。");
+          });
+          document.getElementById("sa-disconnect")?.addEventListener("click", async (e) => {
+            if (!(await window.bo.confirm("Google 連携を解除しますか？（サービスアカウント鍵を削除します）", { confirmLabel: "解除", danger: true }))) return;
+            const r = await window.bo.api("/api/google", { _action: "disconnect" }, { btn: e.currentTarget, successMsg: "解除しました" });
+            if (r.ok) setTimeout(() => location.reload(), 700);
+          });
+        })();
         document.getElementById("copyRedir")?.addEventListener("click", async () => {
           const t = document.getElementById("redir");
           try { await navigator.clipboard.writeText(t.value); window.bo?.toast?.("コピーしました"); }
