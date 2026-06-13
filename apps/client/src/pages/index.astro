@@ -192,6 +192,13 @@ const clampSpan = (n?: number) => Math.max(1, Math.min(3, Number(n) || 1));
           <div class="muted" style="margin-top:6px">{totalLimit > 0 ? `${fmtBytes(totalUsed)} / ${fmtBytes(totalLimit)}（${totalPct}%）` : "計測中"}</div>
         </div>
         {isOrgAdmin && (
+          <div class="card" style="margin-top:.6rem">
+            <div class="label">通信量（保存・更新の回数）{kvPct >= 80 && (<span class="muted" style="font-weight:400"> ⚠️ 残りわずか</span>)}</div>
+            <div class="gauge"><div class={`gfill ${kvPct >= 80 ? "hot" : ""}`} style={`width:${kvPct}%`}></div></div>
+            <div class="muted" style="margin-top:6px">本日 {kvWrites.toLocaleString()} / {KV_WRITE_FREE_LIMIT.toLocaleString()} 回（{kvPct}%）・毎日UTC0時にリセット ・ <a href="/usage">使用量を見る</a></div>
+          </div>
+        )}
+        {isOrgAdmin && (
           <details class="adv">
             <summary>保存容量の内訳・拡張（管理者向け）</summary>
             <p class="adv-note">保存先ごとの内訳です。容量の拡張・外部ストレージの有効化はこちらから行えます。</p>
@@ -205,12 +212,6 @@ const clampSpan = (n?: number) => Math.max(1, Math.min(3, Number(n) || 1));
                   {s.key === "drive" && !s.enabled && (<div class="muted" style="font-size:.85rem;margin-top:2px"><a href="/drive">連携する</a></div>)}
                 </div>
               ))}
-              <div class="card">
-                <div class="label">通信量（保存・更新の回数）</div>
-                <div class="gauge"><div class={`gfill ${kvPct >= 80 ? "hot" : ""}`} style={`width:${kvPct}%`}></div></div>
-                <div class="muted" style="font-size:.85rem;margin-top:4px">本日 {kvWrites.toLocaleString()} / {KV_WRITE_FREE_LIMIT.toLocaleString()} 回（{kvPct}%）</div>
-                <div class="muted" style="font-size:.85rem;margin-top:2px">毎日UTC0時にリセット ・ <a href="/usage">使用量を見る</a></div>
-              </div>
             </div>
           </details>
         )}
