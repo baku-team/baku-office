@@ -1,6 +1,7 @@
 // クライアント側の共通ロジック：ライセンストークンの保持・統合チェック・APIキーの暗号保存（§4/7/10）。
 import { encryptField, decryptField, generateMasterKey, type CheckResponse, type Entitlement, type Ed25519Jwk } from "@baku-office/shared";
 import { logDiag } from "./diag.ts";
+import { AppError, INFRA } from "./errors.ts";
 import type { Ctx, KvPort } from "../core/ports.ts";
 
 const KV_TOKEN = "license_token";
@@ -41,8 +42,8 @@ export async function pollHost(env: Env, deployUrl?: string, apps?: { id: string
     const r = await hostFetch(env, "/api/check?" + qs.toString(), { headers: { "x-bo-license": token } });
     if (!r.ok) return null;
     const data = (await r.json()) as CheckResponse;
-    await env.LICENSE.put(KV_ENTITLEMENT, data.entitlement);
-    await env.LICENSE.put(KV_ENTITLEMENT_AT, String(nowSec())); // 鮮度（重要ゲートのダウングレード窓を縮小）
+    await env.LICENSE.put(KV_ENTITLEMENT, data.entitlement).catch(() => {});
+    await env.LICENSE.put(KV_ENTITLEMENT_AT, String(nowSec())).catch(() => {}); // 鮮度（重要ゲートのダウングレード窓を縮小）。KV上限時も pollHost を止めない
     // ホーム描画をブロックしないための表示用キャッシュ（pollHost は背景実行・§体感速度）。
     if (data.latestVersion) await env.LICENSE.put("latest_version", data.latestVersion).catch(() => {});
     await env.LICENSE.put("notices_cache", JSON.stringify(data.notices ?? [])).catch(() => {});
@@ -127,9 +128,10 @@ export function isProduction(env: Env): boolean {
 
 // MASTER_KEY 未投入を本番で検出したときの重大ブロック用エラー。
 // 暗号処理（APIキー/PII/ファイル）を停止し、管理画面で警告できるようにする。
-export class MasterKeyMissingError extends Error {
+export class MasterKeyMissingError extends AppError {
   constructor() {
-    super("MASTER_KEY が本番で未設定です。`wrangler secret put MASTER_KEY --env production` で投入してください（KV自動生成は本番では禁止・§10.1）。");
+    // 利用者向けは平易に。技術的詳細（wrangler secret put MASTER_KEY --env production・§10.1）は診断ログ側に記録。
+    super(INFRA.MASTER_KEY_MISSING, "暗号化の初期設定が完了していないため、この操作を実行できません。管理者にお問い合わせください。", 503);
     this.name = "MasterKeyMissingError";
   }
 }

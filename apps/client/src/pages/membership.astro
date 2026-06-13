@@ -26,25 +26,25 @@ const cols = canEdit ? 7 : 6;
   {canEdit && (
     <div class="card">
       <h2 style="margin-top:0;border:0">会員を追加</h2>
-      <div class="row"><input id="m-name" placeholder="氏名" /><input id="m-contact" placeholder="連絡先（電話/メール）" /></div>
-      <div class="row"><select id="m-fee">{FEE_STATUSES.map((s) => (<option value={s}>{FEE_LABEL[s]}</option>))}</select><input id="m-paid" placeholder="支払い日時（任意）" /></div>
-      <div class="field"><input id="m-extra" placeholder="任意項目（メモ・自由記述。例：所属=A班, 区分=正会員）" /></div>
+      <div class="row"><input id="m-name" placeholder="氏名" aria-label="氏名" /><input id="m-contact" placeholder="連絡先（電話/メール）" aria-label="連絡先" /></div>
+      <div class="row"><select id="m-fee" aria-label="会費の状態">{FEE_STATUSES.map((s) => (<option value={s}>{FEE_LABEL[s]}</option>))}</select><input id="m-paid" placeholder="支払い日時（任意）" aria-label="支払い日時" /></div>
+      <div class="field"><input id="m-extra" placeholder="任意項目（メモ・自由記述。例：所属=A班, 区分=正会員）" aria-label="任意項目" /></div>
       <button class="btn btn-primary" id="m-add">追加</button>
     </div>
   )}
 
-  <form method="get" class="row" style="margin:.5rem 0"><input name="q" value={q} placeholder="氏名・連絡先で検索" /><button class="btn" type="submit" style="flex:0 0 auto">検索</button></form>
+  <form method="get" class="row" style="margin:.5rem 0"><input name="q" value={q} placeholder="氏名・連絡先で検索" aria-label="氏名・連絡先で検索" /><button class="btn" type="submit" style="flex:0 0 auto">検索</button></form>
   <div class="table-wrap"><table>
     <thead><tr><th>氏名</th><th>連絡先</th><th>会費</th><th>支払日時</th><th>変更日</th><th>任意項目</th>{canEdit && <th>操作</th>}</tr></thead>
     <tbody>
       {members.map((m) => (
         <tr data-id={m.id}>
-          <td>{canEdit ? <input class="e-name" value={m.name} /> : m.name}</td>
-          <td>{canEdit ? <input class="e-contact" value={m.contact ?? ""} /> : (m.contact ?? "—")}</td>
-          <td>{canEdit ? <select class="e-fee">{FEE_STATUSES.map((s) => (<option {...opt(m.fee_status, s)}>{FEE_LABEL[s]}</option>))}</select> : (FEE_LABEL[m.fee_status] ?? m.fee_status)}</td>
-          <td>{canEdit ? <input class="e-paid" value={m.paid_at ?? ""} /> : (m.paid_at ?? "—")}</td>
+          <td>{canEdit ? <input class="e-name" value={m.name} aria-label="氏名" /> : m.name}</td>
+          <td>{canEdit ? <input class="e-contact" value={m.contact ?? ""} aria-label="連絡先" /> : (m.contact ?? "—")}</td>
+          <td>{canEdit ? <select class="e-fee" aria-label="会費の状態">{FEE_STATUSES.map((s) => (<option {...opt(m.fee_status, s)}>{FEE_LABEL[s]}</option>))}</select> : (FEE_LABEL[m.fee_status] ?? m.fee_status)}</td>
+          <td>{canEdit ? <input class="e-paid" value={m.paid_at ?? ""} aria-label="支払い日時" /> : (m.paid_at ?? "—")}</td>
           <td class="muted">{fmt(m.status_changed_at)}</td>
-          <td>{canEdit ? <input class="e-extra" value={m.extra ?? ""} /> : (m.extra ?? "—")}</td>
+          <td>{canEdit ? <input class="e-extra" value={m.extra ?? ""} aria-label="任意項目" /> : (m.extra ?? "—")}</td>
           {canEdit && (<td style="white-space:nowrap"><button class="btn btn-sm btn-primary e-save">保存</button> <button class="btn btn-sm btn-danger e-del">削除</button></td>)}
         </tr>
       ))}

@@ -19,37 +19,39 @@ if (isAdminOrg) {
   const aiReady = !!(await getApiKey(env, "gemini")) || !!(await getApiKey(env, "claude")) || !!env.LOCAL_AI_BASE_URL;
   const googleReady = await googleConfigured(env).catch(() => false);
   steps = [
-    { label: "AIエンジンの接続", href: "/settings/keys", done: aiReady, hint: "Gemini / Claude のキー、またはローカルLLM" },
-    { label: "プランの確認", href: "/billing", done: entitlement !== "free", hint: "Plus/Pro でAI・連携機能が解放" },
-    { label: "Google 連携（任意）", href: "/settings/google-setup", done: googleReady, hint: "Calendar/Gmail/Meet。Gmailは明示同意のみ" },
+    { label: "AIの接続", href: "/settings/keys", done: aiReady, hint: "AIを使うための接続設定" },
+    { label: "プランの確認", href: "/billing", done: entitlement !== "free", hint: "上位プランでAI・連携機能が使えます" },
+    { label: "Google との連携（任意）", href: "/settings/google-setup", done: googleReady, hint: "カレンダー・メール等との連携（任意）" },
   ];
 }
 const pendingSteps = steps.filter((s) => !s.done);
 
 type Link = { href: string; label: string; desc: string; show: boolean };
 type Group = { title: string; items: Link[] };
+// 技術系（連携・高度な設定・運用）は管理者のみ。説明文も専門用語を避けた平易な日本語にする。
 const groups: Group[] = [
   { title: "アカウント・メンバー", items: [
-    { href: "/settings/members", label: "人・ロール", desc: "招待・承認・権限（管理者）", show: isAdminOrg },
-    { href: "/billing", label: "プラン・課金", desc: "Free/Plus/Pro のアップグレード", show: isAdminOrg },
+    { href: "/account", label: "自分のアカウント", desc: "お名前・パスワードなど", show: true },
+    { href: "/settings/members", label: "メンバー・権限", desc: "招待・承認・できることの設定", show: isAdminOrg },
+    { href: "/billing", label: "プラン・お支払い", desc: "ご利用プランの確認・変更", show: isAdminOrg },
   ] },
   { title: "連携・AI", items: [
-    { href: "/settings/keys", label: "連携設定（APIキー）", desc: "Gemini / LINE / Claude / Google", show: true },
-    { href: "/settings/google-setup", label: "Google 連携セットアップ", desc: "Calendar/Gmail/Meet のOAuth設定を手順で案内", show: isAdminOrg },
-    { href: "/usage", label: "使用量・上限", desc: "API消費・上限・任意API・ストレージ容量", show: hasPlus },
-    { href: "/drive", label: "Googleドライブ連携", desc: "同期・バックアップ", show: hasPlus },
+    { href: "/settings/keys", label: "AI・外部サービスの連携", desc: "AIや外部サービスとつなぐ設定", show: isAdminOrg },
+    { href: "/settings/google-setup", label: "Google との連携", desc: "カレンダー・メールなどとの連携を手順で案内", show: isAdminOrg },
+    { href: "/usage", label: "利用状況・上限", desc: "今の利用量と上限の確認", show: isAdminOrg && hasPlus },
+    { href: "/drive", label: "クラウド保存の連携", desc: "ファイルの同期・バックアップ", show: isAdminOrg && hasPlus },
   ] },
-  { title: "カスタマイズ・高度な設定", items: [
-    { href: "/settings/advanced", label: "高度なオプション", desc: "AIエンジン・カスタム指示・KV上限・Workers Paid", show: isAdminOrg && hasPlus },
-    { href: "/settings/domain", label: "カスタムドメイン", desc: "独自ドメインで公開（Plus以上）", show: isAdminOrg && hasPlus },
-    { href: "/settings/a2a", label: "A2A（団体間連携）", desc: "他団体エージェントと相互同意で連携（Pro以上）", show: isAdminOrg && atLeast(entitlement, "pro") },
+  { title: "管理者向け（詳細設定）", items: [
+    { href: "/settings/advanced", label: "高度なオプション", desc: "AIの詳細設定・容量プラン（上級者向け）", show: isAdminOrg && hasPlus },
+    { href: "/settings/domain", label: "独自アドレス（URL）", desc: "独自のURLで公開する", show: isAdminOrg && hasPlus },
+    { href: "/settings/a2a", label: "他団体との連携", desc: "ほかの団体と、相互の同意でつながる", show: isAdminOrg && atLeast(entitlement, "pro") },
   ] },
   { title: "運用・サポート", items: [
-    { href: "/backup", label: "バックアップ", desc: "全データの取得（ローカル/ドライブ）・復元・定期実行", show: isAdminOrg },
-    { href: "/approvals", label: "エージェント操作の承認", desc: "AIの対外/破壊系操作（メール送信・予定変更/削除・A2A）の承認待ち", show: isAdminOrg },
-    { href: "/legal", label: "外部送信・AI利用の開示", desc: "外部送信先一覧・保存期間・削除方法（規約転記用テキスト）", show: true },
-    { href: "/review", label: "共有承認", desc: "個人→組織の承認", show: ses.role === "admin" || ses.role === "accounting" || ses.role === "clerical" },
-    { href: "/diagnostics", label: "診断・サポート", desc: "稼働状況・エラー・Workers Paid 案内", show: true },
+    { href: "/backup", label: "データの保存（バックアップ）", desc: "データの保存と、もとに戻す操作", show: isAdminOrg },
+    { href: "/approvals", label: "AI操作の承認", desc: "AIが行う送信・変更の承認", show: isAdminOrg },
+    { href: "/legal", label: "外部送信・AI利用について", desc: "外部への送信やAI利用についての説明", show: true },
+    { href: "/review", label: "共有の承認", desc: "個人から団体への共有を承認", show: ses.role === "admin" || ses.role === "accounting" || ses.role === "clerical" },
+    { href: "/diagnostics", label: "状態の確認・サポート", desc: "稼働状況の確認・困ったときに", show: true },
     { href: "/settings/update", label: "アプリの更新", desc: "最新版への更新", show: isAdminOrg },
   ] },
 ];
@@ -58,7 +60,7 @@ const slugify = (s: string) => "g-" + s.replace(/[^\p{L}\p{N}]+/gu, "-");
 const catIcon: Record<string, string> = {
   "アカウント・メンバー": "M8 11a3.2 3.2 0 100-6.4A3.2 3.2 0 008 11zM2.5 19a5.5 5.5 0 0111 0M16 11a3 3 0 000-6M21.5 19a5.5 5.5 0 00-4-5.3",
   "連携・AI": "M9 3v5M15 3v5M6 8h12v3a6 6 0 01-12 0zM12 17v4",
-  "カスタマイズ・高度な設定": "M5 6h14M5 12h14M5 18h14M9 6a1.6 1.6 0 100 .01M15 12a1.6 1.6 0 100 .01M8 18a1.6 1.6 0 100 .01",
+  "管理者向け（詳細設定）": "M5 6h14M5 12h14M5 18h14M9 6a1.6 1.6 0 100 .01M15 12a1.6 1.6 0 100 .01M8 18a1.6 1.6 0 100 .01",
   "運用・サポート": "M12 3l7 2.5V11c0 4.5-3 8-7 9.5C8 19 5 15.5 5 11V5.5z",
 };
 const visGroups = groups.map((g) => ({ ...g, items: g.items.filter((i) => i.show) })).filter((g) => g.items.length > 0);
@@ -75,12 +77,26 @@ const visGroups = groups.map((g) => ({ ...g, items: g.items.filter((i) => i.show
     </div>
     <div class="hr"></div>
     <div class="spread" style="flex-wrap:wrap;gap:14px">
-      <div><strong>ナビの形</strong><div class="muted" style="font-size:.82rem">メニューの配置（スマホ画面では自動で下部タブになります）。</div></div>
+      <div><strong>文字の大きさ</strong><div class="muted" style="font-size:.85rem">画面全体の文字を大きくできます（見えにくい方に）。</div></div>
+      <div class="seg" id="set-fontsize" role="group" aria-label="文字の大きさ">
+        <button class="seg-opt" type="button" data-fs="std">標準</button>
+        <button class="seg-opt" type="button" data-fs="large" style="font-size:1.12rem">大</button>
+        <button class="seg-opt" type="button" data-fs="xl" style="font-size:1.28rem">特大</button>
+      </div>
+    </div>
+    <div class="hr"></div>
+    <div class="spread" style="flex-wrap:wrap;gap:14px">
+      <div><strong>ナビの形</strong><div class="muted" style="font-size:.85rem">メニューの配置（スマホ画面では自動で下部タブになります）。</div></div>
       <div class="seg" id="set-nav" role="group" aria-label="ナビの形">
         <button class="seg-opt" type="button" data-nav="top">上部</button>
         <button class="seg-opt" type="button" data-nav="side">サイド</button>
         <button class="seg-opt" type="button" data-nav="bottom">下部</button>
       </div>
+    </div>
+    <div class="hr"></div>
+    <div class="spread" style="flex-wrap:wrap;gap:14px">
+      <div><strong>相棒（キャラクター）を表示</strong><div class="muted" style="font-size:.85rem">画面の右下に表示される相棒のオン／オフ。</div></div>
+      <label class="switch"><input type="checkbox" id="set-mascot" aria-label="相棒を表示" /><span class="track"></span><span class="knob"></span></label>
     </div>
   </div>
 
@@ -155,6 +171,26 @@ const visGroups = groups.map((g) => ({ ...g, items: g.items.filter((i) => i.show
           try { localStorage.setItem("bo_theme", dark.checked ? "dark" : "light"); } catch (e) { /* noop */ }
           requestAnimationFrame(() => requestAnimationFrame(() => root.classList.remove("theme-switching")));
         });
+      }
+      // 文字の大きさ（標準/大/特大）。html[data-fontsize] を即時切替＋localStorage 保存（App.astro 起動scriptが読む）。
+      // 相棒（マスコット）の表示ON/OFF。html[data-mascot] を即時切替＋localStorage 保存（App.astro 起動scriptが読む）。
+      const mascot = document.getElementById("set-mascot");
+      if (mascot) {
+        mascot.checked = root.getAttribute("data-mascot") !== "off";
+        mascot.addEventListener("change", () => {
+          if (mascot.checked) { root.removeAttribute("data-mascot"); try { localStorage.setItem("bo_mascot", "on"); } catch (e) { /* noop */ } }
+          else { root.setAttribute("data-mascot", "off"); try { localStorage.setItem("bo_mascot", "off"); } catch (e) { /* noop */ } }
+        });
+      }
+      const fs = document.getElementById("set-fontsize");
+      if (fs) {
+        const curFs = root.getAttribute("data-fontsize") || "std";
+        fs.querySelectorAll(".seg-opt").forEach((b) => b.classList.toggle("on", b.dataset.fs === curFs));
+        fs.querySelectorAll(".seg-opt").forEach((b) => b.addEventListener("click", () => {
+          root.setAttribute("data-fontsize", b.dataset.fs);
+          try { localStorage.setItem("bo_fontsize", b.dataset.fs); } catch (e) { /* noop */ }
+          fs.querySelectorAll(".seg-opt").forEach((x) => x.classList.toggle("on", x === b));
+        }));
       }
       const seg = document.getElementById("set-nav");
       if (seg) {

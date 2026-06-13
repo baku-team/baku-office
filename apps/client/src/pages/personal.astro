@@ -14,15 +14,15 @@ const yen = (n: number | null) => (n != null ? "¥" + n.toLocaleString("ja-JP") 
   <p class="muted">領収書・メモ・タスク・予定を記録し、必要なものを組織へ共有申請できます（§6/9）。</p>
   <div class="card">
     <div class="row">
-      <select id="type"><option value="receipt">領収書</option><option value="memo">メモ</option><option value="task">タスク</option><option value="schedule">予定</option></select>
-      <input id="title" placeholder="概要" />
-      <input id="amount" type="number" placeholder="金額" />
+      <select id="type" aria-label="種別"><option value="receipt">領収書</option><option value="memo">メモ</option><option value="task">タスク</option><option value="schedule">予定</option></select>
+      <input id="title" placeholder="概要" aria-label="概要" />
+      <input id="amount" type="number" placeholder="金額" aria-label="金額" />
       <button class="btn btn-primary" id="add" style="flex:0 0 auto">追加</button>
     </div>
   </div>
   <div class="table-wrap" style="margin-top:1rem"><table><thead><tr><th>種別</th><th>概要</th><th>金額</th><th>共有</th><th></th></tr></thead><tbody>
     {items.map((it)=>(<tr data-id={it.id}><td>{it.type}</td><td>{it.title}</td><td>{yen(it.amount)}</td><td>{it.share_scope==="org"?("組織："+it.review_status):"個人"}</td><td>{it.share_scope!=="org" && (<button class="btn btn-sm btn-primary share">組織へ共有</button>)}</td></tr>))}
-    {items.length===0 && (<tr><td colspan="5" class="muted">まだありません。</td></tr>)}
+    {items.length===0 && (<tr><td colspan="5" class="muted" style="text-align:center;padding:1.2rem">まだ記録がありません。上の欄から領収書・メモなどを追加してみましょう。</td></tr>)}
   </tbody></table></div>
   <script slot="scripts" is:inline>
     document.getElementById("add").addEventListener("click",async(e)=>{const r=await window.bo.api("/api/personal",{_action:"create",type:document.getElementById("type").value,title:document.getElementById("title").value,amount:document.getElementById("amount").value||undefined},{btn:e.currentTarget,successMsg:"追加しました"});if(r.ok)setTimeout(()=>location.reload(),500);});

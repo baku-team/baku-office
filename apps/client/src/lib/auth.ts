@@ -89,9 +89,15 @@ const REVOKE_PREFIX = "revoke:";
 // WHY: role を内包するステートレスCookieは個別失効手段が無く、権限変更が最大7日反映されない穴があった。
 // TTL はセッション最大寿命と同じ＝それ以降は自然失効するため失効レコードも不要になる。
 export async function revokeSessions(env: Env, uid: string): Promise<void> {
-  await env.LICENSE.put(`${REVOKE_PREFIX}${uid}`, String(Math.floor(Date.now() / 1000)), {
-    expirationTtl: SESSION_DAYS * 86400,
-  });
+  try {
+    await env.LICENSE.put(`${REVOKE_PREFIX}${uid}`, String(Math.floor(Date.now() / 1000)), {
+      expirationTtl: SESSION_DAYS * 86400,
+    });
+  } catch (e) {
+    // KV書き込み上限超過などで失効レコードを書けなくても、管理操作（却下/権限変更）自体は失敗させない（=500を出さない）。
+    // WHY 実害小: 申請却下の対象(pending)は有効セッションを持たない。権限変更時も最大 SESSION_DAYS で自然失効する。
+    console.warn("revokeSessions: KV put failed (quota?):", (e as Error)?.message);
+  }
 }
 
 // CSRF 多層防御（P1-1）：状態変更リクエストが同一オリジン由来かを軽量判定する。

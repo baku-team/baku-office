@@ -77,6 +77,13 @@ export async function rejectUser(env: Env, id: string): Promise<void> {
   await env.DB.prepare("UPDATE users SET status='disabled', leave_requested_at=NULL WHERE id=?").bind(id).run();
   await revokeSessions(env, id); // 既存セッションを即時失効（§3-3）。
 }
+// 名簿から完全に削除（ユーザー行＋ログイン手段）。業務データ（団体帰属）は id 参照のまま残す。
+// 取り消せないため、呼び出し側で最後の管理者・自分自身・システムユーザーをガードすること。
+export async function deleteUser(env: Env, id: string): Promise<void> {
+  await env.DB.prepare("DELETE FROM identities WHERE user_id=?").bind(id).run();
+  await env.DB.prepare("DELETE FROM users WHERE id=?").bind(id).run();
+  await revokeSessions(env, id); // 残存セッションを即時失効。
+}
 export async function setRole(env: Env, id: string, role: Role): Promise<void> {
   await env.DB.prepare("UPDATE users SET role=? WHERE id=?").bind(role, id).run();
   await revokeSessions(env, id); // 権限変更は古いrole内包セッションを即時失効＝再ログインで新roleを反映（§3-3）。
@@ -178,7 +185,9 @@ export async function listMyItems(env: Env, ownerId: string): Promise<{ id: stri
 }
 
 // パスワードハッシュ：PBKDF2-SHA256（塩あり・ストレッチあり）。形式 "pbkdf2$<iter>$<saltB64>$<hashB64>"。
-const PBKDF2_ITER = 210000;
+// WHY 100000上限：Cloudflare Workers の WebCrypto は PBKDF2 の iterations を 100000 までしか許可しない
+// （超過すると NotSupportedError で参加/ログインのパスワード処理が500になる）。100000は同ランタイムでの最大値。
+const PBKDF2_ITER = 100000;
 export async function pbkdf2Hash(password: string, saltB64?: string): Promise<string> {
   const salt = saltB64 ? Uint8Array.from(atob(saltB64), (c) => c.charCodeAt(0)) : crypto.getRandomValues(new Uint8Array(16));
   const base = await crypto.subtle.importKey("raw", new TextEncoder().encode(password), "PBKDF2", false, ["deriveBits"]);

@@ -13,7 +13,7 @@ const roles = ["admin", "accounting", "clerical", "other", "member"];
   <h1>人・ロール管理</h1>
   <div class="card">
     <div class="row">
-      <select id="inviteRole">{roles.map((r)=>(<option value={r}>{r}</option>))}</select>
+      <select id="inviteRole" aria-label="招待する人の役割">{roles.map((r)=>(<option value={r}>{r}</option>))}</select>
       <button class="btn btn-primary" id="inviteBtn" style="flex:0 0 auto">招待コードを発行</button>
     </div>
     <p class="muted" id="inviteOut"></p>
@@ -21,12 +21,13 @@ const roles = ["admin", "accounting", "clerical", "other", "member"];
   <div class="table-wrap" style="margin-top:1rem"><table><thead><tr><th>氏名・役職</th><th>ロール</th><th>状態</th><th>操作</th></tr></thead><tbody>
     {users.map((u)=>(<tr data-id={u.id}>
       <td>{u.name || "(未設定)"}</td>
-      <td><select class="role btn-sm" disabled={u.id==="org"}>{roles.map((r)=>(<option value={r} selected={r===u.role}>{r}</option>))}</select></td>
+      <td><select class="role btn-sm" disabled={u.id==="org"} aria-label="役割">{roles.map((r)=>(<option value={r} selected={r===u.role}>{r}</option>))}</select></td>
       <td>{u.status}{u.leave_requested_at ? <span class="muted">・脱退申請中</span> : null}</td>
-      <td>
+      <td style="white-space:nowrap">
         {u.status==="pending" && (<><button class="btn btn-sm btn-ok act" data-a="approve">承認</button> <button class="btn btn-sm btn-danger act" data-a="reject">却下</button></>)}
         {u.status==="active" && u.leave_requested_at && (<button class="btn btn-sm btn-danger act" data-a="leave_approve">脱退を承認</button>)}
         {u.status==="active" && !u.leave_requested_at && (<button class="btn btn-sm btn-danger act" data-a="reject">無効化</button>)}
+        {u.id!=="org" && u.id!==ses.uid && (<> <button class="btn btn-sm btn-danger del-user" title="名簿から完全に削除">削除</button></>)}
       </td></tr>))}
     {users.length===0 && (<tr><td colspan="4" class="muted">メンバーがいません。招待コードを発行してください。</td></tr>)}
   </tbody></table></div>
@@ -37,6 +38,7 @@ const roles = ["admin", "accounting", "clerical", "other", "member"];
     });
     document.querySelectorAll("tr[data-id]").forEach(tr=>{const id=tr.dataset.id;
       tr.querySelectorAll(".act").forEach(b=>b.addEventListener("click",async(e)=>{const r=await window.bo.api("/api/members",{_action:e.target.dataset.a,id},{btn:e.target,successMsg:"更新しました"});if(r.ok)setTimeout(()=>location.reload(),500);}));
+      const delBtn=tr.querySelector(".del-user");if(delBtn)delBtn.addEventListener("click",async(e)=>{const nm=(tr.querySelector("td")?.textContent||"このメンバー").trim();if(!(await window.bo.confirm("「"+nm+"」を名簿から完全に削除します。よろしいですか？",{title:"メンバーの削除",confirmLabel:"削除",danger:true,irreversible:true,auditHref:"/diagnostics"})))return;const r=await window.bo.api("/api/members",{_action:"delete",id},{btn:e.target,successMsg:"削除しました"});if(r.ok)setTimeout(()=>location.reload(),500);});
       const sel=tr.querySelector(".role");if(sel&&!sel.disabled){let prev=sel.value;sel.addEventListener("change",async()=>{if(!(await window.bo.confirm("このメンバーのロールを「"+sel.value+"」に変更しますか？",{confirmLabel:"変更",danger:true,auditHref:"/diagnostics"}))){sel.value=prev;return;}const r=await window.bo.api("/api/members",{_action:"role",id,role:sel.value},{successMsg:"ロールを変更しました"});if(r.ok)prev=sel.value;else sel.value=prev;});}
     });
   </script>

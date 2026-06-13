@@ -47,20 +47,29 @@ const skills = hasPlus && isOrgAdmin ? await listSkills(env).catch(() => []) : [
         </aside>
         <section class="pane">
           <div class="cbar">
-            <div class="model-seg" id="model-seg" role="group" aria-label="モデル選択">
-              <button class={"model-opt" + (defaultModel === "gemini" ? " on" : "")} type="button" data-m="gemini">Gemini<small>標準・無料</small></button>
-              <button class={"model-opt" + (defaultModel === "claude" ? " on" : "")} type="button" data-m="claude">Claude<small>高精度・要キー</small></button>
-              <button class={"model-opt" + (defaultModel === "local" ? " on" : "")} type="button" data-m="local">クラウドAI<small>Workers AI・無料枠</small></button>
-            </div>
-            {/* スクリプト互換のため hidden で値を保持 */}
+            {/* AIの種類の切替は管理者のみ（一般ユーザーは既定のAIで自動運用）。 */}
+            {isOrgAdmin && (
+              <div class="model-seg" id="model-seg" role="group" aria-label="AIの種類">
+                <button class={"model-opt" + (defaultModel === "gemini" ? " on" : "")} type="button" data-m="gemini">標準AI<small>無料の範囲</small></button>
+                <button class={"model-opt" + (defaultModel === "claude" ? " on" : "")} type="button" data-m="claude">高精度AI<small>キー登録が必要</small></button>
+                <button class={"model-opt" + (defaultModel === "local" ? " on" : "")} type="button" data-m="local">クラウドAI<small>標準</small></button>
+              </div>
+            )}
+            {/* スクリプト互換のため hidden で値を常に保持（一般ユーザーも既定モデルで動作）。 */}
             <select id="model" hidden>
-              <option value="gemini" selected={defaultModel === "gemini"}>Gemini（標準・無料枠）</option>
-              <option value="claude" selected={defaultModel === "claude"}>Claude（高精度・要キー）</option>
-              <option value="local" selected={defaultModel === "local"}>クラウドAI（Workers AI・無料枠）</option>
+              <option value="gemini" selected={defaultModel === "gemini"}>標準AI</option>
+              <option value="claude" selected={defaultModel === "claude"}>高精度AI</option>
+              <option value="local" selected={defaultModel === "local"}>クラウドAI（標準）</option>
             </select>
             <button class="btn btn-sm ses-toggle" type="button" id="ses-toggle">会話履歴</button>
           </div>
-          <div class="model-note" id="model-note"></div>
+          {isOrgAdmin && <div class="model-note" id="model-note"></div>}
+          <div class="ai-examples" aria-label="例文">
+            <span class="muted" style="font-size:.85rem">かんたん入力：</span>
+            <button class="chip ex" type="button" data-ex="今月の会費の入金状況をまとめて">今月の会費の入金状況をまとめて</button>
+            <button class="chip ex" type="button" data-ex="先月の支出を一覧にして">先月の支出を一覧にして</button>
+            <button class="chip ex" type="button" data-ex="次の定例会の案内文を作って">次の定例会の案内文を作って</button>
+          </div>
           <div class="chat-dl">
             <span class="muted">この会話を保存：</span>
             <button class="btn btn-sm dlc" type="button" data-ext="txt">TXT</button>
@@ -86,17 +95,17 @@ const skills = hasPlus && isOrgAdmin ? await listSkills(env).catch(() => []) : [
       </div>
 
       {isOrgAdmin && (
-        <details class="skills-box" style="margin-top:1rem">
-          <summary><strong>スキル管理</strong>（Agent Skills・コード実行/従量課金）</summary>
-          <p class="muted" style="font-size:.85rem">SKILL.md を登録して独自業務スキルを追加（Worker内でevalしません）。mode=instruction（通常費）／code（Anthropic code execution＝従量課金）。有効化すると「〇〇スキルで…」で実行（要 Claude）。</p>
+        <details class="skills-box adv" style="margin-top:1rem">
+          <summary><strong>スキル管理</strong></summary>
+          <p class="adv-note">よく使う作業を「スキル」として登録し、AIに任せられます。AIに作らせるか、手動で追加できます。一部は利用量に応じた費用がかかります。</p>
           <div class="card">
             <p class="muted">🤖 <strong>AIに作らせる</strong>：やりたいことを書くと、AI がスキルを設計して<strong>無効状態で自動登録</strong>します。確認して下で有効化してください。</p>
-            <div class="row"><input id="skreq" placeholder="例：月次の会費集計表を作るスキル" /><button class="btn btn-primary" id="skgen" style="flex:0 0 auto">AIに作らせる</button></div>
+            <div class="row"><input id="skreq" placeholder="例：月次の会費集計表を作るスキル" aria-label="作りたいスキルの内容" /><button class="btn btn-primary" id="skgen" style="flex:0 0 auto">AIに作らせる</button></div>
           </div>
           <details style="margin-top:.5rem"><summary>スキルを手動で追加</summary>
-            <div class="field"><input id="sname" placeholder="スキル名（呼び出し名）" /></div>
-            <div class="row"><input id="sdesc" placeholder="説明（任意）" /><select id="smode" style="flex:0 0 200px"><option value="instruction">instruction（通常費）</option><option value="code">code（従量課金）</option></select></div>
-            <div class="field"><textarea id="smd" rows="5" placeholder="SKILL.md（手順・テンプレート）"></textarea></div>
+            <div class="field"><label for="sname">スキル名（呼び出し名）</label><input id="sname" placeholder="例：会費集計" /></div>
+            <div class="row"><div style="flex:1"><label for="sdesc">説明（任意）</label><input id="sdesc" placeholder="どんな作業か" /></div><div style="flex:0 0 200px"><label for="smode">種類</label><select id="smode"><option value="instruction">標準（通常の費用）</option><option value="code">高度（利用量に応じた費用）</option></select></div></div>
+            <div class="field"><label for="smd">手順・テンプレート</label><textarea id="smd" rows="5" placeholder="作業の手順やひな形を書きます"></textarea></div>
             <button class="btn btn-primary" id="skadd">登録（無効状態で保存）</button>
           </details>
           <div class="table-wrap" style="margin-top:.5rem"><table><thead><tr><th>名前</th><th>モード</th><th>状態</th><th>操作</th></tr></thead><tbody>
@@ -116,9 +125,9 @@ const skills = hasPlus && isOrgAdmin ? await listSkills(env).catch(() => []) : [
         try { const q = new URLSearchParams(location.search).get("q"); if (q) { const m = document.getElementById("msg"); if (m) { m.value = q; m.focus(); } } } catch (e) { /* noop */ }
         // 使用中AIと、できること/できないことの表示。
         const NOTE = {
-          gemini: { use: "Gemini（標準・無料枠）", can: "会計入力・ファイル/名簿検索・文書作成・Web検索などツール実行", cant: "Gemini APIキーが必要（未設定時は他エンジンへ切替）" },
-          claude: { use: "Claude（高精度）", can: "ツール実行全般＋高度な推論", cant: "Claude APIキーが必要（未設定時はGeminiへ）" },
-          local: { use: "クラウドAI（Cloudflare Workers AI・無料枠）", can: "会話・要約・文章作成", cant: "会計登録/検索などのツール操作（必要なときはGemini/Claudeを選択）" },
+          gemini: { use: "標準AI（無料の範囲）", can: "会計入力・ファイル/名簿の検索・文書作成・調べもの など", cant: "利用にはキーの登録が必要（未設定時は自動で切替）" },
+          claude: { use: "高精度AI", can: "上記に加えて、より高度な作業", cant: "利用にはキーの登録が必要（未設定時は標準AIへ）" },
+          local: { use: "クラウドAI（標準）", can: "会話・要約・文章づくり", cant: "会計の登録や検索などの操作（必要なときは管理者が他のAIを設定）" },
         };
         const noteEl = document.getElementById("model-note");
         const engineForModel = (m) => (m === "claude" ? "claude" : m === "gemini" ? "gemini" : "workers_ai");
@@ -138,6 +147,11 @@ const skills = hasPlus && isOrgAdmin ? await listSkills(env).catch(() => []) : [
           mseg.querySelectorAll(".model-opt").forEach((x) => x.classList.toggle("on", x === b));
           sel.value = b.dataset.m;
           setNote(b.dataset.m);
+        }));
+        // 例文ボタン：押すと入力欄に文章を入れて整える（高齢ユーザーが何を書けばよいか迷わないように）。
+        document.querySelectorAll(".ai-examples .ex").forEach((b) => b.addEventListener("click", () => {
+          const m = document.getElementById("msg");
+          if (m) { m.value = b.dataset.ex || b.textContent || ""; m.focus(); }
         }));
         // 会話履歴トグル（モバイル）。
         const sesToggle = document.getElementById("ses-toggle");
@@ -337,6 +351,8 @@ const skills = hasPlus && isOrgAdmin ? await listSkills(env).catch(() => []) : [
   .model-note .mn-use { font-weight: 700; color: var(--ink-2); }
   .model-note .mn-can { color: var(--ok); }
   .model-note .mn-cant { color: var(--danger); }
+  .ai-examples { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 4px 2px 12px; }
+  .ai-examples .ex { font-size: .9rem; }
   .chat-dl { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin: 0 2px 12px; }
   .chat-dl > span { font-size: .76rem; }
   #log { border: 1px solid var(--line); border-radius: var(--r); padding: 20px 18px; min-height: 240px; max-height: 52vh; overflow-y: auto; background: var(--surface-2); display: flex; flex-direction: column; gap: 20px; }
