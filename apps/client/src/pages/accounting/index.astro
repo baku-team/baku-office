@@ -25,6 +25,8 @@ const isOrgAdmin = ses?.role === "admin" && ses?.ctx === "org";
 const { getBookkeepingMode } = await import("../../lib/settings.ts");
 const mode = await getBookkeepingMode(env);
 const acctItems = await import("../../lib/account-items.ts");
+const WALLET_TYPES = acctItems.WALLET_TYPES;
+const walletTypeLabel = (t: string) => WALLET_TYPES.find((w) => w.type === t)?.label ?? t;
 const jr = await import("../../lib/journal.ts");
 const accountItems = await acctItems.listAccountItems(env, { enabledOnly: true });
 const trial = (mode === "double" && period) ? await jr.trialBalance(env, period.id) : [];
@@ -80,6 +82,29 @@ const closureRows = closuresRaw.map((c) => {
     ))}
     {balances.length === 0 && (<div class="muted">口座がまだありません。</div>)}
   </section>
+
+  {isOrgAdmin && (
+    <details class="adv" style="margin:.2rem 0 1rem">
+      <summary>お金の種類・口座を追加／管理（管理者向け）</summary>
+      <p class="adv-note" style="font-size:.9rem">現金・口座のほか、クレジットカード・電子マネー・QRコード決済・プライベート資金など、扱うお金の種類を追加できます（freeeの区分に対応）。</p>
+      <div class="card">
+        <div class="row">
+          <div style="flex:2"><label for="wl-name">名称</label><input id="wl-name" placeholder="例：◯◯カード、PayPay、現金" /></div>
+          <div style="flex:1"><label for="wl-type">お金の種類</label><select id="wl-type">{WALLET_TYPES.map((w) => (<option value={w.type}>{w.label}</option>))}</select></div>
+          <div style="flex:1"><label for="wl-open">期首残高（円）</label><input id="wl-open" type="number" inputmode="numeric" value="0" /></div>
+          <div style="flex:0 0 auto;align-self:end"><button class="btn btn-primary" id="wl-add">追加</button></div>
+        </div>
+      </div>
+      <div class="table-wrap" style="margin-top:.5rem"><table>
+        <thead><tr><th>名称</th><th>種類</th><th class="r">期首残高</th><th></th></tr></thead>
+        <tbody>
+          {balances.map((w) => (
+            <tr><td>{w.name}</td><td>{walletTypeLabel(w.type)}</td><td class="r">{yen(w.opening_balance)}</td><td><button class="btn btn-sm btn-danger wl-del" data-id={w.id}>削除</button></td></tr>
+          ))}
+        </tbody>
+      </table></div>
+    </details>
+  )}
 
   <h2>お金を記録する</h2>
   <div class="card">
@@ -145,29 +170,8 @@ const closureRows = closuresRaw.map((c) => {
         </tbody>
       </table></div>
 
-      {isOrgAdmin && (
-        <Fragment>
-          <h2>仕訳を入力する</h2>
-          <div class="card">
-            <div class="row">
-              <div style="flex:1"><label for="je-date">日付</label><input id="je-date" type="date" value={todayIso} /></div>
-              <div style="flex:2"><label for="je-desc">摘要（メモ）</label><input id="je-desc" placeholder="例：備品購入" /></div>
-            </div>
-            <div class="row" style="margin-top:.5rem">
-              <div style="flex:2"><label for="je-debit">借方科目</label><select id="je-debit">{accountItems.map((a) => (<option value={a.id}>{a.code} {a.name}</option>))}</select></div>
-              <div style="flex:1"><label for="je-debit-amt">借方金額</label><input id="je-debit-amt" type="number" min="1" inputmode="numeric" placeholder="0" /></div>
-            </div>
-            <div class="row" style="margin-top:.5rem">
-              <div style="flex:2"><label for="je-credit">貸方科目</label><select id="je-credit">{accountItems.map((a) => (<option value={a.id}>{a.code} {a.name}</option>))}</select></div>
-              <div style="flex:1"><label for="je-credit-amt">貸方金額</label><input id="je-credit-amt" type="number" min="1" inputmode="numeric" placeholder="0" /></div>
-            </div>
-            <p class="muted" style="font-size:.82rem;margin:.5rem 0 0">借方と貸方の金額は一致させてください（複式のルール）。</p>
-            <div class="row" style="margin-top:.6rem"><button class="btn btn-primary" id="je-add">この仕訳を登録</button></div>
-          </div>
-        </Fragment>
-      )}
-
       <h2>仕訳帳</h2>
+      <p class="muted" style="font-size:.9rem">仕訳は上の「<strong>お金を記録する</strong>」（入金／出金／振替＋勘定科目）から自動で作成されます。複式の借方・貸方も自動です。</p>
       <div class="table-wrap"><table>
         <thead><tr><th>日付</th><th>借方</th><th>貸方</th><th class="r">金額</th><th>摘要</th><th>種類</th><th></th></tr></thead>
         <tbody>
@@ -337,23 +341,25 @@ const closureRows = closuresRaw.map((c) => {
       const r=await window.bo.api("/api/tx",{_action:"delete",id:e.target.dataset.del},{btn:e.target,successMsg:"削除しました"});
       if(r.ok)setTimeout(()=>location.reload(),500);
     }));
+    // お金の種類（口座）の追加・削除（管理者）。
+    document.getElementById("wl-add")?.addEventListener("click",async(e)=>{
+      const name=document.getElementById("wl-name").value.trim();
+      if(!name){window.bo.toast("名称を入力してください","err");return;}
+      const body={name,type:document.getElementById("wl-type").value,opening_balance:Number(document.getElementById("wl-open").value)||0};
+      const r=await window.bo.api("/api/accounting/wallet",body,{btn:e.currentTarget,successMsg:"追加しました"});
+      if(r.ok)setTimeout(()=>location.reload(),600);
+    });
+    document.querySelectorAll(".wl-del[data-id]").forEach(b=>b.addEventListener("click",async(e)=>{
+      if(!(await window.bo.confirm("この口座を削除しますか？（取引がある場合は削除できません）",{confirmLabel:"削除",danger:true})))return;
+      const r=await window.bo.api("/api/accounting/wallet",{_action:"delete",id:e.target.dataset.id},{btn:e.target,successMsg:"削除しました"});
+      if(r.ok)setTimeout(()=>location.reload(),500);
+    }));
     // 記帳方式の切替（管理者）。
     document.querySelectorAll(".bm-opt").forEach(b=>b.addEventListener("click",async()=>{
       const r=await window.bo.api("/api/settings",{_action:"bookkeeping_mode",mode:b.dataset.mode},{successMsg:"記帳方式を変更しました"});
       if(r.ok)setTimeout(()=>location.reload(),500);
     }));
-    // 手動仕訳の登録（複式・管理者）。
-    document.getElementById("je-add")?.addEventListener("click",async(e)=>{
-      const date=document.getElementById("je-date").value,desc=document.getElementById("je-desc").value;
-      const dAcc=document.getElementById("je-debit").value,dAmt=Number(document.getElementById("je-debit-amt").value);
-      const cAcc=document.getElementById("je-credit").value,cAmt=Number(document.getElementById("je-credit-amt").value);
-      if(!date){window.bo.toast("日付を入力してください","err");return;}
-      if(!(dAmt>0)||!(cAmt>0)){window.bo.toast("借方・貸方の金額を入力してください","err");return;}
-      if(dAmt!==cAmt){window.bo.toast("借方と貸方の金額を一致させてください","err");return;}
-      const body={date,description:desc,lines:[{side:"debit",account_item_id:dAcc,amount:dAmt},{side:"credit",account_item_id:cAcc,amount:cAmt}]};
-      const r=await window.bo.api("/api/accounting/journal",body,{btn:e.currentTarget,successMsg:"仕訳を登録しました"});
-      if(r.ok)setTimeout(()=>location.reload(),600);
-    });
+    // 仕訳の削除（複式・管理者）。手動入力は廃止し「お金を記録する」に一本化（仕訳は橋渡しで自動生成）。
     document.querySelectorAll(".je-del[data-del]").forEach(b=>b.addEventListener("click",async(e)=>{
       if(!(await window.bo.confirm("この仕訳を消します。よろしいですか？",{confirmLabel:"削除",danger:true})))return;
       const r=await window.bo.api("/api/accounting/journal",{_action:"delete",id:e.target.dataset.del},{btn:e.target,successMsg:"削除しました"});

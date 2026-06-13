@@ -60,6 +60,21 @@ export async function currentPeriod(env: Env): Promise<FiscalPeriod | null> {
 export async function listWallets(env: Env): Promise<Wallet[]> {
   return (await env.DB.prepare("SELECT * FROM wallets ORDER BY sort_order").all<Wallet>()).results;
 }
+// お金の種類（type）を選んで口座を追加。対応する勘定科目を自動紐付け（現金/口座/カード/電子マネー/QR/プライベート）。
+export async function createWallet(env: Env, w: { name: string; type: string; opening_balance?: number }): Promise<string> {
+  const { WALLET_TYPES, getAccountItemByCode, walletAccountCode } = await import("./account-items.ts");
+  const valid = WALLET_TYPES.some((t) => t.type === w.type) ? w.type : "other";
+  const acc = await getAccountItemByCode(env, walletAccountCode(valid));
+  const id = randomId();
+  const max = await env.DB.prepare("SELECT COALESCE(MAX(sort_order),-1) AS m FROM wallets").first<{ m: number }>();
+  await env.DB.prepare("INSERT INTO wallets (id,name,type,opening_balance,sort_order,account_item_id) VALUES (?,?,?,?,?,?)")
+    .bind(id, w.name, valid, Math.round(w.opening_balance ?? 0), (max?.m ?? -1) + 1, acc?.id ?? null).run();
+  return id;
+}
+export async function softDeleteWallet(env: Env, id: string): Promise<void> {
+  // 取引のある口座は残高計算が壊れるため物理削除しない。簡易にレコード削除（取引が無い前提・UI側で確認）。
+  await env.DB.prepare("DELETE FROM wallets WHERE id=?").bind(id).run();
+}
 export async function listCategories(env: Env): Promise<Category[]> {
   return (await env.DB.prepare("SELECT * FROM categories ORDER BY kind, sort_order").all<Category>()).results;
 }

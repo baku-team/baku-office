@@ -20,12 +20,17 @@ export type AccountItem = {
 const DEFAULTS: [string, string, Major][] = [
   ["111", "現金", "asset"],
   ["112", "普通預金", "asset"],
+  ["120", "電子マネー", "asset"],
+  ["121", "QR決済", "asset"],
   ["135", "売掛金", "asset"],
   ["170", "工具器具備品", "asset"],
+  ["180", "事業主貸", "asset"],
   ["195", "現金過不足", "asset"],
   ["311", "未払金", "liability"],
   ["315", "預り金", "liability"],
+  ["330", "クレジットカード", "liability"],
   ["401", "繰越金", "equity"],
+  ["420", "事業主借", "equity"],
   ["501", "売上高", "revenue"],
   ["509", "受取手数料", "revenue"],
   ["540", "雑収入", "revenue"],
@@ -41,10 +46,23 @@ const DEFAULTS: [string, string, Major][] = [
 ];
 const normalBalanceOf = (m: Major): "debit" | "credit" => (m === "asset" || m === "expense" ? "debit" : "credit");
 
-// 既定勘定科目を冪等投入。count==0 ガード＋code UNIQUE で並行適用も安全。
+// お金の種類（口座タイプ）。freee の口座区分に倣う。code は対応する勘定科目。
+export const WALLET_TYPES: { type: string; label: string; code: string }[] = [
+  { type: "cash", label: "現金", code: "111" },
+  { type: "bank", label: "口座（普通預金）", code: "112" },
+  { type: "credit_card", label: "クレジットカード", code: "330" },
+  { type: "emoney", label: "電子マネー", code: "120" },
+  { type: "qr", label: "QRコード決済", code: "121" },
+  { type: "private", label: "プライベート資金", code: "420" },
+  { type: "other", label: "その他", code: "112" },
+];
+export const walletAccountCode = (type: string): string => WALLET_TYPES.find((w) => w.type === type)?.code ?? "112";
+
+// 既定勘定科目を冪等投入。不足分のみ追加するので、既存団体にも新規科目（電子マネー/カード等）が増える。
+// code UNIQUE＋INSERT OR IGNORE で並行適用も安全。全て揃っていれば早期 return。
 export async function ensureChartOfAccounts(env: Env): Promise<void> {
   const row = await env.DB.prepare("SELECT COUNT(*) AS n FROM account_items").first<{ n: number }>();
-  if ((row?.n ?? 0) > 0) return;
+  if ((row?.n ?? 0) >= DEFAULTS.length) return;
   let i = 0;
   for (const [code, name, major] of DEFAULTS) {
     await env.DB.prepare(
@@ -58,11 +76,11 @@ export async function ensureCategoryAccountLinks(env: Env): Promise<void> {
   const items = await listAccountItems(env);
   const byCode = new Map(items.map((a) => [a.code, a]));
   const byName = new Map(items.map((a) => [a.name, a]));
-  // 口座：現金→111／その他（銀行等）→112。
+  // 口座：お金の種類(type)に対応する勘定科目へ紐付け（現金/口座/カード/電子マネー/QR/プライベート）。
   const wallets = (await env.DB.prepare("SELECT id,type,account_item_id FROM wallets").all<{ id: string; type: string; account_item_id: string | null }>()).results;
   for (const w of wallets) {
     if (w.account_item_id) continue;
-    const acc = w.type === "cash" ? byCode.get("111") : byCode.get("112");
+    const acc = byCode.get(walletAccountCode(w.type));
     if (acc) await env.DB.prepare("UPDATE wallets SET account_item_id=? WHERE id=?").bind(acc.id, w.id).run();
   }
   // 科目：名称一致を優先。無ければ kind で既定（income→売上高／expense→雑費）。
