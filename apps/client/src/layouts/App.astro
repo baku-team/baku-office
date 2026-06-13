@@ -82,6 +82,7 @@ const isAdminOrg = ses?.role === "admin" && ses?.ctx === "org";
   </head>
   <body>
     <div id="bo-progress" aria-hidden="true"></div>
+    <div id="bo-nav" aria-hidden="true"><span class="bo-nav-box"><span class="bo-nav-spin"></span>読み込み中…</span></div>
     <div class="app">
     {auth && ses && (
       <aside class="sidebar">
@@ -316,7 +317,17 @@ const isAdminOrg = ses?.role === "admin" && ses?.ctx === "org";
       }
       (window as any).bo = { toast, busy, api, confirm: confirmDialog, progress: { start: progStart, done: progDone } };
 
-      // 画面遷移（内部リンク/フォーム送信）でも進捗バーを表示。フルページ遷移は新ページ読込で自然にリセット。
+      // 画面遷移時の「読み込み中…」オーバーレイ（押した瞬間の反応・連打/二重送信の防止）。
+      // 速いページでチラつかないよう 180ms 遅延で表示。フルページ遷移は新ページ読込で自然に消える。
+      const navEl = document.getElementById("bo-nav");
+      let navTimer: number | null = null;
+      function navLoading(on: boolean) {
+        if (!navEl) return;
+        if (on) { if (navTimer) return; navTimer = window.setTimeout(() => { navEl.classList.add("on"); navTimer = null; }, 180); }
+        else { if (navTimer) { clearTimeout(navTimer); navTimer = null; } navEl.classList.remove("on"); }
+      }
+      function navStart() { progStart(); navLoading(true); window.setTimeout(() => { progDone(); navLoading(false); }, 8000); }
+      // 画面遷移（内部リンク/フォーム送信）で進捗バー＋ローディング表示。
       document.addEventListener("click", (e) => {
         const a = (e.target as HTMLElement)?.closest?.("a[href]") as HTMLAnchorElement | null;
         if (!a) return;
@@ -325,9 +336,11 @@ const isAdminOrg = ses?.role === "admin" && ses?.ctx === "org";
         const href = a.getAttribute("href") || "";
         if (!href || href.startsWith("#") || href.startsWith("javascript:")) return;
         if (a.host && a.host !== location.host) return; // 外部リンクは除外
-        progStart(); window.setTimeout(progDone, 8000); // 遷移しなかった場合の保険
+        navStart();
       }, true);
-      document.addEventListener("submit", (e) => { const f = e.target as HTMLFormElement; if (f && f.method && f.method.toLowerCase() === "get") { progStart(); window.setTimeout(progDone, 8000); } }, true);
+      document.addEventListener("submit", (e) => { const f = e.target as HTMLFormElement; if (f && f.method && f.method.toLowerCase() === "get") { navStart(); } }, true);
+      // 戻る/進む（bfcache 復帰）でオーバーレイが残らないよう確実に消す。
+      window.addEventListener("pageshow", () => { navLoading(false); progDone(); });
       window.addEventListener("pageshow", () => { progCount = 0; if (progEl) { progEl.classList.remove("on"); progEl.style.width = "0"; } });
 
       // テーマ切替（ダーク/ライト）。切替の一瞬だけ theme-switching でトランジション抑制。

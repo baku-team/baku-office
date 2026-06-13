@@ -122,12 +122,17 @@ html[data-mascot="off"] .bo-agent, html[data-mascot="off"] .bo-agent-pop { displ
 .bo-agent-task .s { font-size: .7rem; color: var(--muted); flex: 0 0 auto; }
 @keyframes boAgentDot { 0%,100% { transform: translateY(0); opacity: .5; } 50% { transform: translateY(-5px); opacity: 1; } }
 /* スマホでは本文・タブバーに重ならないよう縮小し、タブバーの上の右下に固定。 */
-@media (max-width: 720px) { .bo-agent { right: 10px; bottom: calc(70px + env(safe-area-inset-bottom)); width: 60px; height: 60px; } .bo-agent-img { width: 56px; } .bo-agent-pop { right: 10px; bottom: calc(138px + env(safe-area-inset-bottom)); } }
+@media (max-width: 720px) { .bo-agent { right: 8px; bottom: calc(72px + env(safe-area-inset-bottom)); width: 52px; height: 52px; opacity: .92; } .bo-agent-img { width: 48px; } .bo-agent-pop { right: 8px; bottom: calc(132px + env(safe-area-inset-bottom)); } }
 @media (prefers-reduced-motion: reduce) { .bo-agent-img, .bo-agent-dots i, .bo-agent-zzz { animation: none !important; } }
 
 /* トップ進捗バー（ホスト/API通信中・画面遷移中の表示） */
 #bo-progress { position: fixed; top: 0; left: 0; height: 3px; width: 0; background: var(--brand); z-index: 200; opacity: 0; pointer-events: none; transition: width .2s ease, opacity .25s ease; box-shadow: 0 0 8px var(--brand), 0 0 3px var(--brand); }
 #bo-progress.on { opacity: 1; }
+/* 画面遷移中の「読み込み中…」オーバーレイ。押した瞬間の反応＋連打/二重送信の防止（第2次04-2）。 */
+#bo-nav { position: fixed; inset: 0; z-index: 150; display: none; align-items: center; justify-content: center; background: color-mix(in srgb, var(--bg) 55%, transparent); backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px); }
+#bo-nav.on { display: flex; }
+.bo-nav-box { display: inline-flex; align-items: center; gap: 12px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md); box-shadow: var(--shadow-lg); padding: 16px 22px; font-size: 1.05rem; font-weight: 700; color: var(--ink); }
+.bo-nav-spin { width: 22px; height: 22px; border: 3px solid var(--brand); border-right-color: transparent; border-radius: 50%; animation: spin .7s linear infinite; flex: 0 0 auto; }
 
 /* 丸アイコンボタン（ダーク切替・通知） */
 .iconbtn { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; cursor: pointer; border: 1px solid var(--line); background: var(--surface); color: var(--ink-2); transition: background .18s, border-color .18s, transform .1s; position: relative; text-decoration: none; }
@@ -161,7 +166,8 @@ html[data-mascot="off"] .bo-agent, html[data-mascot="off"] .bo-agent-pop { displ
 @media (max-width: 720px) {
   .appbar .nav { display: none; }
   .tabbar { display: flex; }
-  main.wrap { padding-bottom: 96px; }
+  /* 下部タブ＋相棒マスコット（右下・約124px）に最後の本文が隠れないよう余白を確保（第2次05-1）。 */
+  main.wrap { padding-bottom: 150px; }
 }
 
 /* ナビ3形態（上部/サイド/下部）。html[data-nav=top|side|bottom] で切替（pref=localStorage bo_nav・既定top）。 */
