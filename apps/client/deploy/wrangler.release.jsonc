@@ -3,16 +3,22 @@
   // 【配布用テンプレート】顧客が Deploy ボタンで自分のCFアカウントへ展開する単一Worker（§3）。
   // リソースID は記載しない＝CFが複製先アカウントに自動作成してバインド。
   "name": "baku-office",
-  "main": "./_worker.js/index.js",
+  // v13：ビルド成果物は server/（entry.mjs + chunks・事前バンドル）と client/（静的アセット）に分離。
+  //   no_bundle=true でビルド済モジュールをそのまま展開＝顧客側に node_modules / ビルド不要。
+  //   base_dir=./server でモジュール探索を server 配下に限定（client のJSをWorkerに取り込まない）。
+  "main": "./server/entry.mjs",
+  "base_dir": "./server",
+  "no_bundle": true,
+  "rules": [{ "type": "ESModule", "globs": ["**/*.js", "**/*.mjs"] }],
   "compatibility_date": "2025-04-01",
   "compatibility_flags": ["nodejs_compat"],
-  "assets": { "binding": "ASSETS", "directory": "." },
+  "assets": { "binding": "ASSETS", "directory": "./client" },
   "observability": { "enabled": true },
 
   // 自動プロビジョニング（公式推奨）：id・名前を省略し binding のみ。Deploy時にCFが自動作成する。
   // KVは単一（LICENSE）に集約：複数KVの自動命名が衝突（already exists）するのを避けるため。
   //   ファイルは LICENSE に "f/" prefix で保存（storage.ts の mediaKv フォールバック）。
-  //   Astro session は未使用のため SESSION KV も不要。
+  //   Astro session は未使用のため SESSION KV も不要（コードは独自HMACセッション）。
   "d1_databases": [{ "binding": "DB", "migrations_dir": "migrations" }],
   "kv_namespaces": [
     { "binding": "LICENSE" }
