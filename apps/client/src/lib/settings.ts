@@ -4,6 +4,17 @@ import { DEFAULT_MODELS, isValidWorkersAiModel } from "../core/models/config.ts"
 
 export type AiEngine = "gemini" | "claude";
 
+// 記帳方式：単式（出納帳・既定）／複式（仕訳・試算表）。管理者が切替。
+export type BookkeepingMode = "single" | "double";
+export async function getBookkeepingMode(env: Env): Promise<BookkeepingMode> {
+  return (await env.LICENSE.get("bookkeeping_mode")) === "double" ? "double" : "single";
+}
+export async function setBookkeepingMode(env: Env, m: string): Promise<BookkeepingMode> {
+  const v: BookkeepingMode = m === "double" ? "double" : "single";
+  await kvPut(env, "bookkeeping_mode", v);
+  return v;
+}
+
 // クラウドAI（Workers AI）の使用モデル。管理者が上位モデルを選択できる。
 // 解決順：KV設定 > env.WORKERS_AI_MODEL > 既定。妥当でないIDは既定へフォールバック。
 export async function getWorkersAiModel(env: Env): Promise<string> {
