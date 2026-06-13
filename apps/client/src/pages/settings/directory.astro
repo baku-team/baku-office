@@ -88,7 +88,8 @@ const DECL = [
           <button class={"seg-opt" + (policy?.mode === "auto" ? " on" : "")} type="button" data-m="auto">即時に自動応答</button>
           <button class={"seg-opt" + (policy?.mode === "hybrid" ? " on" : "")} type="button" data-m="hybrid">信頼度で自動／受付箱</button>
         </div>
-        <div class="field" style="margin-top:.6rem"><label><input type="checkbox" id="d-verified" checked={policy?.requireVerified} /> 検証済みの相手のみ受け付ける</label></div>
+        <div class="field" style="margin-top:.6rem"><label><input type="checkbox" id="d-certified" checked={policy?.requireCertified} /> 🏅 <strong>貘公式認証の団体のみ受け付ける</strong>（公認同士のクリーンな連携。スパム/サクラを排除）</label></div>
+        <div class="field"><label><input type="checkbox" id="d-verified" checked={policy?.requireVerified} /> 実在検証済みの相手のみ自動応答する</label></div>
         <div class="field"><label><input type="checkbox" id="d-aireview" checked={policy?.requireAiReview} /> 接触時にAIで相手を確認する</label></div>
         <div class="field"><label for="d-trust">自動応答の信頼度しきい値（0〜1）：<span id="d-trustval">{policy?.minHostTrust ?? 0.3}</span></label><input id="d-trust" type="range" min="0" max="1" step="0.05" value={policy?.minHostTrust ?? 0.3} /></div>
         <button class="btn btn-primary" type="button" id="d-policy-save">受付ポリシーを保存</button>
@@ -160,7 +161,7 @@ const DECL = [
         document.querySelectorAll("#d-mode .seg-opt").forEach((b) => b.addEventListener("click", () => { mode = b.dataset.m; document.querySelectorAll("#d-mode .seg-opt").forEach((x) => x.classList.toggle("on", x === b)); }));
         document.getElementById("d-trust").addEventListener("input", (e) => { document.getElementById("d-trustval").textContent = e.target.value; });
         document.getElementById("d-policy-save").addEventListener("click", async (e) => {
-          await api({ _action: "reception_set", mode, requireVerified: document.getElementById("d-verified").checked, requireAiReview: document.getElementById("d-aireview").checked, minHostTrust: Number(document.getElementById("d-trust").value) }, { btn: e.currentTarget, successMsg: "受付ポリシーを保存しました" });
+          await api({ _action: "reception_set", mode, requireCertified: document.getElementById("d-certified").checked, requireVerified: document.getElementById("d-verified").checked, requireAiReview: document.getElementById("d-aireview").checked, minHostTrust: Number(document.getElementById("d-trust").value) }, { btn: e.currentTarget, successMsg: "受付ポリシーを保存しました" });
         });
         document.querySelectorAll(".d-inq-act").forEach((b) => b.addEventListener("click", async (e) => {
           const r = await api({ _action: "inquiry_decide", id: e.target.dataset.id, decision: e.target.dataset.d }, { btn: e.target, successMsg: "処理しました" });

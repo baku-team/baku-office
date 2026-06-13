@@ -1,0 +1,71 @@
+---
+import { env } from "cloudflare:workers";
+export const prerender = false;
+import Host from "../layouts/Host.astro";
+const { getHostSession } = await import("../lib/hostauth.ts");
+const ses = await getHostSession(env, Astro.request);
+if (!ses?.isAdmin) return Astro.redirect("/login", 302);
+const { listAll, listReports } = await import("../lib/directory.ts");
+const entries = await listAll(env);
+const reports = await listReports(env, "open");
+const t = (s: number | null) => (s ? new Date(s * 1000).toISOString().slice(0, 16).replace("T", " ") : "—");
+---
+<Host title="公開ディレクトリ管理" active="/directory">
+  <h1>公開ディレクトリ管理</h1>
+  <p class="muted">公開団体の掲載状況・信頼スコア・公式認証・通報を管理します。<strong>公式認証</strong>は、実際に人と会って事業を確認したうえで付与してください（公認団体同士のクリーンな連携に使われます）。</p>
+
+  <h2>通報（未対応 {reports.length}）</h2>
+  <div class="table-wrap"><table><thead><tr><th>対象</th><th>通報元</th><th>理由</th><th>日時</th><th>操作</th></tr></thead><tbody>
+    {reports.map((r) => (
+      <tr data-rep={r.id} data-lic={r.target_license}>
+        <td><code>{r.target_license}</code></td>
+        <td class="muted" style="font-size:.8rem">{r.reporter_license ?? "—"}</td>
+        <td>{r.reason ?? "—"}{r.detail ? `（${r.detail}）` : ""}</td>
+        <td>{t(r.created_at)}</td>
+        <td>
+          <button class="btn btn-ghost rep-block">掲載停止</button>
+          <button class="btn btn-ghost rep-dismiss">却下</button>
+        </td>
+      </tr>
+    ))}
+    {reports.length === 0 && (<tr><td colspan="5" class="muted">未対応の通報はありません。</td></tr>)}
+  </tbody></table></div>
+
+  <h2 style="margin-top:1.5rem">掲載団体（{entries.length}）</h2>
+  <div class="table-wrap"><table><thead><tr><th>団体</th><th>信頼</th><th>認証</th><th>掲載</th><th>通報</th><th>操作</th></tr></thead><tbody>
+    {entries.map((e) => (
+      <tr data-lic={e.license_id}>
+        <td>{e.org_name}<div class="muted" style="font-size:.75rem"><code>{e.license_id}</code></div></td>
+        <td>{e.trust_score}</td>
+        <td>{e.certified ? "✅ 公認" : "—"}</td>
+        <td>{e.blocked ? "⛔停止" : e.listed ? "公開中" : "非公開"}</td>
+        <td>{e.open_reports || ""}</td>
+        <td>
+          {e.certified
+            ? <button class="btn btn-ghost d-uncertify">認証取消</button>
+            : <button class="btn btn-ghost d-certify">公式認証を付与</button>}
+          {e.blocked
+            ? <button class="btn btn-ghost d-unblock">停止解除</button>
+            : <button class="btn btn-ghost d-block">掲載停止</button>}
+        </td>
+      </tr>
+    ))}
+    {entries.length === 0 && (<tr><td colspan="6" class="muted">公開団体はまだありません。</td></tr>)}
+  </tbody></table></div>
+
+  <script slot="scripts" is:inline>
+    const api = (body, btn, successMsg) => window.bo.api("/api/directory-admin", body, { btn, successMsg });
+    document.querySelectorAll("tr[data-lic]").forEach((tr) => {
+      const license_id = tr.getAttribute("data-lic");
+      tr.querySelector(".d-certify")?.addEventListener("click", async (e) => { const note = prompt("認証メモ（面談日・確認事項など）") ?? ""; if (!confirm("この団体に公式認証を付与しますか？（人と会って事業確認済みであること）")) return; const r = await api({ _action: "certify", license_id, note }, e.currentTarget, "公式認証を付与しました"); if (r.ok) location.reload(); });
+      tr.querySelector(".d-uncertify")?.addEventListener("click", async (e) => { if (!confirm("公式認証を取り消しますか？")) return; const r = await api({ _action: "uncertify", license_id }, e.currentTarget, "認証を取り消しました"); if (r.ok) location.reload(); });
+      tr.querySelector(".d-block")?.addEventListener("click", async (e) => { if (!confirm("この団体の掲載を停止しますか？")) return; const r = await api({ _action: "block", license_id }, e.currentTarget, "掲載停止しました"); if (r.ok) location.reload(); });
+      tr.querySelector(".d-unblock")?.addEventListener("click", async (e) => { const r = await api({ _action: "unblock", license_id }, e.currentTarget, "停止解除しました"); if (r.ok) location.reload(); });
+    });
+    document.querySelectorAll("tr[data-rep]").forEach((tr) => {
+      const report_id = tr.getAttribute("data-rep"); const license_id = tr.getAttribute("data-lic");
+      tr.querySelector(".rep-block")?.addEventListener("click", async (e) => { if (!confirm("対象団体を掲載停止しますか？")) return; await api({ _action: "block", license_id }, e.currentTarget, null); const r = await api({ _action: "report_status", report_id, status: "reviewed" }, e.currentTarget, "対応しました"); if (r.ok) location.reload(); });
+      tr.querySelector(".rep-dismiss")?.addEventListener("click", async (e) => { const r = await api({ _action: "report_status", report_id, status: "dismissed" }, e.currentTarget, "却下しました"); if (r.ok) location.reload(); });
+    });
+  </script>
+</Host>

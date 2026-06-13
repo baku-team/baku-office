@@ -285,7 +285,7 @@ export async function runAgent(ctx: Ctx, owner: string, text: string, image?: { 
     if (isPlus && n === "find_partner") {
       const r = await searchDirectory(env, String(a.query ?? ""), Array.isArray(a.tags) ? (a.tags as string[]) : undefined);
       if (!r.ok) return `探索に失敗：${r.error ?? ""}`;
-      const list = (r.results ?? []).slice(0, 10).map((c) => `・${c.org_name}（ID:${c.license_id}）${c.verified ? "✓検証済" : ""} 信頼${c.trust_score}\n  ${c.summary}\n  公開: ${c.public_actions.map((x) => x.name).join(", ") || "問い合わせのみ"}`);
+      const list = (r.results ?? []).slice(0, 10).map((c) => `・${c.org_name}（ID:${c.license_id}）${c.certified ? "🏅公認 " : ""}${c.verified ? "✓検証済" : ""} 信頼${c.trust_score}\n  ${c.summary}\n  公開: ${c.public_actions.map((x) => x.name).join(", ") || "問い合わせのみ"}`);
       return list.length ? `見つかった団体：\n${list.join("\n")}` : "条件に合う公開団体は見つかりませんでした。";
     }
     if (isPlus && n === "call_public") {

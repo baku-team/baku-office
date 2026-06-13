@@ -2,10 +2,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
-import { publishEntry, searchEntries, recomputeTrust, reportEntry, getEntry } from "../src/lib/directory.ts";
+import { publishEntry, searchEntries, recomputeTrust, reportEntry, getEntry, setCertified } from "../src/lib/directory.ts";
 
 const SCHEMA = `
-CREATE TABLE public_directory (license_id TEXT PRIMARY KEY, org_name TEXT NOT NULL, profile TEXT NOT NULL DEFAULT '{}', embedding TEXT, verification TEXT NOT NULL DEFAULT '{}', trust_score REAL NOT NULL DEFAULT 0, listed INTEGER NOT NULL DEFAULT 0, blocked INTEGER NOT NULL DEFAULT 0, updated_at INTEGER NOT NULL);
+CREATE TABLE public_directory (license_id TEXT PRIMARY KEY, org_name TEXT NOT NULL, profile TEXT NOT NULL DEFAULT '{}', embedding TEXT, verification TEXT NOT NULL DEFAULT '{}', trust_score REAL NOT NULL DEFAULT 0, listed INTEGER NOT NULL DEFAULT 0, blocked INTEGER NOT NULL DEFAULT 0, updated_at INTEGER NOT NULL, certified INTEGER NOT NULL DEFAULT 0, certified_at INTEGER, certified_note TEXT);
 CREATE TABLE directory_reports (id TEXT PRIMARY KEY, target_license TEXT NOT NULL, reporter_license TEXT, reason TEXT, detail TEXT, status TEXT NOT NULL DEFAULT 'open', created_at INTEGER NOT NULL);
 CREATE TABLE licenses (license_id TEXT PRIMARY KEY, plan TEXT, entitlement TEXT, status TEXT, deploy_url TEXT, last_seen INTEGER, created_at INTEGER NOT NULL);
 CREATE TABLE a2a_audit (id TEXT PRIMARY KEY, conn_id TEXT, from_license TEXT, to_license TEXT, action TEXT, status TEXT, kind TEXT DEFAULT 'conn', created_at INTEGER NOT NULL);
@@ -64,6 +64,22 @@ test("信頼スコア：plus＋運用歴ありは free＋新規より高い", as
   const b = await recomputeTrust(env, "LIC-B");
   assert.ok(a > b);
   assert.ok(a > 0 && a <= 1);
+});
+
+test("公式認証：付与で certified=1・trustブースト・certifiedOnly検索に反映", async () => {
+  const { env } = setup();
+  await publishEntry(env, "LIC-A", { orgName: "公認花屋", profile: { summary: "生花店", tags: ["花"] }, embedding: [1, 0, 0], verification: {}, listed: true });
+  const before = await recomputeTrust(env, "LIC-A");
+  await setCertified(env, "LIC-A", true, "2026-06面談");
+  const e = await getEntry(env, "LIC-A");
+  assert.equal(e?.certified, 1);
+  const after = await recomputeTrust(env, "LIC-A");
+  assert.ok(after > before, "認証で信頼スコアが上がる");
+  const certOnly = await searchEntries(env, { query: "花", certifiedOnly: true });
+  assert.equal(certOnly.length, 1);
+  assert.equal(certOnly[0].certified, true);
+  await setCertified(env, "LIC-A", false);
+  assert.equal((await searchEntries(env, { query: "花", certifiedOnly: true })).length, 0);
 });
 
 test("通報が閾値(3)に達すると自動 block", async () => {

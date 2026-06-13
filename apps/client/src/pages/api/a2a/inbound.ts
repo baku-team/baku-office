@@ -24,7 +24,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
   if (!jwk) return json({ ok: false, error: "検証鍵が未設定" }, 503);
   if (!(await verifyEnvelope(await importVerifyKey(jwk), envlp))) return json({ ok: false, error: "署名検証に失敗" }, 401);
 
-  const p = payloadOf(envlp) as { from?: string; groupId?: string; action?: string; args?: Record<string, unknown>; exp?: number; nonce?: string; public?: boolean; fromTrust?: number; fromVerified?: boolean; fromName?: string };
+  const p = payloadOf(envlp) as { from?: string; groupId?: string; action?: string; args?: Record<string, unknown>; exp?: number; nonce?: string; public?: boolean; fromTrust?: number; fromVerified?: boolean; fromCertified?: boolean; fromName?: string };
   if (!p || typeof p.exp !== "number" || p.exp < nowSec()) return json({ ok: false, error: "期限切れ" }, 401);
   // リプレイ防止：署名は exp(60秒) 窓内なら再送可だったため nonce を使い捨て化（脅威モデル⑦＝署名＋nonce）。
   const nonce = typeof p.nonce === "string" ? p.nonce : "";
@@ -43,9 +43,18 @@ export const POST: APIRoute = async ({ request, locals }) => {
     return json({ ok: false, error: "受信を拒否しています" }, 403);
   }
 
+  // 公認のみ受付：公認団体以外からの公開接触は拒否（公認エージェント同士のクリーンな連携）。
+  if (publicPath && p.fromCertified !== true) {
+    const pol = await getReceptionPolicy(env);
+    if (pol.requireCertified) {
+      await logDiag(env, "info", "other", `A2A 公認のみ設定により非公認の公開接触を拒否（from ${p.from ?? "?"}）`);
+      return json({ ok: false, error: "公認団体のみ受け付けています" }, 403);
+    }
+  }
+
   // 問い合わせメッセージ（__inquiry__）は受付箱へ積むのみ（実行しない）。
   if (publicPath && name === "__inquiry__") {
-    await addInquiry(ctx, { fromLicense: String(p.from ?? ""), fromName: p.fromName, action: "inquiry", args: p.args, message: String((p.args as Record<string, unknown> | undefined)?.message ?? ""), trust: { hostTrust: p.fromTrust ?? 0, verified: p.fromVerified === true } });
+    await addInquiry(ctx, { fromLicense: String(p.from ?? ""), fromName: p.fromName, action: "inquiry", args: p.args, message: String((p.args as Record<string, unknown> | undefined)?.message ?? ""), trust: { hostTrust: p.fromTrust ?? 0, verified: p.fromVerified === true, certified: p.fromCertified === true } });
     return json({ ok: true, queued: true, message: "受付しました。担当の承認をお待ちください。" });
   }
 
@@ -64,7 +73,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
     if (allowAuto && policy.requireVerified && p.fromVerified !== true) allowAuto = false;
     if (allowAuto && policy.requireAiReview) { const rev = await reviewIncomingPartner(env, String(p.fromName ?? p.from ?? "")).catch(() => ({ ok: true, reason: "" })); if (!rev.ok) allowAuto = false; }
     if (!allowAuto) {
-      await addInquiry(ctx, { fromLicense: String(p.from ?? ""), fromName: p.fromName, action: name, args: p.args, message: "", trust: { hostTrust: fromTrust, verified: p.fromVerified === true } });
+      await addInquiry(ctx, { fromLicense: String(p.from ?? ""), fromName: p.fromName, action: name, args: p.args, message: "", trust: { hostTrust: fromTrust, verified: p.fromVerified === true, certified: p.fromCertified === true } });
       return json({ ok: true, queued: true, message: "受付しました。担当の承認をお待ちください。" });
     }
   }
