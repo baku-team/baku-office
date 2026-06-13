@@ -40,9 +40,9 @@ const theme = hasPlus ? await getTheme(Astro.locals.ctx) : {};
           <div class="muted" style="font-size:.78rem;margin-top:4px">説明を入れると相棒画像を生成し、そのまま設定します（数秒〜十数秒）。CF上の Workers AI で生成します。</div>
         </div>
         <div class="field">
-          <label>画像をアップロードして設定</label>
-          <div class="row" style="gap:.5rem"><input id="th-mascot-file" type="file" accept="image/png,image/jpeg,image/webp,image/gif" style="flex:1" /><button class="btn btn-sm" type="button" id="th-mascot-up" style="flex:0 0 auto">アップロード</button></div>
-          <div class="muted" style="font-size:.78rem;margin-top:4px">PNG/JPEG/WebP/GIF・3MBまで。背景透過のPNGが綺麗に表示されます。</div>
+          <label for="th-mascot-file">画像をアップロードして設定</label>
+          <div class="row" style="gap:.5rem"><input id="th-mascot-file" type="file" accept="image/png,image/jpeg,image/webp,image/gif" style="flex:1" aria-label="相棒の画像ファイル" /><button class="btn btn-sm" type="button" id="th-mascot-up" style="flex:0 0 auto">アップロード</button></div>
+          <div class="muted" style="font-size:.82rem;margin-top:4px">PNG/JPEG/WebP/GIF・3MBまで。背景透過のPNGが綺麗に表示されます。</div>
         </div>
         <div class="row">
           <label style="flex:1">ブランド色<input id="th-brand-color" value={theme.colors?.brand ?? ""} placeholder="#C9A86A" /></label>

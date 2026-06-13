@@ -37,7 +37,7 @@ const yen = (n: number | null) => (n == null ? "—" : "¥" + n.toLocaleString()
           <h2 style="margin-top:0;border:0">請求書をアップロード</h2>
           <p class="muted">PDF または画像（JPEG/PNG）を選んでアップロードすると、内容を自動抽出して登録します。メール添付・AIチャットからも登録できます。</p>
           <div class="row">
-            <input type="file" id="invfile" accept="application/pdf,image/*" />
+            <input type="file" id="invfile" accept="application/pdf,image/*" aria-label="アップロードする請求書ファイル（PDFまたは画像）" />
             <button class="btn btn-primary" id="invup" style="flex:0 0 auto">アップロードして抽出</button>
           </div>
         </div>

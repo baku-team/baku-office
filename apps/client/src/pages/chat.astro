@@ -100,7 +100,7 @@ const waModelActive = isOrgAdmin && env.AI ? await (await import("../lib/setting
             </label>
           )}
           <div class="cinput">
-            <input type="file" id="att" accept="image/*,application/pdf" hidden />
+            <input type="file" id="att" accept="image/*,application/pdf" hidden aria-label="添付ファイル（画像・PDF）" />
             <button class="btn" id="att-btn" type="button" title="ファイルを添付（画像・PDF）" style="flex:0 0 auto">📎</button>
             <textarea id="msg" placeholder="メッセージを入力（Ctrl/⌘+Enter で送信）"></textarea>
             <button class="btn btn-primary" id="send" style="flex:0 0 auto">送信</button>

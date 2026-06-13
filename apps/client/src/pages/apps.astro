@@ -51,6 +51,8 @@ const ENT_OPTS = ["free", "plus", "pro", "nonprofit", "enterprise"];
     </div>
   </div>
 
+  {/* ストア閲覧・入手は管理者のみ（一般ユーザーは「使う（導入済み）」だけを表示・第2次05-2）。 */}
+  {isAdminOrg && (
   <div class="apps-panel" data-panel="store">
   <h2>ストア</h2>
   <p class="muted">ホストが配信する公開アプリ。お使いのプランで入手できるものが表示されます（DL数・評価順）。</p>
@@ -92,6 +94,7 @@ const ENT_OPTS = ["free", "plus", "pro", "nonprofit", "enterprise"];
   )}
 
   </div>
+  )}
 
   {isAdminOrg && (
     <>

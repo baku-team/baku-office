@@ -87,7 +87,7 @@ const kvPct = KV_WRITE_FREE_LIMIT > 0 ? Math.min(100, Math.round((kvWrites / KV_
         <div class="reset-line"><span>無料枠のリセット（日次）</span><strong>{reset.daily}</strong></div>
         <div class="reset-line"><span>上限のリセット（月次）</span><strong>{reset.monthly}</strong></div>
         <div class="reset-line"><span>当月の推定費用合計</span><strong>${totalUsd.toFixed(2)}</strong></div>
-        <div class="muted" style="font-size:.78rem;margin-top:6px">※参考単価による概算です。実費は各プロバイダの請求が正となります。</div>
+        <div class="muted" style="font-size:.82rem;margin-top:6px">※参考単価による概算です。実費は各プロバイダの請求が正となります。</div>
       </div>
       <div class="table-wrap"><table>
         <thead><tr><th>API</th><th>本日</th><th>当月回数</th><th>当月token</th><th>当月推定$</th><th>当月ニューロン/上限</th><th>無料枠/日</th><th>当月回数上限</th><th>当月上限$</th><th>超過時</th></tr></thead>
@@ -218,7 +218,7 @@ const kvPct = KV_WRITE_FREE_LIMIT > 0 ? Math.min(100, Math.round((kvWrites / KV_
   .bars { display: flex; align-items: flex-end; gap: 4px; height: 140px; }
   .bar { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; height: 100%; }
   .bar .fill { width: 64%; background: var(--navy); border-radius: 3px 3px 0 0; min-height: 2px; transition: height .2s; }
-  .bar .bl { font-size: .55rem; color: var(--muted); margin-top: 3px; white-space: nowrap; }
+  .bar .bl { font-size: .82rem; color: var(--muted); margin-top: 3px; white-space: nowrap; }
   .u-warn { color: var(--warn); font-weight: 700; }
   .u-over { color: var(--danger); font-weight: 700; }
   /* 通信量（KV書き込み）バー */
@@ -233,7 +233,7 @@ const kvPct = KV_WRITE_FREE_LIMIT > 0 ? Math.min(100, Math.round((kvWrites / KV_
   .neuron-cell { display: flex; flex-direction: column; gap: 10px; min-width: 150px; }
   .neuron-val { font-weight: 600; }
   .neuron-val small { color: var(--muted); font-weight: 400; }
-  .neuron-cap { display: flex; align-items: center; gap: 8px; font-size: .74rem; color: var(--muted); }
+  .neuron-cap { display: flex; align-items: center; gap: 8px; font-size: .82rem; color: var(--muted); }
   .neuron-cap input { width: 100px; }
   /* 上限編集テーブル：入力・セルに余白を確保し詰まりを解消 */
   .table-wrap th, .table-wrap td { padding: .7rem .85rem; vertical-align: middle; }

@@ -14,8 +14,8 @@ const opt = (cur: string, v: string) => ({ value: v, selected: cur === v });
 const fmt = (s: number | null) => (s ? new Date(s * 1000).toISOString().slice(0, 10) : "—");
 const cols = canEdit ? 7 : 6;
 ---
-<App title="会員管理" active="/membership">
-  <h1>会員管理</h1>
+<App title="名簿" active="/membership">
+  <h1>名簿</h1>
   <p class="muted">会費を払う団体会員の名簿。氏名・連絡先・会費支払状況・支払い日時・任意項目を管理できます（全プランで利用可）。</p>
   <div class="grid">
     <div class="card"><div class="label">会員数</div><div class="num">{stats.total}</div></div>
