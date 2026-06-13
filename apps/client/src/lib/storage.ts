@@ -1,3 +1,4 @@
+import { kvPut, recordKvWrite } from "./kv.ts";
 // ストレージ抽象（設計書§11）：R2バインディングがあれば優先、無ければKV標準モード（カード不要）。
 import { randomId, encryptBytes, decryptBytes } from "@baku-office/shared";
 import { nowSec } from "./accounting.ts";
@@ -40,7 +41,7 @@ export async function maxUploadMb(env: Env): Promise<number> {
 }
 export async function setMaxUploadMb(env: Env, mb: number): Promise<number> {
   const clamped = Math.min(KV_HARD_MAX_MB, Math.max(1, Math.round(mb)));
-  await env.LICENSE.put("max_upload_mb", String(clamped));
+  await kvPut(env, "max_upload_mb", String(clamped));
   return clamped;
 }
 
@@ -53,7 +54,7 @@ export async function getRetentionDays(env: Env): Promise<number> {
 }
 export async function setRetentionDays(env: Env, days: number): Promise<number> {
   const v = Number.isFinite(days) && days > 0 ? Math.round(days) : 0;
-  await env.LICENSE.put("file_retention_days", String(v));
+  await kvPut(env, "file_retention_days", String(v));
   return v;
 }
 
@@ -77,6 +78,7 @@ export async function saveFile(env: Env, file: File, createdBy: string, ctx: Fil
     if (size > limit) throw new Error(`標準モードは1ファイル ${limit / 1024 / 1024}MB まで（高度なオプションで上限変更 or R2有効化）`);
     const key = `f/${id}`;
     await mediaKv(env).put(key, buf, { metadata: { contentType: "application/octet-stream" } });
+    if (!env.MEDIA) await recordKvWrite(env); // MEDIA未設定時はLICENSEへ書込＝KV枠を消費するので計上
     ref = `kv:${key}`;
   }
   const days = await getRetentionDays(env);
@@ -166,6 +168,7 @@ export async function putRawBlob(env: Env, ref: string, buf: ArrayBuffer): Promi
     return;
   }
   await mediaKv(env).put(ref.replace(/^kv:/, ""), buf, { metadata: { contentType: "application/octet-stream" } });
+  if (!env.MEDIA) await recordKvWrite(env); // MEDIA未設定時はLICENSEへ書込＝KV枠を消費するので計上
 }
 
 // 削除ジョブ（drain から定期実行・P0-5）：

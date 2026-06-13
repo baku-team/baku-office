@@ -1,7 +1,7 @@
 import type { APIRoute } from "astro";
 import { getSession } from "../../lib/auth.ts";
 import { setMaxUploadMb, setRetentionDays } from "../../lib/storage.ts";
-import { setAiEngine, setCustomPrompt, setWorkersPaid, setNotifyWebhook } from "../../lib/settings.ts";
+import { setAiEngine, setCustomPrompt, setWorkersPaid, setNotifyWebhook, setWorkersAiModel } from "../../lib/settings.ts";
 import { setAutonomy, saveAutonomyConfig } from "../../lib/autonomy.ts";
 import { setStorageLimits } from "../../lib/storage-usage.ts";
 import { partCatalog, enabledPartIds, setEnabledPartIds } from "../../core/parts.ts";
@@ -21,7 +21,7 @@ const json = (o: unknown, s = 200) => new Response(JSON.stringify(o), { status: 
 export const POST: APIRoute = async ({ request, locals }) => {
   const ses = await getSession(env, request);
   if (!ses || ses.role !== "admin" || ses.ctx !== "org") return json({ error: "管理者のみ" }, 403);
-  const b = (await request.json().catch(() => ({}))) as { _action?: string; mb?: number; days?: number; engine?: string; prompt?: string; webhook?: string; limits?: Record<string, number>; parts?: string[]; theme?: unknown; nav?: { hidden?: string[]; labels?: Record<string, string>; order?: string[] }; appId?: string; draftId?: string; layout?: { order?: string[]; hidden?: string[] }; domain?: string; workersPaid?: boolean; on?: boolean; cfToken?: string; cfAccount?: string; ghToken?: string; ghRepo?: string };
+  const b = (await request.json().catch(() => ({}))) as { _action?: string; mb?: number; days?: number; engine?: string; model?: string; prompt?: string; webhook?: string; limits?: Record<string, number>; parts?: string[]; theme?: unknown; nav?: { hidden?: string[]; labels?: Record<string, string>; order?: string[] }; appId?: string; draftId?: string; layout?: { order?: string[]; hidden?: string[] }; domain?: string; workersPaid?: boolean; on?: boolean; cfToken?: string; cfAccount?: string; ghToken?: string; ghRepo?: string };
   if (b._action === "max_upload") {
     const v = await setMaxUploadMb(env, Number(b.mb));
     return json({ ok: true, mb: v });
@@ -40,6 +40,11 @@ export const POST: APIRoute = async ({ request, locals }) => {
   if (b._action === "ai_engine") {
     const v = await setAiEngine(env, String(b.engine ?? "gemini"));
     return json({ ok: true, engine: v });
+  }
+  // クラウドAI（Workers AI）の使用モデル（上位モデル選択）。妥当でないIDは既定へ。
+  if (b._action === "workers_ai_model") {
+    const v = await setWorkersAiModel(env, String(b.model ?? ""));
+    return json({ ok: true, model: v });
   }
   if (b._action === "custom_prompt") {
     const v = await setCustomPrompt(env, String(b.prompt ?? ""));

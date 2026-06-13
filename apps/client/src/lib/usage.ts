@@ -1,3 +1,4 @@
+import { kvPut } from "./kv.ts";
 // API使用量（回数ベース）の記録・集計・上限。AI機能や各APIの利用を日次でカウントし、
 // 「API使用量」画面で可視化＋無料枠アラート＋従量上限を制御する（§使用量画面）。
 import { resolvePricing, NEURON_USD } from "../core/models/config.ts";
@@ -121,7 +122,7 @@ export async function getLimits(env: Env): Promise<Limits> {
   try { return JSON.parse((await env.LICENSE.get("usage_limits")) ?? "{}") as Limits; } catch { return {}; }
 }
 export async function setLimits(env: Env, l: Limits): Promise<void> {
-  await env.LICENSE.put("usage_limits", JSON.stringify(l ?? {}));
+  await kvPut(env, "usage_limits", JSON.stringify(l ?? {}));
 }
 
 // 従量上限の判定：当月の推定費用が monthlyUsdCap 以上、または回数が monthlyCap 以上なら

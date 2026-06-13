@@ -32,6 +32,17 @@ export function workersAiModelId(env: Env): string {
   return env.WORKERS_AI_MODEL?.trim() || DEFAULT_MODELS.workers_ai;
 }
 
+// クラウドAI（Workers AI）で管理者が選べるモデル候補。プロンプト形式（toPrompt）互換の
+// テキスト生成instructモデルのみ。廃止サプライズを避けるため、存続が確認済みのものを厳選。
+// 上書き優先順位は getWorkersAiModel：KV設定 > env.WORKERS_AI_MODEL > DEFAULT_MODELS.workers_ai。
+export const WORKERS_AI_MODELS: { id: string; label: string; note: string }[] = [
+  { id: "@cf/meta/llama-3.1-8b-instruct-fast", label: "標準", note: "高速・軽量（既定）" },
+  { id: "@cf/meta/llama-3.3-70b-instruct-fp8-fast", label: "高性能", note: "賢いが少し遅い（70B）" },
+];
+export function isValidWorkersAiModel(id: string): boolean {
+  return WORKERS_AI_MODELS.some((m) => m.id === id);
+}
+
 // env.MODEL_PRICING（JSON: {"gemini":{"in":0.3,"out":2.5},...}）で provider 単位に上書き。
 // 妥当な非負数のみ採用し、それ以外は既定値を残す。
 export function resolvePricing(env: Env): Record<string, { in: number; out: number }> {

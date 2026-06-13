@@ -1,3 +1,4 @@
+import { kvPut } from "./kv.ts";
 // セッション認証（署名Cookie）。組織=Google（本番・P6）／個人=LINE/Discord/local（devはlocal）。
 // 署名は MASTER_KEY 由来のHMAC。Cookie=base64url(payload).hmac。
 import { masterKey } from "./client.ts";
@@ -90,7 +91,7 @@ const REVOKE_PREFIX = "revoke:";
 // TTL はセッション最大寿命と同じ＝それ以降は自然失効するため失効レコードも不要になる。
 export async function revokeSessions(env: Env, uid: string): Promise<void> {
   try {
-    await env.LICENSE.put(`${REVOKE_PREFIX}${uid}`, String(Math.floor(Date.now() / 1000)), {
+    await kvPut(env, `${REVOKE_PREFIX}${uid}`, String(Math.floor(Date.now() / 1000)), {
       expirationTtl: SESSION_DAYS * 86400,
     });
   } catch (e) {

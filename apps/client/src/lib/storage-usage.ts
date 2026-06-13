@@ -1,3 +1,4 @@
+import { kvPut } from "./kv.ts";
 // ストレージ使用量（D1 / KV / R2 / Googleドライブ）の集計と上限。全プランで可視化する。
 // KV/R2 は files メタの size 合計、Drive は同期メタの size 合計。D1 は PRAGMA で概算（不可なら -1）。
 import { driveConnected } from "./drive.ts";
@@ -25,7 +26,7 @@ export async function getStorageLimits(env: Env): Promise<Partial<Record<string,
   try { return JSON.parse((await env.LICENSE.get("storage_limits")) ?? "{}") as Partial<Record<string, number>>; } catch { return {}; }
 }
 export async function setStorageLimits(env: Env, l: Partial<Record<string, number>>): Promise<void> {
-  await env.LICENSE.put("storage_limits", JSON.stringify(l ?? {}));
+  await kvPut(env, "storage_limits", JSON.stringify(l ?? {}));
 }
 
 async function sumFiles(env: Env, like: string): Promise<number> {

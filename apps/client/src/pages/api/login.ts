@@ -1,3 +1,4 @@
+import { kvPut } from "../../lib/kv.ts";
 import type { APIRoute } from "astro";
 import { makeSessionCookie, clearSessionCookie, sessionExp } from "../../lib/auth.ts";
 import { authLocal } from "../../lib/users.ts";
@@ -20,7 +21,7 @@ async function rlCount(env: Env, key: string): Promise<number> {
 async function rlBump(env: Env, key: string): Promise<void> {
   const k = `loginrl:${key}`;
   const cur = Number((await env.LICENSE.get(k)) ?? "0");
-  await env.LICENSE.put(k, String(cur + 1), { expirationTtl: WINDOW });
+  await kvPut(env, k, String(cur + 1), { expirationTtl: WINDOW });
 }
 async function rlReset(env: Env, key: string): Promise<void> {
   await env.LICENSE.delete(`loginrl:${key}`);

@@ -1,3 +1,4 @@
+import { kvPut } from "../../../lib/kv.ts";
 import type { APIRoute } from "astro";
 import { createMember } from "../../../lib/membership.ts";
 import { env } from "cloudflare:workers";
@@ -13,7 +14,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
   const rlKey = `joinrl:${ip}`;
   const cur = Number((await env.LICENSE.get(rlKey)) ?? "0");
   if (cur >= 10) return json({ error: "短時間に申込が集中しています。時間をおいて再度お試しください。" }, 429);
-  await env.LICENSE.put(rlKey, String(cur + 1), { expirationTtl: 3600 });
+  await kvPut(env, rlKey, String(cur + 1), { expirationTtl: 3600 });
   const b = (await request.json().catch(() => ({}))) as { name?: string; contact?: string };
   const name = (b.name ?? "").trim();
   if (!name) return json({ error: "お名前が必要です" }, 400);

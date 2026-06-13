@@ -20,6 +20,9 @@ const sessions = hasPlus ? await listSessions(Astro.locals.ctx, ses.uid).catch((
 const isOrgAdmin = ses.role === "admin" && ses.ctx === "org";
 const { listSkills } = await import("../lib/skills.ts");
 const skills = hasPlus && isOrgAdmin ? await listSkills(env).catch(() => []) : [];
+// クラウドAI（Workers AI）の使用モデル選択（管理者・CF稼働時のみ）。上位モデルも選べる。
+const { WORKERS_AI_MODELS } = await import("../core/models/config.ts");
+const waModelActive = isOrgAdmin && env.AI ? await (await import("../lib/settings.ts")).getWorkersAiModel(env).catch(() => "") : "";
 ---
 <App title="AI" active="/chat">
   <h1>AI</h1>
@@ -64,6 +67,19 @@ const skills = hasPlus && isOrgAdmin ? await listSkills(env).catch(() => []) : [
             <button class="btn btn-sm ses-toggle" type="button" id="ses-toggle">会話履歴</button>
           </div>
           {isOrgAdmin && <div class="model-note" id="model-note"></div>}
+          {isOrgAdmin && env.AI && (
+            <details class="adv" style="margin:.2rem 0 .4rem">
+              <summary>クラウドAIのモデルを選ぶ（管理者向け）</summary>
+              <div style="padding:.45rem 0">
+                <label for="wa-model" class="muted" style="display:block;font-size:.85rem;margin-bottom:5px">「クラウドAI」で使うモデルです。上位ほど賢いですが、少し遅く・費用が増えます。</label>
+                <select id="wa-model">
+                  {WORKERS_AI_MODELS.map((m) => (
+                    <option value={m.id} selected={m.id === waModelActive}>{m.label}（{m.note}）</option>
+                  ))}
+                </select>
+              </div>
+            </details>
+          )}
           <div class="ai-examples" aria-label="例文">
             <span class="muted" style="font-size:.85rem">かんたん入力：</span>
             <button class="chip ex" type="button" data-ex="今月の会費の入金状況をまとめて">今月の会費の入金状況をまとめて</button>
@@ -148,6 +164,10 @@ const skills = hasPlus && isOrgAdmin ? await listSkills(env).catch(() => []) : [
           sel.value = b.dataset.m;
           setNote(b.dataset.m);
         }));
+        // クラウドAIのモデル選択：選んだら即保存（管理者）。次回以降の「クラウドAI」に反映。
+        document.getElementById("wa-model")?.addEventListener("change", (e) => {
+          window.bo?.api?.("/api/settings", { _action: "workers_ai_model", model: e.target.value }, { successMsg: "クラウドAIのモデルを変更しました" });
+        });
         // 例文ボタン：押すと入力欄に文章を入れて整える（高齢ユーザーが何を書けばよいか迷わないように）。
         document.querySelectorAll(".ai-examples .ex").forEach((b) => b.addEventListener("click", () => {
           const m = document.getElementById("msg");

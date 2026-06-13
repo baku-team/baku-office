@@ -1,3 +1,4 @@
+import { kvPut } from "./kv.ts";
 // エージェントの破壊的/対外操作の人間承認ゲート（第三者レビュー P0-4）。
 // 対外/破壊系ツール（gmail送信・予定改変/削除・A2A連携など）は、実行前に preview を出して
 // pending で保留し、人間が承認したときだけ実行する。既定 on（org が信頼運用する場合のみ admin が off に可）。
@@ -21,7 +22,7 @@ export async function getApprovalMode(env: Env): Promise<boolean> {
   return (await env.LICENSE.get("agent_approval")) !== "off";
 }
 export async function setApprovalMode(env: Env, on: boolean): Promise<boolean> {
-  await env.LICENSE.put("agent_approval", on ? "on" : "off");
+  await kvPut(env, "agent_approval", on ? "on" : "off");
   return on;
 }
 

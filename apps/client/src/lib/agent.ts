@@ -22,7 +22,7 @@ import { webSearch, makeDocument } from "./media-ai.ts";
 import { listSkills, runSkill, generateSkill } from "./skills.ts";
 import { createDraft } from "./external-apps.ts";
 import { listCapabilities, invokeCapability, capabilitySummary, videoStatusText } from "./capabilities.ts";
-import { getAiEngine, getCustomPrompt } from "./settings.ts";
+import { getAiEngine, getCustomPrompt, getWorkersAiModel } from "./settings.ts";
 import { recordUsage, recordTokens, overBudget, estimateUsd } from "./usage.ts";
 import { needsApproval, getApprovalMode, createApproval, previewFor, A2A_OUTWARD } from "./approvals.ts";
 
@@ -181,12 +181,14 @@ export async function runAgent(ctx: Ctx, owner: string, text: string, image?: { 
   let model: ChatModel | null = null;
   let provider: "gemini" | "claude" | "local" | "workers_ai" = "gemini";
   const wantLocal = want === "local" || (!geminiKey && !claudeKey);
+  // クラウドAIの使用モデル（管理者が上位モデルを選択可。KV設定 > env > 既定）。フォールバックでも使う。
+  const waModel = env.AI ? await getWorkersAiModel(env) : workersAiModelId(env);
   // ローカル/クラウドAI：CF上で稼働中なら Workers AI（ニューロン課金）を優先。無ければ OpenAI互換ローカル。
   if (wantLocal && env.AI) {
     const wb = await overBudget(env, "workers_ai");
     if (wb === "pause") return "Workers AI（ローカル/クラウドAI）の今月の上限に達しました（設定 → 使用量・上限 で変更できます）。";
     await recordUsage(env, "workers_ai");
-    model = workersAiChatModel(env.AI, workersAiModelId(env));
+    model = workersAiChatModel(env.AI, waModel);
     provider = "workers_ai";
   } else if (wantLocal && env.LOCAL_AI_BASE_URL) {
     model = localChatModel(env.LOCAL_AI_BASE_URL, env.LOCAL_AI_MODEL ?? "llama3.1");
@@ -209,7 +211,7 @@ export async function runAgent(ctx: Ctx, owner: string, text: string, image?: { 
   // Gemini/Claude が通信制限/障害になったら Workers AI へ自動切替し事情を説明（CF稼働時のみ）。
   let fellBack = false;
   if (model && (provider === "gemini" || provider === "claude") && env.AI) {
-    model = fallbackChatModel(model, workersAiChatModel(env.AI, workersAiModelId(env)), () => { fellBack = true; });
+    model = fallbackChatModel(model, workersAiChatModel(env.AI, waModel), () => { fellBack = true; });
   }
   const first = { text: text || "（依頼）", image: provider === "claude" ? undefined : image };
 

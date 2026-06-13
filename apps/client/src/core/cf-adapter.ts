@@ -1,3 +1,4 @@
+import { kvPut } from "../lib/kv.ts";
 // CF 環境アダプタ（移植性アーキ §3・Profile A）。
 // 既存モジュール（storage.ts / media-ai.ts / agent.ts / env.DB）を Port 形に薄く包むだけ。
 // ここに業務ロジックは置かない（コアは薄く・§0原則3）。
@@ -29,7 +30,7 @@ export function cfStorage(env: Env): StoragePort {
   return {
     kv: {
       get: (k) => env.LICENSE.get(k),
-      put: (k, v, o) => env.LICENSE.put(k, v, o),
+      put: (k, v, o) => kvPut(env, k, v, o),
       delete: (k) => env.LICENSE.delete(k),
       list: async (prefix) => (await env.LICENSE.list({ prefix })).keys.map((x) => x.name),
     },
