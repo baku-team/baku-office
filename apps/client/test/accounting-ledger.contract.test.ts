@@ -6,6 +6,7 @@ import { nodeD1 } from "./node-sqlite-adapter.ts";
 import { ensureChartOfAccounts, ensureCategoryAccountLinks, listAccountItems, getAccountItemByCode } from "../src/lib/account-items.ts";
 import { createTx } from "../src/lib/accounting.ts";
 import { buildEntriesForPeriod, trialBalance, createJournalEntry } from "../src/lib/journal.ts";
+import { depreciationSchedule } from "../src/lib/fixed-assets.ts";
 
 const SCHEMA = `
 CREATE TABLE account_items (id TEXT PRIMARY KEY, code TEXT NOT NULL, name TEXT NOT NULL, major TEXT NOT NULL, normal_balance TEXT NOT NULL, summary_group TEXT, freee_account_item_id TEXT, builtin INTEGER NOT NULL DEFAULT 0, enabled INTEGER NOT NULL DEFAULT 1, sort_order INTEGER NOT NULL DEFAULT 0);
@@ -68,6 +69,15 @@ test("単式の入金が借方:現金/貸方:売上高に橋渡しされ、試�
   const sumC = tb.reduce((s, r) => s + r.credit, 0);
   assert.equal(sumD, 1000);
   assert.equal(sumD, sumC);
+});
+
+test("定額法の償却スケジュール（取得100万/5年/残0→各年20万・簿価逓減）", () => {
+  const s = depreciationSchedule({ acquisition_cost: 1_000_000, useful_life_years: 5, method: "straight_line", residual_value: 0, rate: null });
+  assert.equal(s.length, 5);
+  assert.deepEqual(s.map((x) => x.amount), [200000, 200000, 200000, 200000, 200000]);
+  assert.equal(s[0].bookValue, 800000);
+  assert.equal(s[4].bookValue, 0);
+  assert.equal(s.reduce((a, x) => a + x.amount, 0), 1_000_000);
 });
 
 test("手動仕訳は借貸一致を強制（不一致は例外）", async () => {

@@ -32,6 +32,10 @@ const entries = (mode === "double" && period) ? await jr.buildEntriesForPeriod(e
 const trialDebit = trial.reduce((s, r) => s + r.debit, 0);
 const trialCredit = trial.reduce((s, r) => s + r.credit, 0);
 const SRC_JA: Record<string, string> = { tx: "出納帳", manual: "手動", depreciation: "減価償却", closure: "レジ締め" };
+// 固定資産（管理者のみ）。各資産の償却スケジュールと計上済み回数を添える。
+const fa = await import("../../lib/fixed-assets.ts");
+const assets = isOrgAdmin ? await fa.listFixedAssets(env) : [];
+const assetRows = await Promise.all(assets.map(async (a) => ({ a, sched: fa.depreciationSchedule(a), posted: await fa.depreciationCount(env, a.id) })));
 ---
 <App title="お金の記録" active="/accounting">
   <h1>お金の記録 <span class="muted" style="font-size:1rem;font-weight:600">{period?.name ?? "会計期なし"}</span></h1>
@@ -181,6 +185,44 @@ const SRC_JA: Record<string, string> = { tx: "出納帳", manual: "手動", depr
       </tbody></table></div>
   )}
 
+  {isOrgAdmin && (
+    <Fragment>
+      <h2>固定資産・減価償却</h2>
+      <div class="card">
+        <p class="muted" style="font-size:.9rem">パソコン・備品など長く使う資産を登録すると、毎期の減価償却費を仕訳として計上できます。</p>
+        <div class="row">
+          <div style="flex:2"><label for="fa-name">資産名</label><input id="fa-name" placeholder="例：ノートパソコン" /></div>
+          <div style="flex:1"><label for="fa-date">取得日</label><input id="fa-date" type="date" value={todayIso} /></div>
+        </div>
+        <div class="row" style="margin-top:.5rem">
+          <div style="flex:1"><label for="fa-cost">取得価額（円）</label><input id="fa-cost" type="number" min="1" inputmode="numeric" placeholder="0" /></div>
+          <div style="flex:1"><label for="fa-life">耐用年数</label><input id="fa-life" type="number" min="1" inputmode="numeric" placeholder="例：4" /></div>
+          <div style="flex:1"><label for="fa-method">償却方法</label><select id="fa-method"><option value="straight_line">定額法</option><option value="declining_balance">定率法</option></select></div>
+          <div style="flex:1"><label for="fa-residual">残存価額（円）</label><input id="fa-residual" type="number" min="0" inputmode="numeric" value="0" /></div>
+        </div>
+        <div class="row" style="margin-top:.6rem"><button class="btn btn-primary" id="fa-add">資産を登録</button></div>
+      </div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>資産名</th><th>取得日</th><th class="r">取得価額</th><th>方法</th><th class="r">耐用</th><th class="r">初年度償却</th><th>計上</th><th></th></tr></thead>
+        <tbody>
+          {assetRows.map(({ a, sched, posted }) => (
+            <tr>
+              <td>{a.name}</td><td>{a.acquired_date}</td><td class="r">{yen(a.acquisition_cost)}</td>
+              <td>{a.method === "declining_balance" ? "定率法" : "定額法"}</td><td class="r">{a.useful_life_years}年</td>
+              <td class="r">{sched[0] ? yen(sched[0].amount) : "—"}</td>
+              <td>{posted}/{a.useful_life_years}期</td>
+              <td>
+                <button class="btn btn-sm fa-dep" data-id={a.id} disabled={posted >= a.useful_life_years}>当期分を計上</button>
+                <button class="btn btn-sm btn-danger fa-del" data-id={a.id}>削除</button>
+              </td>
+            </tr>
+          ))}
+          {assetRows.length === 0 && (<tr><td colspan="8" class="muted" style="text-align:center;padding:1rem">登録された固定資産はありません。</td></tr>)}
+        </tbody>
+      </table></div>
+    </Fragment>
+  )}
+
   <h2>予算と実績</h2>
   <div class="table-wrap"><table><thead><tr><th>科目</th><th class="r">予算</th><th class="r">実績</th><th class="r">差額</th></tr></thead><tbody>
     {ba.map((r)=>(<tr><td>{r.name}</td><td class="r">{yen(r.budget)}</td><td class="r">{yen(r.actual)}</td><td class="r">{yen(r.budget-r.actual)}</td></tr>))}
@@ -264,6 +306,23 @@ const SRC_JA: Record<string, string> = { tx: "出納帳", manual: "手動", depr
     document.querySelectorAll(".je-del[data-del]").forEach(b=>b.addEventListener("click",async(e)=>{
       if(!(await window.bo.confirm("この仕訳を消します。よろしいですか？",{confirmLabel:"削除",danger:true})))return;
       const r=await window.bo.api("/api/accounting/journal",{_action:"delete",id:e.target.dataset.del},{btn:e.target,successMsg:"削除しました"});
+      if(r.ok)setTimeout(()=>location.reload(),500);
+    }));
+    // 固定資産の登録・減価償却の計上・削除（管理者）。
+    document.getElementById("fa-add")?.addEventListener("click",async(e)=>{
+      const body={name:document.getElementById("fa-name").value,acquired_date:document.getElementById("fa-date").value,acquisition_cost:Number(document.getElementById("fa-cost").value),useful_life_years:Number(document.getElementById("fa-life").value),method:document.getElementById("fa-method").value,residual_value:Number(document.getElementById("fa-residual").value)||0};
+      if(!body.name){window.bo.toast("資産名を入力してください","err");return;}
+      if(!(body.acquisition_cost>0)||!(body.useful_life_years>0)){window.bo.toast("取得価額と耐用年数を入力してください","err");return;}
+      const r=await window.bo.api("/api/accounting/asset",body,{btn:e.currentTarget,successMsg:"固定資産を登録しました"});
+      if(r.ok)setTimeout(()=>location.reload(),600);
+    });
+    document.querySelectorAll(".fa-dep[data-id]").forEach(b=>b.addEventListener("click",async(e)=>{
+      const r=await window.bo.api("/api/accounting/asset",{_action:"depreciate",id:e.target.dataset.id},{btn:e.target,successMsg:"当期分の減価償却を計上しました"});
+      if(r.ok)setTimeout(()=>location.reload(),600);
+    }));
+    document.querySelectorAll(".fa-del[data-id]").forEach(b=>b.addEventListener("click",async(e)=>{
+      if(!(await window.bo.confirm("この固定資産を削除しますか？",{confirmLabel:"削除",danger:true})))return;
+      const r=await window.bo.api("/api/accounting/asset",{_action:"delete",id:e.target.dataset.id},{btn:e.target,successMsg:"削除しました"});
       if(r.ok)setTimeout(()=>location.reload(),500);
     }));
   </script>
