@@ -69,8 +69,27 @@ baku-team/baku-office-app (public・配布物のみ)
   4. 対応結果（resolved/wontfix＋メモ/PR）は `reportUpdates` でクライアントへ返信表示。
 - **定期巡回 `apps/scheduler`**：Cloudflare **Cron Triggers `*/5 * * * *`**。Astroビルド非依存の素のWorker。**Service Binding 経由**で host `sweep`／client `drain` を起動（同一 workers.dev 直fetchは error 1042 で遮断されるため）。外部スケジューラ非依存・CF内で完結。顧客（別アカウント）の client 自走drainは配布テンプレへの cron 同梱で対応（今後）。
 
+## ポータブルコア境界と capability scoping（2026-06-13・第三者レビュー対応）
+
+レビュー指摘（エコシステム成長前の弱点）①②への対応。サードパーティ／AI生成パーツが増える前に Port 境界を固める。
+
+- **① 方言中立 DB Port（`QueryStore`）**：`ctx.db` は CF型(D1 `D1PreparedStatement`)を露出せず `all/first/run/batch(sql, params[])` の中立IFのみ（[core/ports.ts](apps/client/src/core/ports.ts)）。CF結合はアダプタ（[core/cf-adapter.ts](apps/client/src/core/cf-adapter.ts)）に封じる。Node+SQLite アダプタ（test）が同一IFで動き移植性を実証。
+  - 第一者の内部コードに残る `env.DB` 直アクセス（約164箇所）は**アダプタ境界**として許容（Portではない）。完全移植時に ctx 経由へ寄せる（将来）。
+- **①b パーツの env 封鎖**：パーツに渡す実行文脈は `PartCtx = Omit<Ctx,"env">`。Google API は `ctx.google`、ファイルは `ctx.storage`、AI抽出は `ctx.ai`、名簿復号は `ctx.identity.listMemberNames()` の各 Port 経由。パーツは生 env・秘密鍵・認証内部に到達不可。
+- **② capability scoping**：`scopeCtx(ctx, permissions)`（[core/capability.ts](apps/client/src/core/capability.ts)）が**宣言した permission に対応する Port だけ**を注入。未宣言の能力（`db:write`/`storage:*`/`ai`/`agent`/`net`/`members:read`）へのアクセスは実行時に `AppError(E9007)` で拒否。適用点：エージェント道具実行・アプリ間連動（`ctx.apps.call`）・ホームウィジェット。
+  - パーツのマニフェスト `permissions` は宣言＝実効。AI生成/外部取り込みアプリは preflight＋人間承認＋本scopingの多層で、宣言を超えた DB書込・外部送信・他能力を構造的に拒絶。
+
+## 天井と逃げ道（③・設計のみ・小規模団体は単一D1/Workerで十分）
+
+単一 Worker・単一 D1 の容量/CPU 天井は小規模団体には意図通りの割り切り。将来の拡張に備え**継ぎ目だけ先に用意**（実装は据え置き）：
+
+- **パーツ別DB分離**：`QueryStore` は方言中立のため、将来 `ctx.dbFor(namespace)` を足してパーツ/テナント別の D1（または同一D1内スキーマ接頭辞）へ解決できる。現状は全て単一 `env.DB`。Port 利用側（パーツ）は無改修で差し替え可能。
+- **R2 アーカイブ（コールド層）**：`StoragePort` に将来 `archive(id)`/`restore(id)` を足し、古い大容量データを R2 コールドへ退避。`getFile` は透過フォールバック。現状は KV/R2 ホット層のみ。
+- **CPU時間**：重い多段処理は既に `agent_jobs`（enqueue→drain）で分割実行。さらなる分割は Queue/Durable Object への移行余地（Port を増やさず scheduler 側で吸収）。
+
 ## 不変条件
 
 - クライアントのコードは当社配布の固定ランタイム（Worker内で eval しない）。スキル等は Anthropic 等のサンドボックスで実行。
 - 業務データ・PII・APIキーは顧客アカウント内のみ。当社は到達経路を持たない（§1.2）。
 - 署名鍵は当社（将来KMS）。クライアントは公開鍵で検証のみ。
+- **パーツは PartCtx（env無し・capability scoped）でのみ動く**。生 env・秘密・未宣言能力には構造的に到達不可。
