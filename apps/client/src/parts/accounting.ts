@@ -18,12 +18,12 @@ export async function listExpenses(ctx: Ctx, owner: string): Promise<string> {
 
 export const accountingPart: Part = {
   id: "accounting",
-  name: "会計",
+  name: "お金の記録",
   version: "1.0.0",
   category: "会計",
   description: "支出/領収書の記録と一覧。",
   permissions: ["db:read", "db:write"],
-  menu: [{ href: "/accounting", label: "会計" }],
+  menu: [{ href: "/accounting", label: "お金の記録" }],
   widgets: [
     { id: "tx_count", title: "取引数", run: async (ctx) => {
       const r = await ctx.db.first<{ n: number }>("SELECT count(*) AS n FROM transactions").catch(() => null);

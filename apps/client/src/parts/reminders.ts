@@ -36,7 +36,7 @@ export async function markReminderDone(ctx: Ctx, id: string): Promise<void> {
 
 export const remindersPart: Part = {
   id: "reminders",
-  name: "リマインダー",
+  name: "予定",
   version: "1.0.0",
   category: "庶務",
   description: "指定日時の通知。",
