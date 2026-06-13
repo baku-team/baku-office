@@ -174,6 +174,35 @@ export async function suggestAccountItem(
   } catch { return null; }
 }
 
+// 公開ディレクトリ用の団体紹介文＋検索タグをAIが生成（Gemini優先・無ければClaude）。キー無は null。
+export async function generateOrgProfile(env: Env, info: { orgName: string; hints?: string }): Promise<{ summary: string; tags: string[] } | null> {
+  const prompt =
+    `次の団体の「公開ディレクトリ用の紹介文」と「検索タグ」を作って。紹介文は80〜120字で事業内容が一目で分かるように。タグは5個・日本語の短い語。JSONのみ出力（前置き・コードフェンス無し）：\n` +
+    `{"summary":"...","tags":["...","..."]}\n団体名: ${info.orgName}\n補足: ${info.hints ?? "(なし)"}`;
+  const gkey = await getApiKey(env, "gemini");
+  try {
+    let raw = "";
+    if (gkey) {
+      await recordUsage(env, "gemini");
+      raw = await geminiGenerate(env, gkey, [{ text: prompt }]);
+    } else {
+      const ckey = await getApiKey(env, "claude");
+      if (!ckey) return null;
+      const r = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST", headers: { "x-api-key": ckey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+        body: JSON.stringify({ model: claudeModelId(env), max_tokens: 400, messages: [{ role: "user", content: prompt }] }),
+      });
+      await recordUsage(env, "claude");
+      if (!r.ok) return null;
+      const d = (await r.json()) as { content?: { text?: string }[]; usage?: { input_tokens?: number; output_tokens?: number } };
+      await recordTokens(env, "claude", { inputTokens: d.usage?.input_tokens ?? 0, outputTokens: d.usage?.output_tokens ?? 0 });
+      raw = d.content?.map((c) => c.text ?? "").join("") ?? "";
+    }
+    const j = JSON.parse(raw.replace(/^```(?:json)?|```$/g, "").trim()) as { summary?: string; tags?: string[] };
+    return { summary: String(j.summary ?? ""), tags: Array.isArray(j.tags) ? j.tags.map(String).slice(0, 8) : [] };
+  } catch { return null; }
+}
+
 // レジ締めの差異（想定額−実査額）の原因をAIが推定。直近取引と差額から日本語1〜2文。キー無は null。
 export async function estimateDiscrepancy(
   env: Env,

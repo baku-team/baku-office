@@ -5,7 +5,7 @@ import { randomId } from "@baku-office/shared";
 import { nowSec } from "./client.ts";
 import { searchKnowledge } from "../parts/knowledge.ts";
 
-export type ActionScope = "common" | "conn" | "group";
+export type ActionScope = "common" | "conn" | "group" | "public";
 export type ActionRow = { id: string; name: string; kind: "app" | "decl"; spec: string; scope: ActionScope; target: string; enabled: number; created_at: number };
 
 // ノーコード・テンプレ種類（UI 表示用）。
@@ -91,15 +91,23 @@ export async function deleteAction(ctx: Ctx, id: string): Promise<void> {
   await ctx.db.run("DELETE FROM a2a_actions WHERE id=?", [id]);
 }
 
-// 受信時の解決：公開名＋スコープ（common ∪ group:target=groupId ∪ conn:target=from）で1件取得。
-export async function resolveAction(ctx: Ctx, name: string, opts: { groupId?: string; from?: string }): Promise<ActionRow | null> {
+// 受信時の解決：公開名＋スコープ（common ∪ group:target=groupId ∪ conn:target=from ∪ public）で1件取得。
+// allowPublic=true（招待なし公開経路）のときだけ scope='public' 行を許可する。
+export async function resolveAction(ctx: Ctx, name: string, opts: { groupId?: string; from?: string; allowPublic?: boolean }): Promise<ActionRow | null> {
   const rows = await ctx.db.all<ActionRow>("SELECT id,name,kind,spec,scope,target,enabled,created_at FROM a2a_actions WHERE name=? AND enabled=1", [name]);
   for (const r of rows) {
     if (r.scope === "common") return r;
     if (opts.groupId && r.scope === "group" && r.target === opts.groupId) return r;
     if (!opts.groupId && r.scope === "conn" && r.target === opts.from) return r;
+    if (opts.allowPublic && r.scope === "public") return r;
   }
   return null;
+}
+
+// 公開アクション一覧（ディレクトリ掲載用：名前＋ラベル）。
+export async function listPublicActions(ctx: Ctx): Promise<{ name: string; label: string }[]> {
+  const rows = await ctx.db.all<ActionRow>("SELECT name,kind,spec,scope,enabled FROM a2a_actions WHERE scope='public' AND enabled=1");
+  return rows.map((r) => { let label = r.name; try { const s = JSON.parse(r.spec || "{}"); label = s.label || (s.type ? s.type : r.name); } catch { /* noop */ } return { name: r.name, label }; });
 }
 
 // 解決済みアクションの実行（app→ctx.apps.call / decl→runDeclAction）。

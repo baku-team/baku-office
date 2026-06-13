@@ -1,0 +1,172 @@
+---
+import { env } from "cloudflare:workers";
+export const prerender = false;
+import App from "../../layouts/App.astro";
+import { atLeast } from "@baku-office/shared";
+const { getSession } = await import("../../lib/auth.ts");
+const ses = await getSession(env, Astro.request);
+if (!ses) return Astro.redirect("/login", 302);
+const isOrgAdmin = ses.role === "admin" && ses.ctx === "org";
+const { cachedEntitlement } = await import("../../lib/client.ts");
+const hasPlus = atLeast(await cachedEntitlement(env).catch(() => "free" as const), "plus");
+const ctx = Astro.locals.ctx;
+const dir = await import("../../lib/directory.ts");
+const { listActions } = await import("../../lib/a2a-actions.ts");
+const { getReceptionPolicy } = await import("../../lib/settings.ts");
+const { listInquiries } = await import("../../lib/reception.ts");
+const profile = (hasPlus && isOrgAdmin) ? await dir.getPublicProfile(ctx) : {};
+const orgName = (hasPlus && isOrgAdmin) ? await dir.orgDisplayName(ctx) : "";
+const pubActions = (hasPlus && isOrgAdmin) ? (await listActions(ctx)).filter((a) => a.scope === "public") : [];
+const policy = (hasPlus && isOrgAdmin) ? await getReceptionPolicy(env) : null;
+const inquiries = (hasPlus && isOrgAdmin) ? await listInquiries(ctx, "pending") : [];
+const mine = (hasPlus && isOrgAdmin) ? await dir.myDirectory(env).catch(() => ({})) as Record<string, unknown> : {};
+const verification = (mine.entry as Record<string, unknown> | undefined)?.verification as Record<string, unknown> | undefined;
+const isListed = !!(mine.entry as Record<string, unknown> | undefined)?.listed;
+const DECL = [
+  { type: "profile", label: "団体プロフィール参照" },
+  { type: "knowledge", label: "ナレッジ検索（引数 query）" },
+  { type: "files", label: "公開資料の一覧" },
+];
+---
+<App title="エージェントを公開" active="/settings">
+  <h1>エージェントを公開（受付にする）</h1>
+  {!hasPlus && (<div class="card"><div class="banner banner-warn">この機能は <strong>Plus 以上</strong>で利用できます。</div><a class="btn btn-primary" href="/billing">プラン・課金へ</a></div>)}
+  {hasPlus && !isOrgAdmin && (<div class="card"><p class="muted">公開設定は管理者のみが行えます。</p></div>)}
+  {hasPlus && isOrgAdmin && (
+    <Fragment>
+      <p class="lead">団体の情報を公開ディレクトリに載せると、招待コードがなくても他団体があなたのエージェントに「問い合わせ」できます。エージェントが<strong>受付</strong>になります。</p>
+
+      <h2>1. 団体プロフィール</h2>
+      <div class="card">
+        <p class="muted" style="font-size:.9rem">団体名（{orgName || "未設定"}）は「表示」設定のブランド名が使われます。</p>
+        <div class="field"><label for="d-summary">紹介文（公開されます）</label><textarea id="d-summary" rows="3" placeholder="例：地域の保護者会。会費管理と行事運営を行っています。">{profile.summary ?? ""}</textarea></div>
+        <div class="row">
+          <div style="flex:1"><label for="d-tags">タグ（カンマ区切り）</label><input id="d-tags" value={(profile.tags ?? []).join(", ")} placeholder="例：PTA, 教育, 地域" /></div>
+          <div style="flex:1"><label for="d-website">ウェブサイト（任意）</label><input id="d-website" value={profile.website ?? ""} placeholder="https://..." /></div>
+        </div>
+        <div class="field"><label for="d-contact">連絡先（任意・公開）</label><input id="d-contact" value={profile.contact ?? ""} placeholder="例：info@example.org" /></div>
+        <div class="row">
+          <button class="btn" type="button" id="d-gen">AIで紹介文・タグを作成</button>
+          <button class="btn btn-primary" type="button" id="d-save">保存</button>
+        </div>
+      </div>
+
+      <h2>2. 受付で開放するアクション</h2>
+      <div class="card">
+        <p class="muted" style="font-size:.9rem">公開する相手に許可する「読み取り・問い合わせ」操作です。書き込みや名簿などの内部データは公開できません。</p>
+        <div id="d-pub-list">
+          {pubActions.map((a) => (<div class="row" data-pa={a.id} style="align-items:center"><span style="flex:1">{a.name}</span><button class="btn btn-sm btn-danger d-pa-del" data-id={a.id}>外す</button></div>))}
+          {pubActions.length === 0 && (<p class="muted" style="font-size:.9rem">まだ公開アクションがありません。下から追加してください（最低でも「団体プロフィール参照」を推奨）。</p>)}
+        </div>
+        <div class="row" style="margin-top:.5rem">
+          <div style="flex:1"><label for="d-pa-name">公開名</label><input id="d-pa-name" placeholder="例：reception" /></div>
+          <div style="flex:1"><label for="d-pa-type">種類</label><select id="d-pa-type">{DECL.map((d) => (<option value={d.type}>{d.label}</option>))}</select></div>
+          <div style="flex:0 0 auto;align-self:end"><button class="btn" type="button" id="d-pa-add">追加</button></div>
+        </div>
+      </div>
+
+      <h2>3. 実在の確認（信頼バッジ）</h2>
+      <div class="card">
+        <p class="muted" style="font-size:.9rem">AIがWebであなたの団体の実在・評判を調べ、検証バッジを付けます（相手が安心して接触できます）。</p>
+        <div id="d-verif" class="muted" style="font-size:.9rem">{verification ? `検証済み：${verification.exists ? "実在を確認" : "未確認"}・評判 ${String(verification.reputation ?? "-")}・スコア ${String(verification.score ?? 0)}` : "未検証"}</div>
+        <button class="btn" type="button" id="d-verify" style="margin-top:.5rem">実在を検証する</button>
+      </div>
+
+      <h2>4. 公開する</h2>
+      <div class="card">
+        <div id="d-listed" class={"banner " + (isListed ? "banner-ok" : "banner-info")}>{isListed ? "現在：公開中（ディレクトリに掲載されています）" : "現在：未公開"}</div>
+        <div class="row" style="margin-top:.5rem">
+          <button class="btn btn-primary" type="button" id="d-publish">公開する</button>
+          <button class="btn btn-ghost" type="button" id="d-unpublish">公開をやめる</button>
+        </div>
+      </div>
+
+      <h2>5. 受付ポリシー（接触されたときの対応）</h2>
+      <div class="card">
+        <div class="seg" id="d-mode" role="group" aria-label="受付方法">
+          <button class={"seg-opt" + (policy?.mode === "box" ? " on" : "")} type="button" data-m="box">受付箱で承認</button>
+          <button class={"seg-opt" + (policy?.mode === "auto" ? " on" : "")} type="button" data-m="auto">即時に自動応答</button>
+          <button class={"seg-opt" + (policy?.mode === "hybrid" ? " on" : "")} type="button" data-m="hybrid">信頼度で自動／受付箱</button>
+        </div>
+        <div class="field" style="margin-top:.6rem"><label><input type="checkbox" id="d-verified" checked={policy?.requireVerified} /> 検証済みの相手のみ受け付ける</label></div>
+        <div class="field"><label><input type="checkbox" id="d-aireview" checked={policy?.requireAiReview} /> 接触時にAIで相手を確認する</label></div>
+        <div class="field"><label for="d-trust">自動応答の信頼度しきい値（0〜1）：<span id="d-trustval">{policy?.minHostTrust ?? 0.3}</span></label><input id="d-trust" type="range" min="0" max="1" step="0.05" value={policy?.minHostTrust ?? 0.3} /></div>
+        <button class="btn btn-primary" type="button" id="d-policy-save">受付ポリシーを保存</button>
+      </div>
+
+      <h2>受付箱（届いた問い合わせ）</h2>
+      <div class="table-wrap"><table>
+        <thead><tr><th>相手</th><th>内容</th><th>信頼</th><th></th></tr></thead>
+        <tbody id="d-inq">
+          {inquiries.map((q) => (
+            <tr data-inq={q.id}>
+              <td>{q.from_name ?? q.from_license}</td>
+              <td>{q.message ?? q.action ?? ""}</td>
+              <td>{(() => { try { return JSON.parse(q.trust || "{}").hostTrust ?? "-"; } catch { return "-"; } })()}</td>
+              <td>
+                <button class="btn btn-sm btn-ok d-inq-act" data-id={q.id} data-d="approved">承認</button>
+                <button class="btn btn-sm d-inq-act" data-id={q.id} data-d="rejected">拒否</button>
+                <button class="btn btn-sm btn-danger d-inq-act" data-id={q.id} data-d="blocked">ブロック</button>
+              </td>
+            </tr>
+          ))}
+          {inquiries.length === 0 && (<tr><td colspan="4" class="muted" style="text-align:center;padding:1rem">届いている問い合わせはありません。</td></tr>)}
+        </tbody>
+      </table></div>
+
+      <p class="muted" style="margin-top:1rem">他団体を探すには <a href="/directory">公開ディレクトリ</a> へ。</p>
+
+      <style>
+        .lead { color: var(--ink); margin: .2rem 0 1rem; }
+        .seg { display: inline-flex; gap: 4px; flex-wrap: wrap; }
+        .seg-opt { min-height: 40px; padding: 0 .9rem; border: 1px solid var(--line-strong); background: var(--surface); border-radius: var(--r-pill); font-weight: 700; cursor: pointer; }
+        .seg-opt.on { background: var(--brand); color: var(--on-brand); border-color: var(--brand-strong); }
+      </style>
+
+      <script slot="scripts" is:inline>
+        const api = (b, opts) => window.bo.api("/api/directory", b, opts || {});
+        document.getElementById("d-save").addEventListener("click", async (e) => {
+          const tags = document.getElementById("d-tags").value.split(",").map((s) => s.trim()).filter(Boolean);
+          await api({ _action: "profile_save", summary: document.getElementById("d-summary").value, tags, website: document.getElementById("d-website").value, contact: document.getElementById("d-contact").value }, { btn: e.currentTarget, successMsg: "保存しました" });
+        });
+        document.getElementById("d-gen").addEventListener("click", async (e) => {
+          const r = await api({ _action: "profile_generate", hints: document.getElementById("d-summary").value }, { btn: e.currentTarget, successMsg: null });
+          if (r.ok && r.draft) { document.getElementById("d-summary").value = r.draft.summary || ""; document.getElementById("d-tags").value = (r.draft.tags || []).join(", "); window.bo.toast("AIが作成しました。確認して保存してください", "ok"); }
+          else window.bo.toast("AIキー未設定のため生成できませんでした", "info");
+        });
+        document.getElementById("d-pa-add").addEventListener("click", async (e) => {
+          const name = document.getElementById("d-pa-name").value.trim();
+          if (!name) { window.bo.toast("公開名を入力してください", "err"); return; }
+          const r = await api({ _action: "pub_add", name, declType: document.getElementById("d-pa-type").value, label: name }, { btn: e.currentTarget, successMsg: "公開アクションを追加しました" });
+          if (r.ok) setTimeout(() => location.reload(), 600);
+        });
+        document.querySelectorAll(".d-pa-del").forEach((b) => b.addEventListener("click", async (e) => {
+          const r = await api({ _action: "pub_remove", id: e.target.dataset.id }, { btn: e.target, successMsg: "外しました" });
+          if (r.ok) setTimeout(() => location.reload(), 500);
+        }));
+        document.getElementById("d-verify").addEventListener("click", async (e) => {
+          const r = await api({ _action: "verify" }, { btn: e.currentTarget, successMsg: null });
+          if (r.ok && r.verification) { const v = r.verification; document.getElementById("d-verif").textContent = `検証済み：${v.exists ? "実在を確認" : "未確認"}・評判 ${v.reputation}・スコア ${v.score}`; window.bo.toast("検証しました", "ok"); }
+        });
+        document.getElementById("d-publish").addEventListener("click", async (e) => {
+          const r = await api({ _action: "publish" }, { btn: e.currentTarget, successMsg: "公開しました" });
+          if (r.ok) setTimeout(() => location.reload(), 700);
+        });
+        document.getElementById("d-unpublish").addEventListener("click", async (e) => {
+          const r = await api({ _action: "unpublish" }, { btn: e.currentTarget, successMsg: "公開をやめました" });
+          if (r.ok) setTimeout(() => location.reload(), 600);
+        });
+        let mode = document.querySelector("#d-mode .seg-opt.on")?.dataset.m || "box";
+        document.querySelectorAll("#d-mode .seg-opt").forEach((b) => b.addEventListener("click", () => { mode = b.dataset.m; document.querySelectorAll("#d-mode .seg-opt").forEach((x) => x.classList.toggle("on", x === b)); }));
+        document.getElementById("d-trust").addEventListener("input", (e) => { document.getElementById("d-trustval").textContent = e.target.value; });
+        document.getElementById("d-policy-save").addEventListener("click", async (e) => {
+          await api({ _action: "reception_set", mode, requireVerified: document.getElementById("d-verified").checked, requireAiReview: document.getElementById("d-aireview").checked, minHostTrust: Number(document.getElementById("d-trust").value) }, { btn: e.currentTarget, successMsg: "受付ポリシーを保存しました" });
+        });
+        document.querySelectorAll(".d-inq-act").forEach((b) => b.addEventListener("click", async (e) => {
+          const r = await api({ _action: "inquiry_decide", id: e.target.dataset.id, decision: e.target.dataset.d }, { btn: e.target, successMsg: "処理しました" });
+          if (r.ok) setTimeout(() => location.reload(), 600);
+        }));
+      </script>
+    </Fragment>
+  )}
+</App>
