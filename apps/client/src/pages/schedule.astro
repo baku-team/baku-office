@@ -14,7 +14,9 @@ const jpDateTime = (s: string) => {
   const wd = ["日", "月", "火", "水", "木", "金", "土"][new Date(Number(y), Number(mo) - 1, Number(d)).getDay()];
   return `${Number(mo)}月${Number(d)}日（${wd}）${h}:${mi}`;
 };
-const eventsJson = JSON.stringify(results);
+// `<` を < に退避し、件名に "</script>" が含まれても script タグから脱出できないようにする
+// （define:vars/インラインscript埋め込みのXSS対策・astro GHSA-j687-52p2-xcff の影響を構造的に無効化）。
+const eventsJson = JSON.stringify(results).replace(/</g, "\\u003c");
 ---
 <App title="予定" active="/schedule">
   <h1>予定</h1>
