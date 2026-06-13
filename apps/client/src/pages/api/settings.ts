@@ -86,8 +86,12 @@ export const POST: APIRoute = async ({ request, locals }) => {
   }
   // UIテーマ（第1層）。
   if (b._action === "ui_theme") {
-    const v = await setTheme(locals.ctx, b.theme);
-    return json({ ok: true, theme: v });
+    try {
+      const v = await setTheme(locals.ctx, b.theme);
+      return json({ ok: true, theme: v });
+    } catch (e) {
+      return json({ error: "テーマの保存に失敗しました：" + (e as Error).message }, 500);
+    }
   }
   // ナビ上書き（第2層）。
   if (b._action === "nav_overrides") {

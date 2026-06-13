@@ -25,7 +25,15 @@ const theme = hasPlus ? await getTheme(Astro.locals.ctx) : {};
       <p class="muted">ブランド名・ロゴ・配色を団体ごとに上書きします（共通の画面構造はそのまま）。空欄は既定値。色は #hex 等で指定。</p>
       <div class="card">
         <div class="field"><label>ブランド名<input id="th-brand" value={theme.brand ?? ""} placeholder="baku-office" /></label></div>
-        <div class="field"><label>ロゴURL<input id="th-logo" value={theme.logoUrl ?? ""} placeholder="https://…/logo.png" /></label></div>
+        <div class="field">
+          <label>ロゴ画像<input id="th-logo" value={theme.logoUrl ?? ""} placeholder="https://…/logo.png または下からアップロード" /></label>
+          <div class="muted" style="font-size:.8rem;margin-top:4px">空欄でブランド名のテキスト表示。すでにWeb上にあるロゴなら画像URL（https://… で終わりが .png/.jpg）を貼り付け、無ければ下の「アップロード」でお手元の画像から設定できます。</div>
+          <div class="row" style="align-items:center;gap:12px;margin-top:8px">
+            <img id="th-logo-prev" src={theme.logoUrl || ""} alt="ロゴプレビュー" style={`height:32px;max-width:160px;object-fit:contain;background:var(--surface-2);border:1px solid var(--line);border-radius:var(--r-sm);padding:2px 6px;${theme.logoUrl ? "" : "display:none"}`} />
+          </div>
+          <div class="row" style="gap:.5rem;margin-top:8px"><input id="th-logo-file" type="file" accept="image/png,image/jpeg,image/webp,image/gif" style="flex:1" aria-label="ロゴの画像ファイル" /><button class="btn btn-sm" type="button" id="th-logo-up" style="flex:0 0 auto">アップロード</button><button class="btn btn-sm" type="button" id="th-logo-clear" style="flex:0 0 auto">ロゴを消す</button></div>
+          <div class="muted" style="font-size:.82rem;margin-top:4px">PNG/JPEG/WebP/GIF・3MBまで。アップロードすると即座にロゴURLへ反映されます。</div>
+        </div>
         <div class="field">
           <label>相棒（マスコット）画像URL<input id="th-mascot" value={theme.mascotUrl ?? ""} placeholder="空欄=既定（貘キャラ）／ https://…/your.png" /></label>
           <div class="muted" style="font-size:.8rem;margin-top:4px">空欄で合同会社 貘の既定キャラ。背景透過のPNG（正方形〜横長）推奨。自社キャラの画像URLを指定すると相棒が差し替わります。</div>
@@ -44,10 +52,11 @@ const theme = hasPlus ? await getTheme(Astro.locals.ctx) : {};
           <div class="row" style="gap:.5rem"><input id="th-mascot-file" type="file" accept="image/png,image/jpeg,image/webp,image/gif" style="flex:1" aria-label="相棒の画像ファイル" /><button class="btn btn-sm" type="button" id="th-mascot-up" style="flex:0 0 auto">アップロード</button></div>
           <div class="muted" style="font-size:.82rem;margin-top:4px">PNG/JPEG/WebP/GIF・3MBまで。背景透過のPNGが綺麗に表示されます。</div>
         </div>
+        <div class="muted" style="font-size:.8rem;margin:.4rem 0">色は左のパレットで選ぶか、右に #C9A86A のような色コードを直接入力できます（空欄で既定色）。</div>
         <div class="row">
-          <label style="flex:1">ブランド色<input id="th-brand-color" value={theme.colors?.brand ?? ""} placeholder="#C9A86A" /></label>
-          <label style="flex:1">背景色<input id="th-bg" value={theme.colors?.bg ?? ""} placeholder="#EFE9DC" /></label>
-          <label style="flex:1">文字色<input id="th-ink" value={theme.colors?.ink ?? ""} placeholder="#0E1A2B" /></label>
+          <label style="flex:1">ブランド色<span class="th-color-row"><input type="color" class="th-color-pick" data-for="th-brand-color" value={theme.colors?.brand || "#C9A86A"} aria-label="ブランド色を選ぶ" /><input id="th-brand-color" value={theme.colors?.brand ?? ""} placeholder="#C9A86A" /></span></label>
+          <label style="flex:1">背景色<span class="th-color-row"><input type="color" class="th-color-pick" data-for="th-bg" value={theme.colors?.bg || "#EFE9DC"} aria-label="背景色を選ぶ" /><input id="th-bg" value={theme.colors?.bg ?? ""} placeholder="#EFE9DC" /></span></label>
+          <label style="flex:1">文字色<span class="th-color-row"><input type="color" class="th-color-pick" data-for="th-ink" value={theme.colors?.ink || "#0E1A2B"} aria-label="文字色を選ぶ" /><input id="th-ink" value={theme.colors?.ink ?? ""} placeholder="#0E1A2B" /></span></label>
         </div>
         <button class="btn btn-primary" id="saveTheme">テーマを保存</button>
       </div>
@@ -59,6 +68,34 @@ const theme = hasPlus ? await getTheme(Astro.locals.ctx) : {};
           const mascot = document.getElementById("th-mascot");
           const prev = document.getElementById("th-mascot-prev");
           mascot?.addEventListener("input", () => { if (prev) prev.src = mascot.value.trim() || "/mascot/baku.png"; });
+
+          // 色：パレット(type=color)とテキスト(#hex)を双方向同期。保存値はテキスト欄を正とする。
+          document.querySelectorAll(".th-color-pick").forEach((pick) => {
+            const txt = document.getElementById(pick.dataset.for);
+            if (!txt) return;
+            if (txt.value.trim()) pick.value = txt.value.trim();
+            pick.addEventListener("input", () => { txt.value = pick.value; });
+            txt.addEventListener("input", () => { if (/^#[0-9a-fA-F]{6}$/.test(txt.value.trim())) pick.value = txt.value.trim(); });
+          });
+
+          // ロゴ：プレビュー追従。
+          const logo = document.getElementById("th-logo");
+          const logoPrev = document.getElementById("th-logo-prev");
+          const showLogo = (u) => { if (!logoPrev) return; if (u) { logoPrev.src = u; logoPrev.style.display = ""; } else { logoPrev.style.display = "none"; } };
+          logo?.addEventListener("input", () => showLogo(logo.value.trim()));
+          // ロゴ：アップロード（mascot と同方式）。即座に logoUrl へ反映。
+          document.getElementById("th-logo-up")?.addEventListener("click", async (e) => {
+            const f = document.getElementById("th-logo-file").files?.[0];
+            if (!f) { window.bo.toast("ファイルを選択してください", "err"); return; }
+            if (f.size > 3 * 1024 * 1024) { window.bo.toast("画像は3MBまでです", "err"); return; }
+            const dataB64 = await new Promise((res, rej) => { const rd = new FileReader(); rd.onload = () => res(String(rd.result).split(",")[1] || ""); rd.onerror = rej; rd.readAsDataURL(f); });
+            const r = await window.bo.api("/api/logo", { _action: "upload", dataB64, mime: f.type }, { btn: e.currentTarget, successMsg: null });
+            if (r.ok) { window.bo.toast("ロゴを設定しました"); if (logo) logo.value = r.data.logoUrl; showLogo(r.data.logoUrl); setTimeout(() => location.reload(), 1000); }
+          });
+          document.getElementById("th-logo-clear")?.addEventListener("click", async (e) => {
+            const r = await window.bo.api("/api/logo", { _action: "reset" }, { btn: e.currentTarget, successMsg: "ロゴを消しました" });
+            if (r.ok) { if (logo) logo.value = ""; showLogo(""); setTimeout(() => location.reload(), 700); }
+          });
           document.getElementById("th-mascot-default")?.addEventListener("click", async (e) => {
             const r = await window.bo.api("/api/mascot", { _action: "reset" }, { btn: e.currentTarget, successMsg: "既定に戻しました" });
             if (r.ok) { if (mascot) mascot.value = ""; if (prev) prev.src = "/mascot/baku.png"; setTimeout(() => location.reload(), 700); }
@@ -86,6 +123,11 @@ const theme = hasPlus ? await getTheme(Astro.locals.ctx) : {};
           });
         })();
       </script>
+      <style>
+        .th-color-row { display: flex; align-items: center; gap: 6px; }
+        .th-color-row input[type="color"] { width: 44px; height: 36px; padding: 0; border: 1px solid var(--line); border-radius: var(--r-sm); background: none; flex: 0 0 auto; cursor: pointer; }
+        .th-color-row input:not([type="color"]) { flex: 1; min-width: 0; }
+      </style>
     </Fragment>
   )}
 </App>
