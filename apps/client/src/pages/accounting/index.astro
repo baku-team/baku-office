@@ -36,6 +36,27 @@ const SRC_JA: Record<string, string> = { tx: "出納帳", manual: "手動", depr
 const fa = await import("../../lib/fixed-assets.ts");
 const assets = isOrgAdmin ? await fa.listFixedAssets(env) : [];
 const assetRows = await Promise.all(assets.map(async (a) => ({ a, sched: fa.depreciationSchedule(a), posted: await fa.depreciationCount(env, a.id) })));
+// レジ締め（管理者のみ）。
+const reg = await import("../../lib/register.ts");
+const walletName = new Map(wallets.map((w) => [w.id, w.name]));
+const CLOSURE_JA: Record<string, string> = { daily: "日次", monthly: "月次", year_end: "年度末" };
+const closuresRaw = (isOrgAdmin && period) ? await reg.listClosures(env, period.id) : [];
+const closureRows = closuresRaw.map((c) => {
+  const diff = Number(c.difference);
+  return {
+    id: String(c.id),
+    kindJa: CLOSURE_JA[String(c.kind)] ?? String(c.kind),
+    label: String(c.period_label),
+    wallet: walletName.get(String(c.wallet_id)) ?? "",
+    expected: Number(c.expected_amount),
+    counted: Number(c.counted_amount),
+    diff,
+    diffLabel: diff === 0 ? "一致" : (diff > 0 ? `不足 ${yen(diff)}` : `過剰 ${yen(-diff)}`),
+    reason: c.ai_reason ? String(c.ai_reason) : (diff === 0 ? "—" : "（AIキー未設定）"),
+    canAdjust: diff !== 0 && !c.adjustment_entry_id,
+    adjusted: !!c.adjustment_entry_id,
+  };
+});
 ---
 <App title="お金の記録" active="/accounting">
   <h1>お金の記録 <span class="muted" style="font-size:1rem;font-weight:600">{period?.name ?? "会計期なし"}</span></h1>
@@ -187,6 +208,35 @@ const assetRows = await Promise.all(assets.map(async (a) => ({ a, sched: fa.depr
 
   {isOrgAdmin && (
     <Fragment>
+      <h2>レジ締め（現金の確認）</h2>
+      <div class="card">
+        <p class="muted" style="font-size:.9rem">手元の現金を数えて入力すると、帳簿上の想定額と照合します。ズレがあれば原因の見当をAIが補助します。</p>
+        <div class="row">
+          <div style="flex:1"><label for="cl-wallet">口座</label><select id="cl-wallet">{wallets.map((w) => (<option value={w.id}>{w.name}</option>))}</select></div>
+          <div style="flex:1"><label for="cl-kind">締めの種類</label><select id="cl-kind"><option value="daily">日次（今日まで）</option><option value="monthly">月次（今月末まで）</option><option value="year_end">年度末（会計期末まで）</option></select></div>
+          <div style="flex:1"><label for="cl-counted">実際に数えた金額（円）</label><input id="cl-counted" type="number" min="0" inputmode="numeric" placeholder="0" /></div>
+        </div>
+        <div class="row" style="margin-top:.6rem"><button class="btn btn-primary" id="cl-add">この内容で締める</button></div>
+      </div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>締め</th><th>対象</th><th>口座</th><th class="r">想定</th><th class="r">実査</th><th class="r">差異</th><th>原因の見当（AI）</th><th></th></tr></thead>
+        <tbody>
+          {closureRows.map((c) => (
+            <tr>
+              <td>{c.kindJa}</td>
+              <td>{c.label}</td>
+              <td>{c.wallet}</td>
+              <td class="r">{yen(c.expected)}</td>
+              <td class="r">{yen(c.counted)}</td>
+              <td class={c.diff === 0 ? "r" : "r u-warn"}>{c.diffLabel}</td>
+              <td style="font-size:.85rem">{c.reason}</td>
+              <td>{c.canAdjust && (<button class="btn btn-sm cl-adj" data-id={c.id}>現金過不足で調整</button>)}{c.adjusted && (<span class="muted" style="font-size:.82rem">調整済</span>)}</td>
+            </tr>
+          ))}
+          {closureRows.length === 0 && (<tr><td colspan="8" class="muted" style="text-align:center;padding:1rem">まだレジ締めの記録はありません。</td></tr>)}
+        </tbody>
+      </table></div>
+
       <h2>固定資産・減価償却</h2>
       <div class="card">
         <p class="muted" style="font-size:.9rem">パソコン・備品など長く使う資産を登録すると、毎期の減価償却費を仕訳として計上できます。</p>
@@ -248,6 +298,7 @@ const assetRows = await Promise.all(assets.map(async (a) => ({ a, sched: fa.depr
     .book-mode { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: .2rem 0 1rem; }
     .bm-opt { min-height: 40px; padding: 0 .9rem; border: 1px solid var(--line-strong); background: var(--surface); color: var(--ink); border-radius: var(--r-pill); font-weight: 700; cursor: pointer; }
     .bm-opt.on { background: var(--brand); color: var(--on-brand); border-color: var(--brand-strong); }
+    .u-warn { color: var(--warn); font-weight: 700; }
   </style>
 
   <script slot="scripts" is:inline>
@@ -307,6 +358,18 @@ const assetRows = await Promise.all(assets.map(async (a) => ({ a, sched: fa.depr
       if(!(await window.bo.confirm("この仕訳を消します。よろしいですか？",{confirmLabel:"削除",danger:true})))return;
       const r=await window.bo.api("/api/accounting/journal",{_action:"delete",id:e.target.dataset.del},{btn:e.target,successMsg:"削除しました"});
       if(r.ok)setTimeout(()=>location.reload(),500);
+    }));
+    // レジ締め（管理者）。差異があればAI推定が表示される。
+    document.getElementById("cl-add")?.addEventListener("click",async(e)=>{
+      const body={wallet_id:document.getElementById("cl-wallet").value,kind:document.getElementById("cl-kind").value,counted_amount:Number(document.getElementById("cl-counted").value)};
+      if(!(body.counted_amount>=0)){window.bo.toast("数えた金額を入力してください","err");return;}
+      const r=await window.bo.api("/api/accounting/closure",body,{btn:e.currentTarget,successMsg:null});
+      if(r.ok){const msg=r.difference===0?"ぴったり一致しました":((r.difference>0?"不足":"過剰")+" "+Math.abs(r.difference).toLocaleString()+"円");window.bo.toast("締めました："+msg,r.difference===0?"ok":"info");setTimeout(()=>location.reload(),900);}
+    });
+    document.querySelectorAll(".cl-adj[data-id]").forEach(b=>b.addEventListener("click",async(e)=>{
+      if(!(await window.bo.confirm("差異を現金過不足で調整する仕訳を作成します。よろしいですか？",{confirmLabel:"調整する"})))return;
+      const r=await window.bo.api("/api/accounting/closure",{_action:"adjust",id:e.target.dataset.id},{btn:e.target,successMsg:"調整しました"});
+      if(r.ok)setTimeout(()=>location.reload(),600);
     }));
     // 固定資産の登録・減価償却の計上・削除（管理者）。
     document.getElementById("fa-add")?.addEventListener("click",async(e)=>{
