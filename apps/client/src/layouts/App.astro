@@ -326,7 +326,10 @@ const isAdminOrg = ses?.role === "admin" && ses?.ctx === "org";
         if (on) { if (navTimer) return; navTimer = window.setTimeout(() => { navEl.classList.add("on"); navTimer = null; }, 180); }
         else { if (navTimer) { clearTimeout(navTimer); navTimer = null; } navEl.classList.remove("on"); }
       }
-      function navStart() { progStart(); navLoading(true); window.setTimeout(() => { progDone(); navLoading(false); }, 8000); }
+      // 遷移が完了すれば新ページ読込＋pageshow で必ず消える。下のタイマは「遷移が起きなかった
+      // 場合」だけの保険。短すぎると遅い回線で読込途中にオーバーレイが消え「出たり消えたり」して
+      // 見えるため、安全側に 20s へ延長（実遷移ではこの時間に達する前にページが入れ替わる）。
+      function navStart() { progStart(); navLoading(true); window.setTimeout(() => { progDone(); navLoading(false); }, 20000); }
       // 画面遷移（内部リンク/フォーム送信）で進捗バー＋ローディング表示。
       document.addEventListener("click", (e) => {
         const a = (e.target as HTMLElement)?.closest?.("a[href]") as HTMLAnchorElement | null;
