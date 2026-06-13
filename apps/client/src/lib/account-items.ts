@@ -49,7 +49,7 @@ const normalBalanceOf = (m: Major): "debit" | "credit" => (m === "asset" || m ==
 // お金の種類（口座タイプ）。freee の口座区分に倣う。code は対応する勘定科目。
 export const WALLET_TYPES: { type: string; label: string; code: string }[] = [
   { type: "cash", label: "現金", code: "111" },
-  { type: "bank", label: "口座（普通預金）", code: "112" },
+  { type: "bank", label: "口座（銀行振込）", code: "112" },
   { type: "credit_card", label: "クレジットカード", code: "330" },
   { type: "emoney", label: "電子マネー", code: "120" },
   { type: "qr", label: "QRコード決済", code: "121" },

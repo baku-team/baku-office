@@ -130,8 +130,9 @@ const closureRows = closuresRaw.map((c) => {
       <div class="field"><label for="desc">内容（メモ）</label><input id="desc" placeholder="例：6月分の会費" /></div>
       <div id="acctBox" class="row" style="align-items:flex-end">
         <div style="flex:2"><label for="acct">勘定科目（freee用・任意）</label><select id="acct"><option value="">（指定しない＝分類から自動）</option>{accountItems.map((a)=>(<option value={a.id} data-code={a.code}>{a.code} {a.name}</option>))}</select></div>
-        <div style="flex:0 0 auto"><button class="btn" type="button" id="acctAi">AIでおすすめ</button></div>
+        <div style="flex:0 0 auto"><button class="btn" type="button" id="acctAi" title="「内容（メモ）」の文章をもとに、AIが当てはまりそうな勘定科目を提案します">AIで提案（メモから判断）</button></div>
       </div>
+      <div class="muted" style="font-size:.8rem;margin-top:2px">↑「内容（メモ）」に書いた文章をAIが読み、ふさわしい勘定科目を提案します（最終的にはご自身で選べます）。</div>
       <input type="hidden" id="kind" value="income" />
       <div class="row">
         <button class="btn btn-primary btn-lg" id="reg" style="flex:1">この内容で記録する</button>

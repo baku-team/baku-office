@@ -39,9 +39,10 @@ const fmt = (s: number) => new Date(s * 1000).toISOString().slice(0, 10);
           </label>
         </div>
         <div class="row" style="margin-top:.5rem">
-          <button class="btn" id="sim">容量・費用を見積もる</button>
-          {isAdmin && (<button class="btn btn-primary" id="run" disabled>この内容で取り込む</button>)}
+          <button class="btn" id="sim">① 容量・費用を見積もる</button>
+          {isAdmin && (<button class="btn btn-primary" id="run" disabled title="先に「① 容量・費用を見積もる」を押すと、このボタンで取り込めるようになります">② この内容で取り込む</button>)}
         </div>
+        {isAdmin && (<div id="runhint" class="muted" style="font-size:.82rem;margin-top:6px">まず「① 容量・費用を見積もる」を押してください。見積りが出ると「② この内容で取り込む」が押せるようになります。</div>)}
         <div id="simout" class="banner banner-info" hidden style="margin-top:.6rem;white-space:pre-wrap"></div>
       </div>
 
@@ -70,7 +71,13 @@ const fmt = (s: number) => new Date(s * 1000).toISOString().slice(0, 10);
             "情報の増加：約 " + mb(d.metaBytes) + (d.d1Over ? "  ⚠️容量の上限を超える恐れ" : "") + "\n" +
             "ファイルそのもの：" + (d.withFiles && d.r2Enabled ? "約 " + mb(d.binaryBytes) + " / 概算 " + yen(d.r2CostYen) + "/月" + (d.r2Over ? "  ⚠️容量の上限を超える恐れ" : "") : "取り込まない（情報だけ）") + "\n\n" +
             "対策：\n- " + (d.advice || []).join("\n- ");
-          if (runBtn) runBtn.disabled = false;
+          if (runBtn) {
+            runBtn.disabled = false;
+            runBtn.title = "";
+            const hint = document.getElementById("runhint");
+            if (hint) hint.textContent = "見積りが出ました。問題なければ「② この内容で取り込む」を押してください。";
+            window.bo.toast("見積りが出ました。下の「② この内容で取り込む」で実行できます。", "info");
+          }
         });
         if (runBtn) runBtn.addEventListener("click", async (e) => {
           if (!(await window.bo.confirm("この内容で取り込みますか？", { confirmLabel: "取り込む" }))) return;
