@@ -1,5 +1,6 @@
 // 会計コア（設計書§8.1）。現金主義・単式（出納帳）＋科目分類。帳票はクエリで導出（保存しない）。
 import { randomId } from "@baku-office/shared";
+import { ensureChartOfAccounts, ensureCategoryAccountLinks } from "./account-items.ts";
 
 export const nowSec = (): number => Math.floor(Date.now() / 1000);
 
@@ -16,35 +17,41 @@ export type Tx = {
   amount: number;
   description: string | null;
   counter_wallet_id: string | null;
+  account_item_id?: string | null;
   created_at: number;
 };
 
 // 初回シード：会計期・口座・科目が無ければ既定を投入（任意団体がすぐ使えるように）。
 export async function ensureSeed(env: Env): Promise<void> {
+  // 勘定科目マスタは常に冪等投入（既存団体にも後付けで提供）。
+  await ensureChartOfAccounts(env);
   const fp = await env.DB.prepare("SELECT id FROM fiscal_periods LIMIT 1").first<{ id: string }>();
-  if (fp) return;
-  const y = new Date().getUTCFullYear();
-  const fid = randomId();
-  await env.DB.prepare("INSERT INTO fiscal_periods (id,name,start_date,end_date,status) VALUES (?,?,?,?,'open')")
-    .bind(fid, `${y}年度`, `${y}-04-01`, `${y + 1}-03-31`)
-    .run();
-  const wallets: [string, string][] = [["現金", "cash"], ["普通預金", "bank"]];
-  let i = 0;
-  for (const [name, type] of wallets) {
-    await env.DB.prepare("INSERT INTO wallets (id,name,type,opening_balance,sort_order) VALUES (?,?,?,0,?)")
-      .bind(randomId(), name, type, i++)
+  if (!fp) {
+    const y = new Date().getUTCFullYear();
+    const fid = randomId();
+    await env.DB.prepare("INSERT INTO fiscal_periods (id,name,start_date,end_date,status) VALUES (?,?,?,?,'open')")
+      .bind(fid, `${y}年度`, `${y}-04-01`, `${y + 1}-03-31`)
       .run();
+    const wallets: [string, string][] = [["現金", "cash"], ["普通預金", "bank"]];
+    let i = 0;
+    for (const [name, type] of wallets) {
+      await env.DB.prepare("INSERT INTO wallets (id,name,type,opening_balance,sort_order) VALUES (?,?,?,0,?)")
+        .bind(randomId(), name, type, i++)
+        .run();
+    }
+    const cats: [string, "income" | "expense"][] = [
+      ["会費収入", "income"], ["寄付収入", "income"], ["事業収入", "income"], ["雑収入", "income"],
+      ["消耗品費", "expense"], ["通信費", "expense"], ["会議費", "expense"], ["旅費交通費", "expense"], ["雑費", "expense"],
+    ];
+    i = 0;
+    for (const [name, kind] of cats) {
+      await env.DB.prepare("INSERT INTO categories (id,name,kind,parent_id,sort_order) VALUES (?,?,?,NULL,?)")
+        .bind(randomId(), name, kind, i++)
+        .run();
+    }
   }
-  const cats: [string, "income" | "expense"][] = [
-    ["会費収入", "income"], ["寄付収入", "income"], ["事業収入", "income"], ["雑収入", "income"],
-    ["消耗品費", "expense"], ["通信費", "expense"], ["会議費", "expense"], ["旅費交通費", "expense"], ["雑費", "expense"],
-  ];
-  i = 0;
-  for (const [name, kind] of cats) {
-    await env.DB.prepare("INSERT INTO categories (id,name,kind,parent_id,sort_order) VALUES (?,?,?,NULL,?)")
-      .bind(randomId(), name, kind, i++)
-      .run();
-  }
+  // 口座・科目に勘定科目を紐付け（未設定のみ・橋渡し用）。
+  await ensureCategoryAccountLinks(env);
 }
 
 export async function currentPeriod(env: Env): Promise<FiscalPeriod | null> {
@@ -77,10 +84,10 @@ export async function createTx(env: Env, t: Omit<Tx, "id" | "created_at">): Prom
   const id = randomId();
   const now = nowSec();
   await env.DB.prepare(
-    `INSERT INTO transactions (id,fiscal_period_id,date,wallet_id,kind,category_id,amount,description,counter_wallet_id,created_at,updated_at)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+    `INSERT INTO transactions (id,fiscal_period_id,date,wallet_id,kind,category_id,amount,description,counter_wallet_id,account_item_id,created_at,updated_at)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
   )
-    .bind(id, t.fiscal_period_id, t.date, t.wallet_id, t.kind, t.category_id, t.amount, t.description, t.counter_wallet_id, now, now)
+    .bind(id, t.fiscal_period_id, t.date, t.wallet_id, t.kind, t.category_id, t.amount, t.description, t.counter_wallet_id, t.account_item_id ?? null, now, now)
     .run();
   return id;
 }

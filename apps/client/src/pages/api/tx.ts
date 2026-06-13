@@ -41,6 +41,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
     amount: Math.round(amount),
     description: b.description ? String(b.description) : null,
     counter_wallet_id: kind === "transfer" ? String(b.counter_wallet_id) : null,
+    account_item_id: kind !== "transfer" && b.account_item_id ? String(b.account_item_id) : null,
   });
   return json({ ok: true, id });
 };
