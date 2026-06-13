@@ -131,7 +131,7 @@ const isAdminOrg = ses?.role === "admin" && ses?.ctx === "org";
                 <span style="position:relative">
                   <button class="userchip" id="bo-user" type="button" aria-haspopup="menu" aria-expanded="false">
                     <span class="avatar">{initial}</span>
-                    <span class="nm">{firstName}<small>{ses.role}</small></span>
+                    <span class="nm">{firstName}{isAdminOrg && <small>{ses.role}</small>}</span>
                   </button>
                   <div class="menu-ov" id="bo-user-ov" hidden></div>
                   <div class="usermenu fade-up" id="bo-user-menu" role="menu" hidden>
@@ -175,7 +175,7 @@ const isAdminOrg = ses?.role === "admin" && ses?.ctx === "org";
       <>
         <button class={"bo-agent " + (agentAwake ? "idle" : "asleep") + (mascotUrl !== "/mascot/baku.png" ? " custom" : "")} id="bo-agent" type="button" data-awake={agentAwake ? "1" : "0"} data-engine={mascotEngine} title="相棒（AI・エージェント）" aria-label="相棒（AI・エージェント）の稼働状況">
           <span class="bo-agent-dots" aria-hidden="true"><i></i><i></i><i></i></span>
-          <span class="bo-agent-zzz" aria-hidden="true">z<small>z</small></span>
+          <span class="bo-agent-zzz" aria-hidden="true" title="相棒はお休み中（Proで活動します）">💤</span>
           <span class="bo-agent-sprite-wrap">
             <img class="bo-agent-img" src={mascotUrl} alt="相棒" width="88" height="88" decoding="async" />
           </span>

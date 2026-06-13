@@ -105,7 +105,7 @@ const clampSpan = (n?: number) => Math.max(1, Math.min(3, Number(n) || 1));
       <h1 class="h1" style="margin:.25rem 0 0">{greeting}{dispName && <span style="color:var(--muted);font-weight:600">、{dispName}</span>}</h1>
     </div>
     <div class="home-head-right">
-      <span class="pill brand">{planLabel(entitlement)}</span>
+      {isOrgAdmin && <span class="pill brand">{planLabel(entitlement)}</span>}
       <span class="pill"><span class="dot" style={`background:${online ? "var(--ok)" : "var(--faint)"}`}></span>{online ? "オンライン" : "未接続"}</span>
       {isOrgAdmin && (<button class="btn btn-ghost btn-sm" id="editHome">ホームを編集</button>)}
     </div>
