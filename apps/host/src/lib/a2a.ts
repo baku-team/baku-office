@@ -2,6 +2,7 @@
 // 認証＝相手ライセンスの実在/有効＋接続の active。実行面は相手 client の /api/a2a/inbound（ctx.apps.call 経由・権限検査つき）。
 import { randomId, signEnvelope, importSignKey, openLicense, type Envelope } from "@baku-office/shared";
 import { nowSec, signingJwk, isSafeDeployUrl } from "./host.ts";
+import { getEntry, hasPublicAction, recomputeTrust } from "./directory.ts";
 
 // ライセンストークン（client が保持）→ licenseId を検証して取り出す。なりすまし防止。
 export async function licenseFromToken(env: Env, token: string | undefined): Promise<string | null> {
@@ -13,6 +14,7 @@ export async function licenseFromToken(env: Env, token: string | undefined): Pro
 }
 
 const RATE_PER_MIN = 60; // 1接続あたりの中継上限/分（暴走・ループ防止）。
+const PUBLIC_RATE_PER_MIN = 10; // 招待なし公開中継は from 単位でより厳しめ（スパム抑止）。
 
 export type ConnRow = { id: string; org_a_license: string; org_b_license: string | null; status: string; label_a: string | null; label_b: string | null };
 
@@ -42,6 +44,21 @@ export async function listConnections(env: Env, license: string): Promise<{ id: 
   return results.map((c) => c.org_a_license === license
     ? { id: c.id, partner: c.org_b_license, status: c.status, role: "a" as const }
     : { id: c.id, partner: c.org_a_license, status: c.status, role: "b" as const });
+}
+
+// 受付箱からの接続昇格：公開接触してきた相手(other)を受信側(approver)が承認したら active 接続を作る。
+// 双方の同意（other が接触＝申込／approver が承認）が揃うため即 active。既に有効接続があれば何もしない。
+export async function establishFromPublic(env: Env, approverLicense: string, otherLicense: string): Promise<{ ok: boolean; error?: string }> {
+  if (approverLicense === otherLicense) return { ok: false, error: "自団体とは接続できません" };
+  const other = await env.DB.prepare("SELECT 1 FROM licenses WHERE license_id=? AND status='active'").bind(otherLicense).first();
+  if (!other) return { ok: false, error: "相手のライセンスが無効です" };
+  const exists = await env.DB.prepare("SELECT 1 FROM a2a_connections WHERE status='active' AND ((org_a_license=? AND org_b_license=?) OR (org_a_license=? AND org_b_license=?)) LIMIT 1")
+    .bind(approverLicense, otherLicense, otherLicense, approverLicense).first();
+  if (exists) return { ok: true };
+  const now = nowSec();
+  await env.DB.prepare("INSERT INTO a2a_connections (id,org_a_license,org_b_license,status,created_at,updated_at) VALUES (?,?,?,'active',?,?)")
+    .bind(randomId(8), approverLicense, otherLicense, now, now).run();
+  return { ok: true };
 }
 
 export async function revokeConnection(env: Env, code: string, byLicense: string): Promise<void> {
@@ -121,9 +138,9 @@ export async function groupRelay(env: Env, fromLicense: string, groupId: string,
   return { ok: true, results };
 }
 
-async function audit(env: Env, connId: string | null, from: string, to: string, action: string, status: string): Promise<void> {
-  await env.DB.prepare("INSERT INTO a2a_audit (id,conn_id,from_license,to_license,action,status,created_at) VALUES (?,?,?,?,?,?,?)")
-    .bind(randomId(8), connId, from, to, action, status, nowSec()).run().catch(() => {});
+async function audit(env: Env, connId: string | null, from: string, to: string, action: string, status: string, kind = "conn"): Promise<void> {
+  await env.DB.prepare("INSERT INTO a2a_audit (id,conn_id,from_license,to_license,action,status,kind,created_at) VALUES (?,?,?,?,?,?,?,?)")
+    .bind(randomId(8), connId, from, to, action, status, kind, nowSec()).run().catch(() => {});
 }
 
 // 中継：from→to へ署名エンベロープを送り、相手 client の inbound 結果を返す。
@@ -150,5 +167,42 @@ export async function relay(env: Env, fromLicense: string, toLicense: string, ac
   } catch (e) {
     await audit(env, c.id, fromLicense, toLicense, action, "error");
     return { ok: false, error: "相手へ到達できません（カスタムドメイン等で到達可能である必要があります）：" + ((e as Error).message ?? "") };
+  }
+}
+
+// 招待なし公開中継：to が公開ディレクトリに掲載中(listed&!blocked)で、action が公開アクションなら接続なしで中継。
+// 多層防御：from は実在ライセンス（token認証＋署名）／公開アクション限定／from単位レート／SSRF／envelope に
+// fromTrust・fromVerified・fromName を同梱（受信側の受付ポリシー判定用・改ざんは署名で防止）。
+export async function relayPublic(env: Env, fromLicense: string, toLicense: string, action: string, args: Record<string, unknown>): Promise<{ ok: boolean; result?: unknown; queued?: boolean; error?: string }> {
+  // 既に active 接続があれば通常経路（公開はあくまで接続なし時の追加路）。
+  const existing = await env.DB.prepare("SELECT 1 FROM a2a_connections WHERE status='active' AND ((org_a_license=? AND org_b_license=?) OR (org_a_license=? AND org_b_license=?)) LIMIT 1")
+    .bind(fromLicense, toLicense, toLicense, fromLicense).first();
+  if (existing) return relay(env, fromLicense, toLicense, action, args);
+
+  const to = await getEntry(env, toLicense);
+  if (!to || to.listed !== 1 || to.blocked === 1) { await audit(env, null, fromLicense, toLicense, action, "denied", "public"); return { ok: false, error: "相手は公開されていません" }; }
+  // __inquiry__（問い合わせメッセージ）は常に許可（受信側で受付箱へ）。それ以外は公開アクション限定。
+  if (action !== "__inquiry__" && !hasPublicAction(to, action)) { await audit(env, null, fromLicense, toLicense, action, "denied", "public"); return { ok: false, error: "そのアクションは公開されていません" }; }
+  // from 単位レート（公開・分）。
+  const since = nowSec() - 60;
+  const cnt = await env.DB.prepare("SELECT COUNT(*) AS n FROM a2a_audit WHERE from_license=? AND kind='public' AND status='ok' AND created_at>=?").bind(fromLicense, since).first<{ n: number }>();
+  if ((cnt?.n ?? 0) >= PUBLIC_RATE_PER_MIN) { await audit(env, null, fromLicense, toLicense, action, "denied", "public"); return { ok: false, error: "公開連絡のレート上限に達しました。しばらく待って再試行してください" }; }
+  const dst = await env.DB.prepare("SELECT deploy_url FROM licenses WHERE license_id=? AND status='active'").bind(toLicense).first<{ deploy_url: string | null }>();
+  if (!dst?.deploy_url || !isSafeDeployUrl(dst.deploy_url)) { await audit(env, null, fromLicense, toLicense, action, "error", "public"); return { ok: false, error: "相手のデプロイURLが未登録または不正です" }; }
+  // 送信元の信頼情報を同梱（受信側の受付判定用）。
+  const fromTrust = await recomputeTrust(env, fromLicense);
+  const fromEntry = await getEntry(env, fromLicense);
+  const fromVerified = (fromEntry?.verification as { exists?: boolean } | undefined)?.exists === true;
+  const fromName = fromEntry?.org_name ?? "";
+  const envlp = await signEnvelope(await importSignKey(signingJwk(env)), { from: fromLicense, action, args, public: true, fromTrust, fromVerified, fromName, exp: nowSec() + 60, nonce: randomId(12) });
+  try {
+    const r = await fetch(dst.deploy_url.replace(/\/$/, "") + "/api/a2a/inbound", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(envlp), redirect: "manual" });
+    const data = (await r.json().catch(() => ({}))) as { ok?: boolean; result?: unknown; queued?: boolean; error?: string };
+    await audit(env, null, fromLicense, toLicense, action, r.ok && data.ok ? "ok" : "error", "public");
+    if (!r.ok || !data.ok) return { ok: false, error: data.error ?? `相手が応答しませんでした（${r.status}）` };
+    return { ok: true, result: data.result, queued: data.queued };
+  } catch (e) {
+    await audit(env, null, fromLicense, toLicense, action, "error", "public");
+    return { ok: false, error: "相手へ到達できません：" + ((e as Error).message ?? "") };
   }
 }

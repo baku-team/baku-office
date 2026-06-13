@@ -40,6 +40,8 @@ const groups: Group[] = [
     { href: "/settings/google-setup", label: "Google との連携", desc: "カレンダー・メールなどとの連携を手順で案内", show: isAdminOrg },
     { href: "/usage", label: "利用状況・上限", desc: "今の利用量と上限の確認", show: isAdminOrg && hasPlus },
     { href: "/drive", label: "クラウド保存の連携", desc: "ファイルの同期・バックアップ", show: isAdminOrg && hasPlus },
+    { href: "/settings/directory", label: "エージェントを公開（受付にする）", desc: "団体を公開し、招待なしで問い合わせを受け付ける", show: isAdminOrg && hasPlus },
+    { href: "/directory", label: "公開団体を探す", desc: "公開している他団体を探して連絡する", show: isAdminOrg && hasPlus },
   ] },
   { title: "管理者向け（詳細設定）", items: [
     { href: "/settings/advanced", label: "高度なオプション", desc: "AIの詳細設定・容量プラン（上級者向け）", show: isAdminOrg && hasPlus },

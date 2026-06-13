@@ -9,7 +9,8 @@ import { scopeCtx } from "../core/capability.ts";
 import { runToolLoop, type ToolDecl, type Turn, type ChatModel, type TokenUsage } from "../core/ai.ts";
 import { ROLES, toolsForRole, normalizeRole, ROLE_LIST } from "./multi-agent.ts";
 import { maxParallelAgents, agentMaxHops } from "./settings.ts";
-import { callPartner, groupRelayCall } from "./a2a.ts";
+import { callPartner, groupRelayCall, callPublic, sendInquiry } from "./a2a.ts";
+import { searchDirectory } from "./directory.ts";
 import { autonomyReady, AUTONOMY_TOOLS, AUTONOMY_POLICY, runAutonomyTool } from "./autonomy.ts";
 import { localChatModel } from "../core/models/local.ts";
 import { workersAiChatModel } from "../core/models/workers-ai.ts";
@@ -70,6 +71,12 @@ const MULTI_TOOLS = [
   { name: "broadcast_group", description: "A2Aグループの全メンバーへ同じ公開アクション（action=公開名）を同報し、各社の結果をまとめて得る", parameters: { type: "object", properties: { group: { type: "string", description: "グループID" }, action: { type: "string", description: "公開アクション名" }, args: { type: "object" } }, required: ["group", "action"] } },
   { name: "call_group_member", description: "A2Aグループ内の特定メンバー（partner=ライセンスID）の公開アクション（action=公開名）を呼ぶ", parameters: { type: "object", properties: { group: { type: "string" }, partner: { type: "string" }, action: { type: "string", description: "公開アクション名" }, args: { type: "object" } }, required: ["group", "partner", "action"] } },
 ];
+// 公開ディレクトリ道具（Plus以上）：招待なしで公開団体を探し、公開アクション/問い合わせを行う＝「受付」連携。
+const DIRECTORY_TOOLS = [
+  { name: "find_partner", description: "公開ディレクトリから条件に合う団体を探す（query=自然文や業種、tags=任意）。招待コード不要。候補のライセンスID・紹介・検証/信頼を返す", parameters: { type: "object", properties: { query: { type: "string" }, tags: { type: "array", items: { type: "string" } } }, required: ["query"] } },
+  { name: "call_public", description: "公開している団体（partner=ライセンスID）の公開アクション（action=公開名）を招待なしで呼ぶ", parameters: { type: "object", properties: { partner: { type: "string", description: "相手のライセンスID" }, action: { type: "string", description: "公開アクション名" }, args: { type: "object" } }, required: ["partner", "action"] } },
+  { name: "send_inquiry", description: "公開している団体（partner=ライセンスID）の受付箱へ問い合わせメッセージを送る（相手の承認待ちに積まれる）", parameters: { type: "object", properties: { partner: { type: "string" }, message: { type: "string", description: "問い合わせ本文" } }, required: ["partner", "message"] } },
+];
 // 高度なオプション：有効化済みのユーザー追加スキル（要Claudeキー）。
 function skillTool(names: string[]) {
   return { name: "run_skill", description: `登録済みの業務スキルを実行（利用可能: ${names.join(", ")}）`, parameters: { type: "object", properties: { name: { type: "string" }, input: { type: "string" } }, required: ["name", "input"] } };
@@ -129,7 +136,7 @@ async function execTool(ctx: Ctx, owner: string, baseUrl: string, name: string, 
 // owner はデータスコープ識別子（LINE は `line:<userId>`、Web は session.uid）。呼び出し側で付与する。
 // API依存ツール（web_search=Gemini／make_document=Claude）は対応キーがある時だけモデルに提示。
 // 無人ジョブ（cron 自動巡回など人間が監督しない実行）で提示しない対外系マルチエージェント道具。
-const UNATTENDED_BLOCK_MULTI = new Set(["call_partner", "broadcast_group", "call_group_member"]);
+const UNATTENDED_BLOCK_MULTI = new Set(["call_partner", "broadcast_group", "call_group_member", "call_public", "send_inquiry"]);
 
 export async function runAgent(ctx: Ctx, owner: string, text: string, image?: { mimeType: string; dataB64: string }, baseUrl = "", role: Role = "member", opts: { history?: Turn[]; model?: "gemini" | "claude" | "local"; unattended?: boolean } = {}): Promise<string> {
   const env = ctx.env;
@@ -149,6 +156,7 @@ export async function runAgent(ctx: Ctx, owner: string, text: string, image?: { 
   // エンタイトルメント：Pro判定＋パーツの minPlan ゲートに使う（Pro未満には Pro限定アプリの道具を提示しない）。
   const ent = await entitlementForGate(env).catch(() => "free" as const);
   const isPro = atLeast(ent, "pro");
+  const isPlus = atLeast(ent, "plus");
   const parts = enabledParts(await enabledPartIds(ctx)).filter((p) => !off.has(p.id) && atLeast(ent, p.minPlan ?? "free"));
   // 無人ジョブでは対外/破壊系道具（unattended:false）をそもそも提示せず、execTool 経路でも実行不可にする。
   const activeTools = opts.unattended ? toolsOf(parts).filter((t) => t.unattended !== false) : toolsOf(parts);
@@ -158,7 +166,9 @@ export async function runAgent(ctx: Ctx, owner: string, text: string, image?: { 
   const autonomy = isPro && role === "admin" && (await autonomyReady(env).catch(() => false));
   // 無人ジョブでは対外系の他団体連携（A2A）道具を除外する。
   const multiTools = opts.unattended ? MULTI_TOOLS.filter((t) => !UNATTENDED_BLOCK_MULTI.has(t.name)) : MULTI_TOOLS;
-  const decls = [...partDecls, ...CORE_TOOLS, ...GEMINI_TOOLS, ...(hasClaude ? CLAUDE_TOOLS : []), ...(isPro ? multiTools : []), ...(autonomy ? AUTONOMY_TOOLS : []), ...(enabledSkills.length ? [skillTool(enabledSkills.map((s) => s.name))] : []), ...capDecls];
+  // 公開ディレクトリ道具（Plus以上）。無人ジョブでは対外系（call_public/send_inquiry）を除外（find_partner は読み取りで可）。
+  const dirTools = opts.unattended ? DIRECTORY_TOOLS.filter((t) => !UNATTENDED_BLOCK_MULTI.has(t.name)) : DIRECTORY_TOOLS;
+  const decls = [...partDecls, ...CORE_TOOLS, ...GEMINI_TOOLS, ...(hasClaude ? CLAUDE_TOOLS : []), ...(isPro ? multiTools : []), ...(isPlus ? dirTools : []), ...(autonomy ? AUTONOMY_TOOLS : []), ...(enabledSkills.length ? [skillTool(enabledSkills.map((s) => s.name))] : []), ...capDecls];
   // 自己認識：有効な追加能力＋団体のカスタム指示（口調・人格・回答形式）をシステム文脈へ。安全制約は不変。
   const capInfo = await capabilitySummary(env);
   const custom = await getCustomPrompt(env);
@@ -272,6 +282,21 @@ export async function runAgent(ctx: Ctx, owner: string, text: string, image?: { 
       const fmt = (x: { member: string; ok: boolean; result?: unknown; error?: string }) => `・${x.member}：${x.ok ? (typeof x.result === "string" ? x.result : JSON.stringify(x.result)) : "失敗（" + (x.error ?? "") + "）"}`;
       return (r.results ?? []).map(fmt).join("\n") || "対象メンバーがいません。";
     }
+    if (isPlus && n === "find_partner") {
+      const r = await searchDirectory(env, String(a.query ?? ""), Array.isArray(a.tags) ? (a.tags as string[]) : undefined);
+      if (!r.ok) return `探索に失敗：${r.error ?? ""}`;
+      const list = (r.results ?? []).slice(0, 10).map((c) => `・${c.org_name}（ID:${c.license_id}）${c.verified ? "✓検証済" : ""} 信頼${c.trust_score}\n  ${c.summary}\n  公開: ${c.public_actions.map((x) => x.name).join(", ") || "問い合わせのみ"}`);
+      return list.length ? `見つかった団体：\n${list.join("\n")}` : "条件に合う公開団体は見つかりませんでした。";
+    }
+    if (isPlus && n === "call_public") {
+      const r = await callPublic(env, String(a.partner ?? ""), String(a.action ?? ""), (a.args as Record<string, unknown>) ?? {});
+      if (r.queued) return "相手の受付箱に届けました。先方の承認をお待ちください。";
+      return r.ok ? `公開連絡の応答：\n${typeof r.result === "string" ? r.result : JSON.stringify(r.result)}` : `公開連絡に失敗：${r.error ?? ""}`;
+    }
+    if (isPlus && n === "send_inquiry") {
+      const r = await sendInquiry(env, String(a.partner ?? ""), String(a.message ?? ""));
+      return r.ok ? "相手の受付箱に問い合わせを届けました。先方の承認をお待ちください。" : `問い合わせに失敗：${r.error ?? ""}`;
+    }
     if (autonomy && AUTONOMY_TOOLS.some((t) => t.name === n)) return runAutonomyTool(env, n, a);
     return execTool(ctx, owner, baseUrl, n, a, role, activeTools);
   };
@@ -301,6 +326,15 @@ export async function runApprovedTool(ctx: Ctx, owner: string, baseUrl: string, 
     if (!r.ok) return `グループ連携に失敗：${r.error ?? ""}`;
     const fmt = (x: { member: string; ok: boolean; result?: unknown; error?: string }) => `・${x.member}：${x.ok ? (typeof x.result === "string" ? x.result : JSON.stringify(x.result)) : "失敗（" + (x.error ?? "") + "）"}`;
     return (r.results ?? []).map(fmt).join("\n") || "対象メンバーがいません。";
+  }
+  if (tool === "call_public") {
+    const r = await callPublic(env, String(args.partner ?? ""), String(args.action ?? ""), (args.args as Record<string, unknown>) ?? {});
+    if (r.queued) return "相手の受付箱に届けました。先方の承認をお待ちください。";
+    return r.ok ? `公開連絡の応答：\n${typeof r.result === "string" ? r.result : JSON.stringify(r.result)}` : `公開連絡に失敗：${r.error ?? ""}`;
+  }
+  if (tool === "send_inquiry") {
+    const r = await sendInquiry(env, String(args.partner ?? ""), String(args.message ?? ""));
+    return r.ok ? "相手の受付箱に問い合わせを届けました。" : `問い合わせに失敗：${r.error ?? ""}`;
   }
   // 業務道具：現在の有効パーツから対象ツールを引いて承認済み実行。
   const ent = await entitlementForGate(env).catch(() => "free" as const);

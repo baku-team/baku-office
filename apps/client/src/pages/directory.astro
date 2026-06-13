@@ -1,0 +1,69 @@
+---
+import { env } from "cloudflare:workers";
+export const prerender = false;
+import App from "../layouts/App.astro";
+import { atLeast } from "@baku-office/shared";
+const { getSession } = await import("../lib/auth.ts");
+const ses = await getSession(env, Astro.request);
+if (!ses) return Astro.redirect("/login", 302);
+const isOrgAdmin = ses.role === "admin" && ses.ctx === "org";
+const { cachedEntitlement } = await import("../lib/client.ts");
+const hasPlus = atLeast(await cachedEntitlement(env).catch(() => "free" as const), "plus");
+---
+<App title="公開ディレクトリ" active="/directory">
+  <h1>公開ディレクトリ（団体を探す）</h1>
+  {!hasPlus && (<div class="card"><div class="banner banner-warn">この機能は <strong>Plus 以上</strong>で利用できます。</div><a class="btn btn-primary" href="/billing">プラン・課金へ</a></div>)}
+  {hasPlus && !isOrgAdmin && (<div class="card"><p class="muted">団体検索は管理者が行えます。一般メンバーはAIチャットで「◯◯な団体を探して」と頼むこともできます。</p></div>)}
+  {hasPlus && isOrgAdmin && (
+    <Fragment>
+      <p class="lead">公開している他団体を探して、招待コードなしで問い合わせ・連絡ができます。自団体を公開するには <a href="/settings/directory">エージェントを公開</a>。</p>
+      <div class="card">
+        <div class="row">
+          <div style="flex:2"><label for="q">どんな団体を探していますか？</label><input id="q" placeholder="例：地域の花屋、PTA、会計を手伝ってくれる団体" /></div>
+          <div style="flex:1"><label for="qtags">タグ（任意・カンマ区切り）</label><input id="qtags" placeholder="例：花, ギフト" /></div>
+          <div style="flex:0 0 auto;align-self:end"><button class="btn btn-primary" id="q-go">探す</button></div>
+        </div>
+      </div>
+      <div id="results"></div>
+
+      <script slot="scripts" is:inline>
+        const api = (b, opts) => window.bo.api("/api/directory", b, opts || {});
+        const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+        document.getElementById("q-go").addEventListener("click", async (e) => {
+          const tags = document.getElementById("qtags").value.split(",").map((s) => s.trim()).filter(Boolean);
+          const r = await api({ _action: "search", query: document.getElementById("q").value, tags }, { btn: e.currentTarget, successMsg: null });
+          const box = document.getElementById("results");
+          if (!r.ok || !r.results || !r.results.length) { box.innerHTML = '<p class="muted" style="padding:1rem">条件に合う公開団体は見つかりませんでした。</p>'; return; }
+          box.innerHTML = r.results.map((c) => `
+            <div class="card" data-lic="${esc(c.license_id)}">
+              <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                <strong style="font-size:1.05rem">${esc(c.org_name)}</strong>
+                ${c.verified ? '<span class="pill brand">✓ 実在確認済み</span>' : '<span class="pill">未確認</span>'}
+                <span class="muted" style="font-size:.82rem">信頼度 ${c.trust_score}</span>
+              </div>
+              <div class="muted" style="margin-top:4px">${esc(c.summary)}</div>
+              <div class="muted" style="font-size:.82rem;margin-top:4px">公開アクション: ${(c.public_actions || []).map((a) => esc(a.label || a.name)).join(", ") || "問い合わせのみ"}</div>
+              <div class="row" style="margin-top:8px">
+                <input class="msg" placeholder="問い合わせ内容（例：見積もりをお願いしたい）" style="flex:1" />
+                <button class="btn btn-primary inq" style="flex:0 0 auto">問い合わせる</button>
+                <button class="btn btn-ghost rep" style="flex:0 0 auto">通報</button>
+              </div>
+            </div>`).join("");
+          box.querySelectorAll(".inq").forEach((b) => b.addEventListener("click", async (ev) => {
+            const card = ev.target.closest("[data-lic]"); const msg = card.querySelector(".msg").value.trim();
+            if (!msg) { window.bo.toast("問い合わせ内容を入力してください", "err"); return; }
+            const rr = await api({ _action: "send_inquiry", to: card.dataset.lic, message: msg }, { btn: ev.target, successMsg: null });
+            window.bo.toast(rr.ok ? "相手の受付箱に届けました。先方の承認をお待ちください。" : ("失敗：" + (rr.error || "")), rr.ok ? "ok" : "err");
+          }));
+          box.querySelectorAll(".rep").forEach((b) => b.addEventListener("click", async (ev) => {
+            if (!(await window.bo.confirm("この団体を通報しますか？（スパム・不適切など）", { confirmLabel: "通報", danger: true }))) return;
+            const card = ev.target.closest("[data-lic]");
+            const rr = await api({ _action: "report", target: card.dataset.lic, reason: "user_report" }, { btn: ev.target, successMsg: "通報しました" });
+            if (rr.ok) ev.target.disabled = true;
+          }));
+        });
+      </script>
+      <style>.lead{color:var(--ink);margin:.2rem 0 1rem}</style>
+    </Fragment>
+  )}
+</App>

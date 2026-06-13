@@ -4,6 +4,26 @@ import { DEFAULT_MODELS, isValidWorkersAiModel } from "../core/models/config.ts"
 
 export type AiEngine = "gemini" | "claude";
 
+// 招待なし公開A2Aの受付ポリシー（団体ごと）。mode＝box(受付箱で承認)/auto(即時自動応答)/hybrid(信頼で分岐)。
+export type ReceptionPolicy = { mode: "box" | "auto" | "hybrid"; minHostTrust: number; requireVerified: boolean; requireAiReview: boolean };
+const DEFAULT_RECEPTION: ReceptionPolicy = { mode: "box", minHostTrust: 0.3, requireVerified: false, requireAiReview: false };
+export async function getReceptionPolicy(env: Env): Promise<ReceptionPolicy> {
+  const raw = await env.LICENSE.get("reception_policy");
+  if (!raw) return { ...DEFAULT_RECEPTION };
+  try { const p = JSON.parse(raw); return { ...DEFAULT_RECEPTION, ...p, mode: ["box", "auto", "hybrid"].includes(p.mode) ? p.mode : "box" }; } catch { return { ...DEFAULT_RECEPTION }; }
+}
+export async function setReceptionPolicy(env: Env, p: Partial<ReceptionPolicy>): Promise<ReceptionPolicy> {
+  const cur = await getReceptionPolicy(env);
+  const next: ReceptionPolicy = {
+    mode: p.mode && ["box", "auto", "hybrid"].includes(p.mode) ? p.mode : cur.mode,
+    minHostTrust: typeof p.minHostTrust === "number" ? Math.max(0, Math.min(1, p.minHostTrust)) : cur.minHostTrust,
+    requireVerified: typeof p.requireVerified === "boolean" ? p.requireVerified : cur.requireVerified,
+    requireAiReview: typeof p.requireAiReview === "boolean" ? p.requireAiReview : cur.requireAiReview,
+  };
+  await kvPut(env, "reception_policy", JSON.stringify(next));
+  return next;
+}
+
 // 記帳方式：単式（出納帳・既定）／複式（仕訳・試算表）。管理者が切替。
 export type BookkeepingMode = "single" | "double";
 export async function getBookkeepingMode(env: Env): Promise<BookkeepingMode> {
