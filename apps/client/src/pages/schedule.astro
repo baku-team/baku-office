@@ -6,6 +6,21 @@ const { getSession } = await import("../lib/auth.ts");
 const ses = await getSession(env, Astro.request);
 if (!ses) return Astro.redirect("/login", 302);
 const { results } = await env.DB.prepare("SELECT id,title,start_at,end_at FROM schedules WHERE deleted_at IS NULL ORDER BY start_at").all<{ id: string; title: string; start_at: string; end_at: string | null }>();
+// Googleカレンダー連携の可否（Pro＋連携済み＋カレンダー権限）。連携時は今後の予定を表示し、追加時に同時登録できる。
+const { atLeast } = await import("@baku-office/shared");
+const { cachedEntitlement } = await import("../lib/client.ts");
+const { googleConfigured, googleStatus } = await import("../lib/google.ts");
+let googleReady = false, googleEventsText = "";
+try {
+  if (atLeast(await cachedEntitlement(env), "pro") && (await googleConfigured(env))) {
+    const st = await googleStatus(env);
+    if (st.connected && st.groups.includes("calendar")) {
+      googleReady = true;
+      const { listEvents } = await import("../parts/calendar.ts");
+      googleEventsText = await listEvents(Astro.locals.ctx, { max: 15 });
+    }
+  }
+} catch { googleReady = false; }
 // 一覧の日時を日本語表示（YYYY-MM-DDTHH:MM 形式の naive 文字列を素直に整形）。終了時刻があれば併記。
 const hhmm = (s: string | null) => { const m = /T(\d{2}):(\d{2})/.exec(s || ""); return m ? `${m[1]}:${m[2]}` : ""; };
 const jpDateTime = (s: string, e?: string | null) => {
@@ -60,6 +75,9 @@ const eventsJson = JSON.stringify(results).replace(/</g, "\\u003c");
         <span class="time-sep">分</span>
       </div>
     </div>
+    {googleReady && (
+      <label class="field" style="display:flex;align-items:center;gap:8px;margin-top:.2rem"><input type="checkbox" id="to-google" /> Googleカレンダーにも登録する</label>
+    )}
     <div class="add-actions">
       <button class="btn btn-primary add-go" id="add">＋ この日に追加</button>
       <button class="btn btn-ghost" id="add-cancel" type="button">閉じる</button>
@@ -72,7 +90,15 @@ const eventsJson = JSON.stringify(results).replace(/</g, "\\u003c");
     {results.length===0 && (<tr><td colspan="3" class="muted" style="text-align:center;padding:1.2rem">まだ予定がありません。上のカレンダーの日付をタップして、最初の予定を追加してみましょう。</td></tr>)}
   </tbody></table></div>
 
-  <p class="muted" style="margin-top:1rem">Googleカレンダーと連携したい場合は <a href="/calendar">カレンダー連携</a> をご覧ください。</p>
+  {googleReady ? (
+    <div class="card" style="margin-top:1rem">
+      <h2 style="margin-top:0;border:0">Googleカレンダーの予定（今後）</h2>
+      <p class="muted" style="font-size:.85rem">連携中のGoogleカレンダーの予定です。上で「Googleカレンダーにも登録する」にチェックして追加すると、こちらにも反映されます。</p>
+      <pre style="white-space:pre-wrap;font-family:inherit;font-size:.9rem;margin:0">{googleEventsText}</pre>
+    </div>
+  ) : (
+    <p class="muted" style="margin-top:1rem">Googleカレンダーと連動させたい場合は <a href="/calendar">カレンダー連携</a>（Proプラン）から設定できます。連携すると、ここでGoogleの予定も表示され、追加時に同時登録できます。</p>
+  )}
 
   <style>
     .lead { color: var(--ink); margin: .2rem 0 1rem; }
@@ -213,8 +239,12 @@ const eventsJson = JSON.stringify(results).replace(/</g, "\\u003c");
         end = `${selDate}T${endH.value}:${endM.value}`;
         if (end <= start) { window.bo.toast("終了時刻は開始時刻より後にしてください", "err"); return; }
       }
-      const r = await P({ title: t, start_at: start, end_at: end }, e.currentTarget);
-      if (r.ok) setTimeout(() => location.reload(), 500);
+      const toG = document.getElementById("to-google");
+      const r = await P({ title: t, start_at: start, end_at: end, to_google: !!(toG && toG.checked) }, e.currentTarget);
+      if (r.ok) {
+        if (toG && toG.checked && r.data && !r.data.googlePushed) window.bo.toast("内部の予定は保存しましたが、Googleカレンダーへの登録に失敗しました（連携状態をご確認ください）", "err");
+        setTimeout(() => location.reload(), 600);
+      }
     });
     document.querySelectorAll("tr[data-id] .del").forEach((b) => b.addEventListener("click", async (e) => {
       if (!(await window.bo.confirm("この予定を削除しますか？", { confirmLabel: "削除", danger: true, irreversible: true }))) return;

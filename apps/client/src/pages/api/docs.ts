@@ -21,7 +21,28 @@ export const POST: APIRoute = async ({ request, locals }) => {
     await env.DB.prepare("INSERT INTO schedules (id,title,start_at,end_at,body,created_by,created_at) VALUES (?,?,?,?,?,?,?)")
       .bind(id, b.title, b.start_at, b.end_at ?? null, b.body ?? null, ses.uid, nowSec()).run();
     await audit(env, ses.uid, "schedule.create", id);
-    return json({ ok: true, id });
+    // 任意：Googleカレンダーにも登録（ベストエフォート＝失敗しても内部保存は成立）。終了時刻が無ければ開始+1時間。
+    let googlePushed = false, googleError = "";
+    if (b.to_google) {
+      try {
+        const { createEvent } = await import("../../parts/calendar.ts");
+        const withSec = (s: string) => (/T\d{2}:\d{2}$/.test(s) ? `${s}:00` : s);
+        const start = withSec(b.start_at);
+        let end = b.end_at ? withSec(b.end_at) : "";
+        if (!end) {
+          const d = new Date(`${start}Z`); // naive を UTC とみなし +1h（JST 表記で送るため日跨ぎも安全に算出）。
+          if (!Number.isNaN(d.getTime())) {
+            d.setUTCHours(d.getUTCHours() + 1);
+            const p = (n: number) => String(n).padStart(2, "0");
+            end = `${d.getUTCFullYear()}-${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())}T${p(d.getUTCHours())}:${p(d.getUTCMinutes())}:00`;
+          } else end = start;
+        }
+        const res = await createEvent(locals.ctx, { title: b.title, start, end, description: b.body });
+        googlePushed = res.startsWith("予定を作成しました");
+        if (!googlePushed) googleError = res;
+      } catch (e) { googleError = (e as Error).message; }
+    }
+    return json({ ok: true, id, googlePushed, googleError });
   }
   if (b.kind === "minutes") {
     if (b._action === "delete") { await env.DB.prepare("UPDATE knowledge SET deleted_at=? WHERE id=?").bind(nowSec(), b.id).run(); return json({ ok: true }); }
