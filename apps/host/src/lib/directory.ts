@@ -8,6 +8,7 @@ export type DirProfile = { summary?: string; tags?: string[]; contact?: string; 
 export type DirEntry = {
   license_id: string; org_name: string; profile: DirProfile; embedding: number[] | null;
   verification: Record<string, unknown>; trust_score: number; listed: number; blocked: number; updated_at: number;
+  certified: number; certified_at: number | null; certified_note: string | null;
 };
 
 const REPORT_BLOCK_THRESHOLD = 3; // 未対応通報がこの数に達したら自動 block。
@@ -31,9 +32,18 @@ export async function unpublishEntry(env: Env, licenseId: string): Promise<void>
 }
 
 export async function getEntry(env: Env, licenseId: string): Promise<DirEntry | null> {
-  const r = await env.DB.prepare("SELECT * FROM public_directory WHERE license_id=?").bind(licenseId).first<{ license_id: string; org_name: string; profile: string; embedding: string | null; verification: string; trust_score: number; listed: number; blocked: number; updated_at: number }>();
+  const r = await env.DB.prepare("SELECT * FROM public_directory WHERE license_id=?").bind(licenseId).first<{ license_id: string; org_name: string; profile: string; embedding: string | null; verification: string; trust_score: number; listed: number; blocked: number; updated_at: number; certified: number; certified_at: number | null; certified_note: string | null }>();
   if (!r) return null;
-  return { license_id: r.license_id, org_name: r.org_name, profile: parse<DirProfile>(r.profile, {}), embedding: parse<number[] | null>(r.embedding, null), verification: parse<Record<string, unknown>>(r.verification, {}), trust_score: r.trust_score, listed: r.listed, blocked: r.blocked, updated_at: r.updated_at };
+  return { license_id: r.license_id, org_name: r.org_name, profile: parse<DirProfile>(r.profile, {}), embedding: parse<number[] | null>(r.embedding, null), verification: parse<Record<string, unknown>>(r.verification, {}), trust_score: r.trust_score, listed: r.listed, blocked: r.blocked, updated_at: r.updated_at, certified: r.certified ?? 0, certified_at: r.certified_at ?? null, certified_note: r.certified_note ?? null };
+}
+
+// 公式認証の付与/取消（ホスト管理者・人と会って事業確認後に手動）。trust を即再計算。
+export async function setCertified(env: Env, licenseId: string, on: boolean, note?: string): Promise<{ ok: boolean }> {
+  await env.DB.prepare("UPDATE public_directory SET certified=?, certified_at=?, certified_note=? WHERE license_id=?")
+    .bind(on ? 1 : 0, on ? nowSec() : null, note ?? null, licenseId).run();
+  const t = await recomputeTrust(env, licenseId);
+  await env.DB.prepare("UPDATE public_directory SET trust_score=? WHERE license_id=?").bind(t, licenseId).run();
+  return { ok: true };
 }
 
 // 公開アクション名が掲載団体の公開リストに含まれるか（relayPublic のゲート）。
@@ -48,31 +58,40 @@ const cosine = (a: number[], b: number[]): number => {
   return na && nb ? dot / (Math.sqrt(na) * Math.sqrt(nb)) : 0;
 };
 
-export type Candidate = { license_id: string; org_name: string; summary: string; tags: string[]; verified: boolean; trust_score: number; public_actions: { name: string; label?: string }[]; score: number };
+export type Candidate = { license_id: string; org_name: string; summary: string; tags: string[]; verified: boolean; certified: boolean; trust_score: number; public_actions: { name: string; label?: string }[]; score: number };
 
 // 掲載中(listed=1 & blocked=0)を取得し、埋め込みコサイン＋キーワード/タグでスコア合成。小規模Nを想定。
-export async function searchEntries(env: Env, opts: { query?: string; queryEmbedding?: number[] | null; tags?: string[]; limit?: number }): Promise<Candidate[]> {
-  const { results } = await env.DB.prepare("SELECT license_id,org_name,profile,embedding,verification,trust_score FROM public_directory WHERE listed=1 AND blocked=0").all<{ license_id: string; org_name: string; profile: string; embedding: string | null; verification: string; trust_score: number }>();
+// 精度向上：語の重なり数で部分加点、タイトル一致を強め、信頼/公認を弱い加点に。certifiedOnly で公認限定。
+export async function searchEntries(env: Env, opts: { query?: string; queryEmbedding?: number[] | null; tags?: string[]; limit?: number; certifiedOnly?: boolean }): Promise<Candidate[]> {
+  const { results } = await env.DB.prepare("SELECT license_id,org_name,profile,embedding,verification,trust_score,certified FROM public_directory WHERE listed=1 AND blocked=0").all<{ license_id: string; org_name: string; profile: string; embedding: string | null; verification: string; trust_score: number; certified: number }>();
   const q = (opts.query ?? "").toLowerCase().trim();
+  const qWords = q.split(/[\s、,　]+/).filter((w) => w.length >= 2);
   const wantTags = (opts.tags ?? []).map((t) => t.toLowerCase());
+  const noCriteria = !opts.queryEmbedding && !q && !wantTags.length;
   const cands: Candidate[] = [];
   for (const r of results) {
+    if (opts.certifiedOnly && r.certified !== 1) continue;
     const profile = parse<DirProfile>(r.profile, {});
     const ver = parse<Record<string, unknown>>(r.verification, {});
     const emb = parse<number[] | null>(r.embedding, null);
     const tags = (profile.tags ?? []).map((t) => String(t));
+    const hay = (r.org_name + " " + (profile.summary ?? "") + " " + tags.join(" ")).toLowerCase();
     let score = 0;
-    if (opts.queryEmbedding && emb) score += cosine(opts.queryEmbedding, emb); // 0..1
-    if (q) {
-      const hay = (r.org_name + " " + (profile.summary ?? "") + " " + tags.join(" ")).toLowerCase();
-      if (hay.includes(q)) score += 0.4;
-    }
-    if (wantTags.length) { const hit = tags.filter((t) => wantTags.includes(t.toLowerCase())).length; if (hit) score += 0.3 * hit; }
-    if (!opts.queryEmbedding && !q && !wantTags.length) score = 0.1; // 無条件は全件低スコアで列挙
+    // 意味検索（埋め込みコサイン）を主軸に（0..1）。
+    if (opts.queryEmbedding && emb) score += cosine(opts.queryEmbedding, emb) * 1.0;
+    // キーワード：完全部分一致に加え、語ごとの重なりで部分加点（表記ゆれに強く）。
+    if (q && hay.includes(q)) score += 0.5;
+    if (qWords.length) { const hit = qWords.filter((w) => hay.includes(w)).length; score += 0.25 * (hit / qWords.length); }
+    if (r.org_name.toLowerCase().includes(q) && q) score += 0.2; // 団体名一致は強め
+    if (wantTags.length) { const hit = tags.filter((t) => wantTags.includes(t.toLowerCase())).length; if (hit) score += 0.3 * Math.min(2, hit); }
+    if (noCriteria) score = 0.1; // 無条件は全件低スコアで列挙
+    // 信頼/公認の弱い加点（同点時の並びに効く・主たる関連度は意味/語）。
+    score += r.trust_score * 0.1 + (r.certified === 1 ? 0.1 : 0);
     if (score <= 0) continue;
     cands.push({
       license_id: r.license_id, org_name: r.org_name, summary: profile.summary ?? "", tags,
       verified: ver.exists === true || (typeof ver.score === "number" && ver.score >= 0.5),
+      certified: r.certified === 1,
       trust_score: r.trust_score, public_actions: (profile.public_actions ?? []).map((a) => ({ name: a.name, label: a.label })), score,
     });
   }
@@ -99,7 +118,41 @@ export async function recomputeTrust(env: Env, licenseId: string): Promise<numbe
   // 未対応通報で減点。
   const rep = await env.DB.prepare("SELECT COUNT(*) AS n FROM directory_reports WHERE target_license=? AND status='open'").bind(licenseId).first<{ n: number }>();
   score -= Math.min(0.4, (rep?.n ?? 0) * 0.15);
+  // 貘公式認証（人と会って事業確認）は強い信頼根拠＝大きく加点。
+  const cert = await env.DB.prepare("SELECT certified FROM public_directory WHERE license_id=?").bind(licenseId).first<{ certified: number }>();
+  if (cert?.certified === 1) score += 0.4;
   return Math.max(0, Math.min(1, Math.round(score * 100) / 100));
+}
+
+// 全掲載団体の trust を再計算（scheduler 相乗り・1回あたり limit 件）。古い順に回す。
+export async function recomputeAllTrust(env: Env, limit = 50): Promise<number> {
+  const { results } = await env.DB.prepare("SELECT license_id FROM public_directory ORDER BY updated_at ASC LIMIT ?").bind(limit).all<{ license_id: string }>();
+  let n = 0;
+  for (const r of results) {
+    const t = await recomputeTrust(env, r.license_id);
+    await env.DB.prepare("UPDATE public_directory SET trust_score=? WHERE license_id=?").bind(t, r.license_id).run();
+    n++;
+  }
+  return n;
+}
+
+// ===== ホスト管理用 =====
+export async function listAll(env: Env): Promise<(DirEntry & { open_reports: number })[]> {
+  const { results } = await env.DB.prepare("SELECT license_id FROM public_directory ORDER BY certified DESC, trust_score DESC, updated_at DESC LIMIT 500").all<{ license_id: string }>();
+  const out: (DirEntry & { open_reports: number })[] = [];
+  for (const r of results) {
+    const e = await getEntry(env, r.license_id);
+    if (!e) continue;
+    const rc = await env.DB.prepare("SELECT COUNT(*) AS n FROM directory_reports WHERE target_license=? AND status='open'").bind(r.license_id).first<{ n: number }>();
+    out.push({ ...e, open_reports: rc?.n ?? 0 });
+  }
+  return out;
+}
+export async function listReports(env: Env, status = "open"): Promise<{ id: string; target_license: string; reporter_license: string | null; reason: string | null; detail: string | null; status: string; created_at: number }[]> {
+  return (await env.DB.prepare("SELECT id,target_license,reporter_license,reason,detail,status,created_at FROM directory_reports WHERE status=? ORDER BY created_at DESC LIMIT 200").bind(status).all<{ id: string; target_license: string; reporter_license: string | null; reason: string | null; detail: string | null; status: string; created_at: number }>()).results;
+}
+export async function setReportStatus(env: Env, id: string, status: "reviewed" | "dismissed"): Promise<void> {
+  await env.DB.prepare("UPDATE directory_reports SET status=? WHERE id=?").bind(status, id).run();
 }
 
 export async function reportEntry(env: Env, targetLicense: string, reporterLicense: string | null, reason: string, detail?: string): Promise<{ ok: boolean; blocked: boolean }> {

@@ -88,12 +88,12 @@ export async function myDirectory(env: Env): Promise<Record<string, unknown>> {
   const r = await hostFetch(env, "/api/directory/mine", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ token }) });
   return (await r.json().catch(() => ({ error: "応答不正" }))) as Record<string, unknown>;
 }
-export type SearchCandidate = { license_id: string; org_name: string; summary: string; tags: string[]; verified: boolean; trust_score: number; public_actions: { name: string; label?: string }[] };
-export async function searchDirectory(env: Env, query: string, tags?: string[]): Promise<{ ok: boolean; results?: SearchCandidate[]; error?: string }> {
+export type SearchCandidate = { license_id: string; org_name: string; summary: string; tags: string[]; verified: boolean; certified: boolean; trust_score: number; public_actions: { name: string; label?: string }[] };
+export async function searchDirectory(env: Env, query: string, tags?: string[], certifiedOnly?: boolean): Promise<{ ok: boolean; results?: SearchCandidate[]; error?: string }> {
   const token = await getToken(env);
   if (!token) return { ok: false, error: "ライセンス未取得" };
   const queryEmbedding = query ? await buildEmbedding(env, query) : null;
-  const r = await hostFetch(env, "/api/directory/search", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ token, query, queryEmbedding, tags }) });
+  const r = await hostFetch(env, "/api/directory/search", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ token, query, queryEmbedding, tags, certifiedOnly }) });
   return (await r.json().catch(() => ({ ok: false, error: "応答不正" }))) as { ok: boolean; results?: SearchCandidate[]; error?: string };
 }
 export async function reportDirectory(env: Env, target: string, reason: string, detail?: string): Promise<Record<string, unknown>> {

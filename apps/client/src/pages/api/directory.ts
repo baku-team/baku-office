@@ -44,7 +44,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
   }
   if (a === "unpublish") return json(await unpublishDirectory(env));
   // 探索・通報・公開連絡
-  if (a === "search") return json(await searchDirectory(env, String(b.query ?? ""), Array.isArray(b.tags) ? (b.tags as string[]) : undefined));
+  if (a === "search") return json(await searchDirectory(env, String(b.query ?? ""), Array.isArray(b.tags) ? (b.tags as string[]) : undefined, b.certifiedOnly === true));
   if (a === "report") return json(await reportDirectory(env, String(b.target ?? ""), String(b.reason ?? "spam"), b.detail ? String(b.detail) : undefined));
   if (a === "send_inquiry") return json(await sendInquiry(env, String(b.to ?? ""), String(b.message ?? "")));
   if (a === "call_public") return json(await callPublic(env, String(b.to ?? ""), String(b.action ?? ""), (b.args ?? {}) as Record<string, unknown>));

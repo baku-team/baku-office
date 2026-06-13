@@ -23,6 +23,7 @@ const hasPlus = atLeast(await cachedEntitlement(env).catch(() => "free" as const
           <div style="flex:1"><label for="qtags">タグ（任意・カンマ区切り）</label><input id="qtags" placeholder="例：花, ギフト" /></div>
           <div style="flex:0 0 auto;align-self:end"><button class="btn btn-primary" id="q-go">探す</button></div>
         </div>
+        <div class="field" style="margin-top:.5rem"><label><input type="checkbox" id="q-cert" /> 🏅 貘公式認証の団体のみ表示（実際に確認済み・スパムやサクラの心配なし）</label></div>
       </div>
       <div id="results"></div>
 
@@ -31,13 +32,14 @@ const hasPlus = atLeast(await cachedEntitlement(env).catch(() => "free" as const
         const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
         document.getElementById("q-go").addEventListener("click", async (e) => {
           const tags = document.getElementById("qtags").value.split(",").map((s) => s.trim()).filter(Boolean);
-          const r = await api({ _action: "search", query: document.getElementById("q").value, tags }, { btn: e.currentTarget, successMsg: null });
+          const r = await api({ _action: "search", query: document.getElementById("q").value, tags, certifiedOnly: document.getElementById("q-cert").checked }, { btn: e.currentTarget, successMsg: null });
           const box = document.getElementById("results");
           if (!r.ok || !r.results || !r.results.length) { box.innerHTML = '<p class="muted" style="padding:1rem">条件に合う公開団体は見つかりませんでした。</p>'; return; }
           box.innerHTML = r.results.map((c) => `
             <div class="card" data-lic="${esc(c.license_id)}">
               <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
                 <strong style="font-size:1.05rem">${esc(c.org_name)}</strong>
+                ${c.certified ? '<span class="pill brand">🏅 貘公式認証</span>' : ""}
                 ${c.verified ? '<span class="pill brand">✓ 実在確認済み</span>' : '<span class="pill">未確認</span>'}
                 <span class="muted" style="font-size:.82rem">信頼度 ${c.trust_score}</span>
               </div>

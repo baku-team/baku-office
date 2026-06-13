@@ -193,8 +193,9 @@ export async function relayPublic(env: Env, fromLicense: string, toLicense: stri
   const fromTrust = await recomputeTrust(env, fromLicense);
   const fromEntry = await getEntry(env, fromLicense);
   const fromVerified = (fromEntry?.verification as { exists?: boolean } | undefined)?.exists === true;
+  const fromCertified = fromEntry?.certified === 1;
   const fromName = fromEntry?.org_name ?? "";
-  const envlp = await signEnvelope(await importSignKey(signingJwk(env)), { from: fromLicense, action, args, public: true, fromTrust, fromVerified, fromName, exp: nowSec() + 60, nonce: randomId(12) });
+  const envlp = await signEnvelope(await importSignKey(signingJwk(env)), { from: fromLicense, action, args, public: true, fromTrust, fromVerified, fromCertified, fromName, exp: nowSec() + 60, nonce: randomId(12) });
   try {
     const r = await fetch(dst.deploy_url.replace(/\/$/, "") + "/api/a2a/inbound", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(envlp), redirect: "manual" });
     const data = (await r.json().catch(() => ({}))) as { ok?: boolean; result?: unknown; queued?: boolean; error?: string };
