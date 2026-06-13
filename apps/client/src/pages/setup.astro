@@ -1,0 +1,111 @@
+---
+import { env } from "cloudflare:workers";
+export const prerender = false;
+import App from "../layouts/App.astro";
+const { getSession } = await import("../lib/auth.ts");
+const ses = await getSession(env, Astro.request);
+if (!ses) return Astro.redirect("/login", 302);
+const isAdmin = ses.role === "admin" && ses.ctx === "org";
+if (!isAdmin) return Astro.redirect("/", 302);
+
+const { hasApiKey } = await import("../lib/client.ts");
+const { googleConfigured } = await import("../lib/google.ts");
+const { getTheme } = await import("../core/theme.ts");
+const { getBackupState } = await import("../lib/backup.ts");
+
+const [gemini, claude, line, google, theme, backup] = await Promise.all([
+  hasApiKey(env, "gemini").catch(() => false),
+  hasApiKey(env, "claude").catch(() => false),
+  hasApiKey(env, "line_token").catch(() => false),
+  googleConfigured(env).catch(() => false),
+  getTheme(Astro.locals.ctx).catch(() => ({}) as import("../core/theme.ts").ThemeConfig),
+  getBackupState(env).catch(() => null),
+]);
+let guides: { title: string; url: string }[] = [];
+try { guides = JSON.parse((await env.LICENSE.get("onboarding_guides")) ?? "[]"); } catch { guides = []; }
+
+// 各ステップ：完了判定・遷移先・なぜ必要か。
+const steps = [
+  { key: "ai", title: "AI を使えるようにする", done: gemini || claude, href: "/settings/keys", why: "Gemini か Claude の API キーを登録すると、AIチャットや自動処理が使えます。", how: "Google AI Studio（Gemini）や Anthropic（Claude）でキーを発行し、連携設定に貼り付けます。" },
+  { key: "brand", title: "ブランド設定（見た目）", done: !!(theme.brand || theme.logoUrl || theme.colors), href: "/settings/theme", why: "団体名・ロゴ・色を設定すると、画面が自団体の見た目になります。", how: "ロゴ画像のアップロードや色のパレット選択ができます。" },
+  { key: "google", title: "Google 連携（予定・メール）", done: google, href: "/settings/google-setup", why: "カレンダー・Gmail・Meet と連携できます。手順ガイドつき。", how: "Google Cloud Console で OAuth クライアントを作成し、ID/シークレットを登録します。" },
+  { key: "line", title: "LINE 連携（任意・Pro）", done: line, href: "/settings/keys", why: "LINE から AI に話しかけて操作できます（Proプラン）。", how: "LINE Developers でチャネルを作成し、シークレット/トークンを登録します。" },
+  { key: "backup", title: "バックアップを取得", done: !!backup, href: "/backup", why: "データは自団体の責任で保全します。定期的な取得をおすすめします。", how: "ローカルへのダウンロードか Google ドライブへの保存ができます。" },
+];
+const doneCount = steps.filter((s) => s.done).length;
+---
+<App title="はじめの設定" active="/settings">
+  <h1>はじめの設定</h1>
+  <p class="muted">baku-office を使い始めるための設定です。上から順に進めると迷いません（{doneCount} / {steps.length} 完了）。</p>
+
+  <div class="setup-steps">
+    {steps.map((s, i) => (
+      <div class={"setup-step" + (s.done ? " done" : "")}>
+        <div class="ss-mark" aria-hidden="true">{s.done ? "✓" : i + 1}</div>
+        <div class="ss-body">
+          <div class="ss-title">{s.title}{s.done && <span class="ss-badge">設定済み</span>}</div>
+          <div class="muted" style="font-size:.88rem">{s.why}</div>
+          <div class="muted" style="font-size:.82rem;margin-top:2px">やり方：{s.how}</div>
+        </div>
+        <a class={"btn btn-sm " + (s.done ? "btn-ghost" : "btn-primary")} href={s.href}>{s.done ? "確認する" : "設定する"}</a>
+      </div>
+    ))}
+  </div>
+
+  <h2>ガイド動画・資料</h2>
+  {guides.length > 0 ? (
+    <div class="card">
+      <ul style="margin:.2rem 0;padding-left:1.2rem;line-height:1.9">
+        {guides.map((g) => (<li><a href={g.url} target="_blank" rel="noopener">{g.title} ↗</a></li>))}
+      </ul>
+    </div>
+  ) : (
+    <div class="card"><p class="muted">案内動画・資料はまだ登録されていません。各ステップの画面にも手順の案内があります。下の欄から動画や資料のリンクを登録すると、ここに表示されます。</p></div>
+  )}
+
+  <details class="adv" style="margin-top:.4rem">
+    <summary>ガイド動画・資料のリンクを登録（管理者）</summary>
+    <div class="card">
+      <p class="muted" style="font-size:.85rem">タイトルと URL（https://…）の組を登録します。動画（YouTube等）や資料（PDF/スプレッドシート）のリンクをそのまま貼り付けてください。</p>
+      <div id="g-rows">
+        {(guides.length ? guides : [{ title: "", url: "" }]).map((g) => (
+          <div class="row g-row" style="margin-bottom:.4rem"><input class="g-title" value={g.title} placeholder="例：Gemini APIキーの取り方" /><input class="g-url" value={g.url} placeholder="https://…" /><button type="button" class="btn btn-sm btn-ghost g-del" style="flex:0 0 auto">削除</button></div>
+        ))}
+      </div>
+      <div class="row" style="margin-top:.4rem"><button type="button" class="btn btn-sm" id="g-add" style="flex:0 0 auto">＋ 行を追加</button><button type="button" class="btn btn-primary" id="g-save" style="flex:0 0 auto">保存</button></div>
+    </div>
+  </details>
+
+  <div class="row" style="margin-top:1rem"><button type="button" class="btn btn-ghost" id="setup-dismiss" style="flex:0 0 auto">この案内を今後表示しない</button></div>
+
+  <style>
+    .setup-steps { display: flex; flex-direction: column; gap: 10px; margin: 1rem 0; }
+    .setup-step { display: flex; align-items: center; gap: 14px; padding: 14px 16px; border: 1px solid var(--line-strong); border-radius: var(--r-md); background: var(--surface); }
+    .setup-step.done { border-color: var(--ok, #1a8a4a); background: var(--surface-2, #f6faf7); }
+    .ss-mark { width: 36px; height: 36px; flex: 0 0 auto; border-radius: 50%; display: grid; place-items: center; font-weight: 800; background: var(--brand-soft); color: var(--brand-strong); }
+    .setup-step.done .ss-mark { background: var(--ok, #1a8a4a); color: #fff; }
+    .ss-body { flex: 1; min-width: 0; }
+    .ss-title { font-weight: 700; font-size: 1.05rem; }
+    .ss-badge { font-size: .72rem; color: var(--ok, #1a8a4a); margin-left: 8px; }
+  </style>
+
+  <script slot="scripts" is:inline>
+    document.getElementById("g-add")?.addEventListener("click", () => {
+      const rows = document.getElementById("g-rows");
+      const div = document.createElement("div");
+      div.className = "row g-row"; div.style.marginBottom = ".4rem";
+      div.innerHTML = '<input class="g-title" placeholder="例：Gemini APIキーの取り方" /><input class="g-url" placeholder="https://…" /><button type="button" class="btn btn-sm btn-ghost g-del" style="flex:0 0 auto">削除</button>';
+      rows.appendChild(div);
+    });
+    document.getElementById("g-rows")?.addEventListener("click", (e) => { const b = e.target.closest(".g-del"); if (b) b.closest(".g-row").remove(); });
+    document.getElementById("g-save")?.addEventListener("click", async (e) => {
+      const guides = [...document.querySelectorAll(".g-row")].map((r) => ({ title: r.querySelector(".g-title").value, url: r.querySelector(".g-url").value })).filter((g) => g.title.trim() && g.url.trim());
+      const r = await window.bo.api("/api/settings", { _action: "onboarding_guides", guides }, { btn: e.currentTarget, successMsg: "保存しました" });
+      if (r.ok) setTimeout(() => location.reload(), 700);
+    });
+    document.getElementById("setup-dismiss")?.addEventListener("click", async (e) => {
+      const r = await window.bo.api("/api/settings", { _action: "onboarding_dismiss" }, { btn: e.currentTarget, successMsg: "今後この案内は表示しません" });
+      if (r.ok) setTimeout(() => location.href = "/", 700);
+    });
+  </script>
+</App>

@@ -38,6 +38,8 @@ const { brandName, getTheme } = await import("../core/theme.ts");
 const { reviewQueue } = await import("../lib/users.ts");
 const { backupAlert } = await import("../lib/backup.ts");
 
+// はじめの設定（オンボーディング）案内：管理者が「今後表示しない」を選ぶまでホームに出す。
+const onboardingDismissed = isOrgAdmin ? ((await env.LICENSE.get("onboarding_dismissed").catch(() => null)) === "1") : true;
 // 後続の多くが依存するため先に取得。
 const instSet = new Set(await installedAppIds(ctx).catch(() => []));
 const ym = new Date().toISOString().slice(0, 7);
@@ -155,6 +157,9 @@ const clampSpan = (n?: number) => Math.max(1, Math.min(3, Number(n) || 1));
 
   {/* 固定セクション：baku-office からのお知らせ・重要なお知らせ（並べ替え/非表示の対象外・常に最上部）。 */}
   <section class="home-fixed">
+    {isOrgAdmin && !onboardingDismissed && (
+      <div class="banner banner-info">🚀 はじめにいくつか設定すると、もっと便利に使えます。<a href="/setup">はじめの設定ガイド</a>（AI・ブランド・Google連携・バックアップ）を開く。</div>
+    )}
     <h2>お知らせ</h2>
     {notices.length === 0 && !updateAvailable && (<p class="muted">現在、新しいお知らせはありません。</p>)}
     {notices.map((n) => (<div class={`banner ${n.severity === "critical" ? "banner-danger" : n.severity === "important" ? "banner-warn" : "banner-info"}`} data-sev={n.severity} data-id={n.id}>{n.body}</div>))}
