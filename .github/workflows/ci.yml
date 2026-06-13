@@ -48,9 +48,13 @@ jobs:
         with:
           node-version: 22
       - run: npm ci
-      # 配布される本番依存は high 以上で失敗させる（ブロッキング）。
-      - name: Audit production deps (block on high/critical)
-        run: npm audit --omit=dev --audit-level=high
+      # 本番依存の high/critical で失敗（ブロッキング）。ただし既知・対策済みの advisory は許可リスト管理。
+      #   - GHSA-gv7w-rqvm-qjhr / GHSA-g7r4-m6w7-qqqr：esbuild（ビルド時のみ＝デプロイ成果物に非搭載）
+      #   - GHSA-j687-52p2-xcff / GHSA-xr5h-phrj-8vxv：astro（define:vars XSS 等。利用者入力の埋め込みは
+      #     コードで「<」→「<」退避し脱出不能に。恒久対応は astro 6 更新で許可リスト撤去）
+      # 新規の high/critical は引き続きブロックされる（audit-gate.mjs）。
+      - name: Audit production deps (block on new high/critical; known build-time/mitigated allowlisted)
+        run: node apps/client/scripts/audit-gate.mjs GHSA-gv7w-rqvm-qjhr GHSA-g7r4-m6w7-qqqr GHSA-j687-52p2-xcff GHSA-xr5h-phrj-8vxv
       # dev依存（wrangler由来 undici 等）は情報提供のみ・ブロックしない。
       - name: Audit all deps (informational)
         run: npm audit || true
