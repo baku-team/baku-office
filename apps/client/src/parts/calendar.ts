@@ -3,7 +3,6 @@
 import type { Part } from "../core/parts.ts";
 import type { Ctx } from "../core/ports.ts";
 import { randomId } from "@baku-office/shared";
-import { googleFetch } from "../lib/google.ts";
 
 const CAL = "https://www.googleapis.com/calendar/v3/calendars/primary/events";
 const TZ = "Asia/Tokyo";
@@ -28,7 +27,7 @@ async function listEvents(ctx: Ctx, a: { time_min?: string; time_max?: string; q
   u.searchParams.set("timeMin", a.time_min || new Date().toISOString());
   if (a.time_max) u.searchParams.set("timeMax", a.time_max);
   if (a.query) u.searchParams.set("q", a.query);
-  const r = await googleFetch(ctx.env, u.toString());
+  const r = await ctx.google.fetch(u.toString());
   if (!r) return NEED_CONNECT;
   if (!r.ok) return `カレンダー取得に失敗しました（${r.status}）。`;
   const d = (await r.json()) as { items?: GEvent[] };
@@ -52,7 +51,7 @@ async function createEvent(ctx: Ctx, a: { title: string; start: string; end: str
   }
   const u = new URL(CAL);
   if (a.with_meet) u.searchParams.set("conferenceDataVersion", "1");
-  const r = await googleFetch(ctx.env, u.toString(), { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+  const r = await ctx.google.fetch(u.toString(), { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
   if (!r) return NEED_CONNECT;
   if (!r.ok) return `予定作成に失敗しました（${r.status}）。`;
   const e = (await r.json()) as GEvent;
@@ -66,14 +65,14 @@ async function updateEvent(ctx: Ctx, a: { event_id: string; title?: string; star
   if (a.description !== undefined) body.description = a.description;
   if (a.start) body.start = { dateTime: a.start, timeZone: TZ };
   if (a.end) body.end = { dateTime: a.end, timeZone: TZ };
-  const r = await googleFetch(ctx.env, `${CAL}/${encodeURIComponent(a.event_id)}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+  const r = await ctx.google.fetch(`${CAL}/${encodeURIComponent(a.event_id)}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
   if (!r) return NEED_CONNECT;
   if (!r.ok) return `予定の更新に失敗しました（${r.status}）。`;
   return "予定を更新しました。";
 }
 
 async function deleteEvent(ctx: Ctx, a: { event_id: string }): Promise<string> {
-  const r = await googleFetch(ctx.env, `${CAL}/${encodeURIComponent(a.event_id)}`, { method: "DELETE" });
+  const r = await ctx.google.fetch(`${CAL}/${encodeURIComponent(a.event_id)}`, { method: "DELETE" });
   if (!r) return NEED_CONNECT;
   if (!r.ok && r.status !== 410) return `予定の削除に失敗しました（${r.status}）。`;
   return "予定を削除しました。";

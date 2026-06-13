@@ -5,8 +5,6 @@ import type { Part } from "../core/parts.ts";
 import type { Ctx } from "../core/ports.ts";
 import { randomId } from "@baku-office/shared";
 import { nowSec } from "../lib/accounting.ts";
-import { getFile, fileBelongsTo } from "../lib/storage.ts";
-import { extractInvoiceData } from "../lib/media-ai.ts";
 import { setReminder } from "./reminders.ts";
 
 export type InvoiceRow = {
@@ -39,10 +37,10 @@ export async function registerInvoiceFromFile(ctx: Ctx, owner: string, fileId: s
   // 所有者検査（P0-1補完）。WHY: チャットの register_invoice ツールは model 指定の file_id を
   // raw getFile に渡すため、自分が保存したファイル以外を抽出できると他者ファイルのIDORになる。
   // 正規フロー（手動アップロード/チャット添付）は直前に owner 本人が保存＝created_by===owner。
-  if (!(await fileBelongsTo(ctx.env, fileId, owner))) return { error: "ファイルが見つかりません。" };
-  const f = await getFile(ctx.env, fileId);
+  if (!(await ctx.storage.ownsFile(fileId, owner))) return { error: "ファイルが見つかりません。" };
+  const f = await ctx.storage.getFile(fileId);
   if (!f) return { error: "ファイルが見つかりません。" };
-  const ex = await extractInvoiceData(ctx.env, f);
+  const ex = await ctx.ai.extractInvoice(f);
   const id = await saveInvoice(ctx, owner, { fileId, vendor: ex.vendor, amount: ex.amount, issued_date: ex.issued_date, due_date: ex.due_date, source });
   return { id, vendor: ex.vendor, amount: ex.amount, due_date: ex.due_date };
 }

@@ -2,8 +2,6 @@
 // オンデマンド呼び出し。メールの一覧・検索・本文取得・送信。PII を扱うため要約・引用は呼び出し側で配慮。
 import type { Part } from "../core/parts.ts";
 import type { Ctx } from "../core/ports.ts";
-import { googleFetch } from "../lib/google.ts";
-import { saveFile } from "../lib/storage.ts";
 
 const GM = "https://gmail.googleapis.com/gmail/v1/users/me";
 const NEED_CONNECT = "Google 連携が未設定です。連携設定（Gmail画面）から連携してください。";
@@ -38,7 +36,7 @@ async function listMessages(ctx: Ctx, a: { query?: string; max?: number }): Prom
   u.searchParams.set("maxResults", String(Math.min(a.max ?? 10, 25)));
   if (a.query) u.searchParams.set("q", a.query);
   else u.searchParams.set("labelIds", "INBOX");
-  const r = await googleFetch(ctx.env, u.toString());
+  const r = await ctx.google.fetch(u.toString());
   if (!r) return NEED_CONNECT;
   if (!r.ok) return `メール一覧の取得に失敗しました（${r.status}）。`;
   const d = (await r.json()) as { messages?: { id: string }[] };
@@ -46,7 +44,7 @@ async function listMessages(ctx: Ctx, a: { query?: string; max?: number }): Prom
   if (!ids.length) return "該当するメールはありません。";
   const lines: string[] = [];
   for (const id of ids) {
-    const mr = await googleFetch(ctx.env, `${GM}/messages/${id}?format=metadata&metadataHeaders=Subject&metadataHeaders=From&metadataHeaders=Date`);
+    const mr = await ctx.google.fetch(`${GM}/messages/${id}?format=metadata&metadataHeaders=Subject&metadataHeaders=From&metadataHeaders=Date`);
     if (!mr || !mr.ok) continue;
     const m = (await mr.json()) as { snippet?: string; payload?: { headers?: { name: string; value: string }[] } };
     const h = (n: string) => m.payload?.headers?.find((x) => x.name === n)?.value ?? "";
@@ -56,7 +54,7 @@ async function listMessages(ctx: Ctx, a: { query?: string; max?: number }): Prom
 }
 
 async function getMessage(ctx: Ctx, a: { message_id: string }): Promise<string> {
-  const r = await googleFetch(ctx.env, `${GM}/messages/${encodeURIComponent(a.message_id)}?format=full`);
+  const r = await ctx.google.fetch(`${GM}/messages/${encodeURIComponent(a.message_id)}?format=full`);
   if (!r) return NEED_CONNECT;
   if (!r.ok) return `メール本文の取得に失敗しました（${r.status}）。`;
   const m = (await r.json()) as { payload?: GmPart & { headers?: { name: string; value: string }[] } };
@@ -76,7 +74,7 @@ async function sendMessage(ctx: Ctx, a: { to: string; subject: string; body: str
     "",
     a.body,
   ].join("\r\n");
-  const r = await googleFetch(ctx.env, `${GM}/messages/send`, {
+  const r = await ctx.google.fetch(`${GM}/messages/send`, {
     method: "POST", headers: { "content-type": "application/json" },
     body: JSON.stringify({ raw: b64url(enc.encode(raw)) }),
   });
@@ -94,20 +92,20 @@ function findAttachment(p: GmPart | undefined): { attachmentId: string; filename
 }
 // メールの添付（PDF/画像）を取得してストレージへ保存し file_id を返す（請求書登録などに使う）。
 async function getAttachment(ctx: Ctx, owner: string, a: { message_id: string }): Promise<string> {
-  const mr = await googleFetch(ctx.env, `${GM}/messages/${encodeURIComponent(a.message_id)}?format=full`);
+  const mr = await ctx.google.fetch(`${GM}/messages/${encodeURIComponent(a.message_id)}?format=full`);
   if (!mr) return NEED_CONNECT;
   if (!mr.ok) return `メールの取得に失敗しました（${mr.status}）。`;
   const m = (await mr.json()) as { payload?: GmPart };
   const found = findAttachment(m.payload);
   if (!found) return "このメールに添付ファイルはありません。";
-  const ar = await googleFetch(ctx.env, `${GM}/messages/${encodeURIComponent(a.message_id)}/attachments/${found.attachmentId}`);
+  const ar = await ctx.google.fetch(`${GM}/messages/${encodeURIComponent(a.message_id)}/attachments/${found.attachmentId}`);
   if (!ar) return NEED_CONNECT;
   if (!ar.ok) return `添付の取得に失敗しました（${ar.status}）。`;
   const ad = (await ar.json()) as { data?: string };
   if (!ad.data) return "添付データが空です。";
   const bin = atob(ad.data.replace(/-/g, "+").replace(/_/g, "/"));
   const file = new File([Uint8Array.from(bin, (c) => c.charCodeAt(0))], found.filename || "attachment", { type: found.mimeType });
-  const saved = await saveFile(ctx.env, file, owner);
+  const saved = await ctx.storage.saveFile(file, owner);
   return `添付「${found.filename}」を保存しました: file_id=${saved.id}`;
 }
 
