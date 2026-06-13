@@ -4,7 +4,8 @@
 export const DEFAULT_MODELS = {
   gemini: "gemini-2.5-flash",
   claude: "claude-sonnet-4-6",
-  workers_ai: "@cf/meta/llama-3.1-8b-instruct", // Cloudflare Workers AI（CF上で稼働・ニューロン課金）
+  workers_ai: "@cf/meta/llama-3.1-8b-instruct-fast", // Cloudflare Workers AI（CF上で稼働・ニューロン課金）。
+  // WHY -fast：無印 @cf/meta/llama-3.1-8b-instruct は 2026-05-30 に廃止。-fast バリアントは存続（プロンプト互換のドロップイン）。
 } as const;
 
 // USD / 100万token（2026-06 公式価格・レビュー§7.1）。
