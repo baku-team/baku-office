@@ -14,6 +14,23 @@ export async function callPartner(env: Env, to: string, action: string, args: Re
   }
 }
 
+// 招待なし公開中継：公開団体 to の公開アクションを呼ぶ（接続不要）。
+export async function callPublic(env: Env, to: string, action: string, args: Record<string, unknown>): Promise<{ ok: boolean; result?: unknown; queued?: boolean; error?: string }> {
+  const token = await getToken(env);
+  if (!token) return { ok: false, error: "ライセンス未取得" };
+  try {
+    const r = await hostFetch(env, "/api/a2a/relay-public", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ token, to, action, args }) });
+    return (await r.json().catch(() => ({ ok: false, error: "応答不正" }))) as { ok: boolean; result?: unknown; queued?: boolean; error?: string };
+  } catch (e) {
+    return { ok: false, error: "ホストへ到達できません：" + ((e as Error).message ?? "") };
+  }
+}
+
+// 公開団体の受付箱へ問い合わせ（接続不要・相手の承認待ちに積まれる）。
+export async function sendInquiry(env: Env, to: string, message: string, args?: Record<string, unknown>): Promise<{ ok: boolean; queued?: boolean; error?: string }> {
+  return callPublic(env, to, "__inquiry__", { message, ...(args ?? {}) });
+}
+
 // 接続操作（ホストへ中継）。
 export async function a2aHost(env: Env, action: "create" | "accept" | "list" | "revoke", body: Record<string, unknown> = {}): Promise<Record<string, unknown>> {
   const token = await getToken(env);
