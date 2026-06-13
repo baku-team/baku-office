@@ -8,5 +8,6 @@ export const importPart: Part = {
   category: "庶務",
   description: "Notion / Google ドライブから資料を取り込み。",
   minPlan: "plus",
+  orgOnly: true,
   menu: [{ href: "/import", label: "書類の取り込み" }],
 };

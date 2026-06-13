@@ -39,6 +39,7 @@ export interface Part {
   menu?: NavItem[]; // 第2層：このパーツが提供するナビ項目（UIパーツ用）。
   widgets?: AppWidget[]; // ホームに出す連携ウィジェット（例 総会員数・当月収支）。
   minPlan?: Entitlement; // このアプリの利用に必要な最低プラン（launcher/マーケットの表示ゲート。未指定=Free）。
+  orgOnly?: boolean; // 組織(ctx==="org")専用。個人ユーザーには launcher/ナビに出さない（出すと遷移先でログインへ戻され「ホームに飛ぶ」ため）。
 }
 
 // 有効パーツが提供するホームウィジェットを集約。

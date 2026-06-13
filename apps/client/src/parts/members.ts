@@ -19,6 +19,7 @@ export const membersPart: Part = {
   category: "庶務",
   description: "会員名簿（暗号化PII）の照会。特権ロールのみ。",
   permissions: ["db:read", "members:read"],
+  orgOnly: true,
   menu: [{ href: "/membership", label: "名簿" }],
   widgets: [
     { id: "members_count", title: "登録メンバー", run: async (ctx) => {

@@ -10,6 +10,22 @@ const ses = await getSession(env, Astro.request);
 if (!ses) return Astro.redirect("/login", 302);
 const ctx = Astro.locals.ctx;
 const isOrgAdmin = ses.role === "admin" && ses.ctx === "org";
+const isOrg = ses.ctx === "org";
+// よく使う4大ボタン。組織専用の導線（名簿・書類取り込み）は個人ユーザーに出さない
+// （遷移先で /login に戻され「ホームに飛ぶ」ため）。個人は自分の作業領域・AI・アプリへ。
+const homeActions = isOrg
+  ? [
+      { href: "/accounting", label: "お金の記録", sub: "入金・出金・残高", icon: "M3 6h18v12H3zM3 10h18M7 15h4" },
+      { href: "/schedule", label: "予定", sub: "行事・スケジュール", icon: "M4 5h16v15H4zM4 9h16M8 3v4M16 3v4" },
+      { href: "/membership", label: "名簿", sub: "会員の一覧・管理", icon: "M9 11a3 3 0 100-6 3 3 0 000 6M3 19a6 6 0 0112 0M17 11a3 3 0 000-6M21 19a6 6 0 00-4-5.7" },
+      { href: "/import", label: "書類の取り込み", sub: "ファイル・資料を取込", icon: "M12 3v10M8 9l4 4 4-4M5 21h14" },
+    ]
+  : [
+      { href: "/personal", label: "個人の作業領域", sub: "領収書・メモ・予定", icon: "M12 12a4 4 0 100-8 4 4 0 000 8M4 21a8 8 0 0116 0" },
+      { href: "/schedule", label: "予定", sub: "行事・スケジュール", icon: "M4 5h16v15H4zM4 9h16M8 3v4M16 3v4" },
+      { href: "/chat", label: "AI", sub: "質問・相談・作成", icon: "M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z" },
+      { href: "/apps", label: "アプリ", sub: "使えるアプリ一覧", icon: "M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z" },
+    ];
 const { pollHost, cachedEntitlement, APP_VERSION, nowSec } = await import("../lib/client.ts");
 const { cmpVersion } = await import("../lib/update.ts");
 await import("../parts/index.ts"); // パーツ登録（カタログ参照の前提）
@@ -118,22 +134,12 @@ const clampSpan = (n?: number) => Math.max(1, Math.min(3, Number(n) || 1));
 
   {/* 業務の入口：よく使う4つを大ボタンで常設（並べ替え/非表示の対象外・最上部）。高齢ユーザーが1タップで届くように。 */}
   <nav class="home-actions" aria-label="よく使う操作">
-    <a class="ha" href="/accounting">
-      <span class="ha-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18v12H3zM3 10h18M7 15h4" /></svg></span>
-      <span class="ha-txt"><strong>お金の記録</strong><small>入金・出金・残高</small></span>
-    </a>
-    <a class="ha" href="/schedule">
-      <span class="ha-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16v15H4zM4 9h16M8 3v4M16 3v4" /></svg></span>
-      <span class="ha-txt"><strong>予定</strong><small>行事・スケジュール</small></span>
-    </a>
-    <a class="ha" href="/membership">
-      <span class="ha-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 11a3 3 0 100-6 3 3 0 000 6M3 19a6 6 0 0112 0M17 11a3 3 0 000-6M21 19a6 6 0 00-4-5.7" /></svg></span>
-      <span class="ha-txt"><strong>名簿</strong><small>会員の一覧・管理</small></span>
-    </a>
-    <a class="ha" href="/import">
-      <span class="ha-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v10M8 9l4 4 4-4M5 21h14" /></svg></span>
-      <span class="ha-txt"><strong>書類の取り込み</strong><small>ファイル・資料を取込</small></span>
-    </a>
+    {homeActions.map((a) => (
+      <a class="ha" href={a.href}>
+        <span class="ha-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d={a.icon} /></svg></span>
+        <span class="ha-txt"><strong>{a.label}</strong><small>{a.sub}</small></span>
+      </a>
+    ))}
   </nav>
   <style>
     .home-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 1.1rem 0 .4rem; }

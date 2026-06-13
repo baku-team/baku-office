@@ -19,7 +19,9 @@ const installed = new Set(await installedAppIds(ctx));
 const isOn = (id: string) => installed.has(id);
 const isMust = (id: string) => MANDATORY_APPS.includes(id);
 // ランチャー：導入済み・ナビ(menu)あり・プラン充足のアプリの起動リンク。
-const launch = registeredParts().filter((p) => installed.has(p.id) && (p.menu?.length ?? 0) > 0 && okPlan(p.minPlan))
+// 組織専用(orgOnly)アプリは個人ユーザーに出さない（遷移先で /login に戻され「ホームに飛ぶ」ため）。
+const isOrg = ses.ctx === "org";
+const launch = registeredParts().filter((p) => installed.has(p.id) && (p.menu?.length ?? 0) > 0 && okPlan(p.minPlan) && (isOrg || !p.orgOnly))
   .flatMap((p) => (p.menu ?? []).map((m) => ({ app: p.name, href: m.href, label: m.label })));
 
 const { listExternalApps, listDrafts } = await import("../lib/external-apps.ts");
