@@ -8,7 +8,7 @@ import { audit } from "./storage.ts";
 import type { AgentTool } from "../core/parts.ts";
 
 // A2A（他団体連携）の対外ツール。AgentTool ではなく agent.ts 側で捌くため、名前で判定する。
-export const A2A_OUTWARD = new Set(["call_partner", "broadcast_group", "call_group_member"]);
+export const A2A_OUTWARD = new Set(["call_partner", "broadcast_group", "call_group_member", "call_public", "send_inquiry"]);
 
 // 承認が必要か。対外/破壊系（part tool は unattended:false、A2A は名前一致）。
 export function needsApproval(name: string, activeTools: AgentTool[]): boolean {
@@ -36,6 +36,8 @@ export function previewFor(tool: string, args: Record<string, unknown>): string 
     case "call_partner": return `他団体連携（A2A）：partner=${s("partner")} / action=${s("action")}`;
     case "broadcast_group": return `グループ同報（A2A）：group=${s("group")} / action=${s("action")}`;
     case "call_group_member": return `グループ内連携（A2A）：group=${s("group")} / partner=${s("partner")} / action=${s("action")}`;
+    case "call_public": return `公開団体への連絡（A2A）：partner=${s("partner")} / action=${s("action")}`;
+    case "send_inquiry": return `公開団体への問い合わせ：partner=${s("partner")} / 本文「${s("message").slice(0, 60)}」`;
     default: {
       const j = JSON.stringify(args ?? {});
       return `${tool}（${j.length > 200 ? j.slice(0, 200) + "…" : j}）`;

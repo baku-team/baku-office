@@ -18,7 +18,9 @@ test("needsApproval：A2A 対外ツールは名前一致で承認必須", () => 
   assert.equal(needsApproval("call_partner", []), true);
   assert.equal(needsApproval("broadcast_group", []), true);
   assert.equal(needsApproval("call_group_member", []), true);
-  assert.deepEqual([...A2A_OUTWARD].sort(), ["broadcast_group", "call_group_member", "call_partner"]);
+  assert.equal(needsApproval("call_public", []), true);
+  assert.equal(needsApproval("send_inquiry", []), true);
+  assert.deepEqual([...A2A_OUTWARD].sort(), ["broadcast_group", "call_group_member", "call_partner", "call_public", "send_inquiry"]);
 });
 
 test("needsApproval：未知ツールは承認不要（既定で通す）", () => {
