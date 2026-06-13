@@ -5,13 +5,13 @@ import { randomId } from "@baku-office/shared";
 import { nowSec } from "../lib/accounting.ts";
 
 export async function saveKnowledge(ctx: Ctx, owner: string, a: { title: string; body: string }): Promise<string> {
-  await ctx.db.prepare("INSERT INTO knowledge (id,title,body,file_ref,tags,created_by,created_at) VALUES (?,?,?,?,?,?,?)")
-    .bind(randomId(), a.title, a.body, null, "agent", owner, nowSec()).run();
+  await ctx.db.run("INSERT INTO knowledge (id,title,body,file_ref,tags,created_by,created_at) VALUES (?,?,?,?,?,?,?)",
+    [randomId(), a.title, a.body, null, "agent", owner, nowSec()]);
   return `ナレッジを保存：${a.title}`;
 }
 export async function searchKnowledge(ctx: Ctx, a: { query: string }): Promise<string> {
   const q = `%${a.query}%`;
-  const { results } = await ctx.db.prepare("SELECT title,body FROM knowledge WHERE deleted_at IS NULL AND (title LIKE ? OR body LIKE ?) ORDER BY created_at DESC LIMIT 5").bind(q, q).all<{ title: string; body: string | null }>();
+  const results = await ctx.db.all<{ title: string; body: string | null }>("SELECT title,body FROM knowledge WHERE deleted_at IS NULL AND (title LIKE ? OR body LIKE ?) ORDER BY created_at DESC LIMIT 5", [q, q]);
   if (!results.length) return "該当するナレッジは見つかりませんでした。";
   return results.map((r) => `■ ${r.title}\n${(r.body ?? "").slice(0, 200)}`).join("\n\n");
 }

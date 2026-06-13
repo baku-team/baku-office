@@ -14,7 +14,7 @@ const { cmpVersion } = await import("../lib/update.ts");
 await import("../parts/index.ts"); // パーツ登録（カタログ参照の前提）
 const { appCatalog, installedAppIds } = await import("../core/apps.ts");
 const { getStorageUsage, fmtBytes } = await import("../lib/storage-usage.ts");
-const { widgetsOf, enabledParts } = await import("../core/parts.ts");
+const { scopedWidgets, enabledParts } = await import("../core/parts.ts");
 const { getHomeLayout, orderedSections, HOME_SECTIONS } = await import("../core/home.ts");
 const { brandName, getTheme } = await import("../core/theme.ts");
 const { reviewQueue } = await import("../lib/users.ts");
@@ -30,7 +30,7 @@ try { Astro.locals.runtime.ctx.waitUntil(pollHost(env, Astro.url.origin, _apps).
 catch { pollHost(env, Astro.url.origin, _apps).catch(() => {}); }
 
 // 軽量データは常に並列取得。重い KPI（残高・当月収支・承認待ち・ストレージ）は短期キャッシュ。
-const widgetDefs = widgetsOf(enabledParts([...instSet]));
+const widgetDefs = scopedWidgets(enabledParts([...instSet]));
 const [entitlement, homeLayout, theme, latestVersion, noticesRaw, lastAtRaw, backupAlertState, widgetData, kpiRaw] = await Promise.all([
   cachedEntitlement(env).catch(() => "free" as const),
   getHomeLayout(ctx).catch(() => null),

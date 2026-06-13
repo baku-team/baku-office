@@ -142,3 +142,25 @@ export async function extractInvoiceData(env: Env, file: { buf: ArrayBuffer; mim
     return { vendor: j.vendor ?? undefined, amount: typeof j.amount === "number" ? j.amount : undefined, issued_date: j.issued_date ?? undefined, due_date: j.due_date ?? undefined };
   } catch { return {}; }
 }
+
+// 会議トランスクリプトの議事録要約＋アクション抽出（Claude）。Meet パーツから ctx.ai 経由で呼ぶ（env非露出）。
+export async function summarizeTranscript(env: Env, transcript: string): Promise<{ summary: string; actions: { content: string; due?: string }[] } | null> {
+  const key = await getApiKey(env, "claude");
+  if (!key) return null;
+  const sys = "あなたは会議の議事録作成アシスタント。与えられたトランスクリプトから日本語で(1)議事録要約(2)アクションアイテムを抽出し、" +
+    'JSONのみを出力：{"summary":"...","actions":[{"content":"担当と内容","due":"ISO8601日時(任意・無ければ省略)"}]}（前置き・コードフェンス無し）。';
+  const r = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+    body: JSON.stringify({ model: claudeModelId(env), max_tokens: 2000, system: sys, messages: [{ role: "user", content: transcript }] }),
+  });
+  await recordUsage(env, "claude").catch(() => {});
+  if (!r.ok) { console.log("[meet-claude]", r.status, (await r.text()).slice(0, 150)); return null; }
+  const data = (await r.json()) as { content?: { text?: string }[]; usage?: { input_tokens?: number; output_tokens?: number } };
+  await recordTokens(env, "claude", { inputTokens: data.usage?.input_tokens ?? 0, outputTokens: data.usage?.output_tokens ?? 0 }).catch(() => {});
+  const raw = (data.content?.map((c) => c.text ?? "").join("") ?? "").replace(/^```(?:json)?|```$/g, "").trim();
+  try {
+    const j = JSON.parse(raw) as { summary?: string; actions?: { content: string; due?: string }[] };
+    return { summary: String(j.summary ?? ""), actions: Array.isArray(j.actions) ? j.actions : [] };
+  } catch { return { summary: raw.slice(0, 4000), actions: [] }; }
+}

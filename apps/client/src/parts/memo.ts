@@ -5,8 +5,8 @@ import { randomId } from "@baku-office/shared";
 import { nowSec } from "../lib/accounting.ts";
 
 export async function saveMemo(ctx: Ctx, owner: string, a: { title: string; body?: string }): Promise<string> {
-  await ctx.db.prepare("INSERT INTO personal_items (id,owner_user_id,type,title,body,share_scope,review_status,created_at) VALUES (?,?,?,?,?,'personal','none',?)")
-    .bind(randomId(), owner, "memo", a.title, a.body ?? null, nowSec()).run();
+  await ctx.db.run("INSERT INTO personal_items (id,owner_user_id,type,title,body,share_scope,review_status,created_at) VALUES (?,?,?,?,?,'personal','none',?)",
+    [randomId(), owner, "memo", a.title, a.body ?? null, nowSec()]);
   return `メモを保存：${a.title}`;
 }
 

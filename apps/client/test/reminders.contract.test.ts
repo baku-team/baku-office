@@ -11,6 +11,7 @@ import { recordExpense, listExpenses } from "../src/parts/accounting.ts";
 import { saveMemo } from "../src/parts/memo.ts";
 import { saveKnowledge, searchKnowledge } from "../src/parts/knowledge.ts";
 import { searchMembers } from "../src/parts/members.ts";
+import { localIdentity } from "../src/core/identity.ts";
 
 const SCHEMA = `
 CREATE TABLE reminders (id TEXT PRIMARY KEY, owner TEXT, content TEXT, remind_at INTEGER, done INTEGER DEFAULT 0, created_at INTEGER);
@@ -23,7 +24,9 @@ function setup(env: Record<string, unknown> = {}) {
   const sqlite = new DatabaseSync(":memory:");
   sqlite.exec(SCHEMA);
   const db = nodeSqlStore(sqlite);
-  return { sqlite, db, ctx: { profile: "node", db, env } };
+  const ctx: Record<string, unknown> = { profile: "node", db, env };
+  ctx.identity = localIdentity(ctx as never); // 名簿復号は identity Port 経由（§capability）。
+  return { sqlite, db, ctx };
 }
 
 test("reminders パーツが Node+SQLite で動く（道具経路）", async () => {
@@ -77,8 +80,9 @@ test("members パーツが Node+SQLite で動く（暗号化名簿の復号も�
 test("members：鍵保管Port(ctx.storage.kv)経由で鍵を解決し復号できる（§14-3）", async () => {
   const sqlite = new DatabaseSync(":memory:");
   sqlite.exec("CREATE TABLE users (id TEXT PRIMARY KEY, display_name TEXT, role TEXT, status TEXT, created_at INTEGER)");
-  const ctx = { profile: "node", db: nodeSqlStore(sqlite), storage: { kv: memKv() }, env: {} } as never;
-  const mk = await masterKeyCtx(ctx); // secret 無し → kv に自動生成
+  const ctx: Record<string, unknown> = { profile: "node", db: nodeSqlStore(sqlite), storage: { kv: memKv() }, env: {} };
+  ctx.identity = localIdentity(ctx as never);
+  const mk = await masterKeyCtx(ctx as never); // secret 無し → kv に自動生成
   const enc = await encryptField(mk, "鈴木花子", "member-pii");
   sqlite.prepare("INSERT INTO users (id,display_name,role,status,created_at) VALUES (?,?,?,?,?)").run("m2", enc, "clerical", "active", 0);
   assert.match(await searchMembers(ctx, { query: "鈴木" }), /鈴木花子/);

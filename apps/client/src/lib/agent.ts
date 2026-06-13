@@ -4,7 +4,8 @@
 import { getApiKey, entitlementForGate } from "./client.ts";
 import { type Role, atLeast } from "@baku-office/shared";
 import type { Ctx } from "../core/ports.ts";
-import { enabledParts, toolsOf, enabledPartIds, type AgentTool } from "../core/parts.ts";
+import { enabledParts, toolsOf, enabledPartIds, partOfTool, type AgentTool } from "../core/parts.ts";
+import { scopeCtx } from "../core/capability.ts";
 import { runToolLoop, type ToolDecl, type Turn, type ChatModel, type TokenUsage } from "../core/ai.ts";
 import { ROLES, toolsForRole, normalizeRole, ROLE_LIST } from "./multi-agent.ts";
 import { maxParallelAgents, agentMaxHops } from "./settings.ts";
@@ -92,7 +93,8 @@ async function execTool(ctx: Ctx, owner: string, baseUrl: string, name: string, 
       const id = await createApproval(ctx.env, owner, name, args, preview);
       return `⚠️ この操作は承認が必要です（対外/破壊系）。\n${preview}\n「承認待ち」一覧（/approvals）で管理者が承認すると実行されます。承認ID: ${id}`;
     }
-    return tool.run(ctx, owner, baseUrl, args);
+    // パーツ道具には宣言 permission に絞った PartCtx を注入（生env・未宣言Portへは到達不可・§capability）。
+    return tool.run(scopeCtx(ctx, partOfTool(tool.name)?.permissions) as unknown as Ctx, owner, baseUrl, args);
   }
   // 2) コア組み込み道具（スキル・AI能力）。
   const env = ctx.env;

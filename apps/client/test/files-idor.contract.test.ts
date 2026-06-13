@@ -3,7 +3,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
-import { nodeSqlStore } from "./node-sqlite-adapter.ts";
+import { nodeD1 } from "./node-sqlite-adapter.ts";
 import { listFilesForSession, softDeleteFileForSession, fileBelongsTo } from "../src/lib/storage.ts";
 import type { Session } from "../src/lib/auth.ts";
 
@@ -16,7 +16,7 @@ CREATE TABLE files (id TEXT PRIMARY KEY, name TEXT NOT NULL, size INTEGER NOT NU
 function setup() {
   const sqlite = new DatabaseSync(":memory:");
   sqlite.exec(SCHEMA);
-  const env = { DB: nodeSqlStore(sqlite) } as unknown as Env;
+  const env = { DB: nodeD1(sqlite) } as unknown as Env;
   const ins = (id: string, by: string, ctx: string | null) =>
     sqlite.prepare("INSERT INTO files (id,name,size,mime,ref,created_by,created_at,ctx) VALUES (?,?,?,?,?,?,?,?)")
       .run(id, id + ".pdf", 1, "application/pdf", "kv:f/" + id, by, 1, ctx);

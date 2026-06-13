@@ -37,6 +37,7 @@ export const INFRA = {
   MIGRATION: "E9004", // スキーマ自動適用の失敗
   BOOT: "E9005", // 起動時点検の失敗
   HOST: "E9006", // ホスト(host worker)との通信失敗
+  CAPABILITY: "E9007", // アプリ（パーツ）が宣言していない能力(Port)へアクセスした（capability scoping 違反）
 } as const;
 
 // 想定外エラーの既定文言（利用者向け）。

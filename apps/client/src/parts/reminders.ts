@@ -9,13 +9,13 @@ import { nowSec } from "../lib/accounting.ts";
 export async function setReminder(ctx: Ctx, owner: string, a: { content: string; remind_at: string }): Promise<string> {
   const at = Math.floor(new Date(a.remind_at).getTime() / 1000);
   if (!Number.isFinite(at)) return "日時を解釈できませんでした（例：2026-06-20T10:00）。";
-  await ctx.db.prepare("INSERT INTO reminders (id,owner,content,remind_at,done,created_at) VALUES (?,?,?,?,0,?)")
-    .bind(randomId(), owner, a.content, at, nowSec()).run();
+  await ctx.db.run("INSERT INTO reminders (id,owner,content,remind_at,done,created_at) VALUES (?,?,?,?,0,?)",
+    [randomId(), owner, a.content, at, nowSec()]);
   return `リマインダー設定：${a.remind_at} に「${a.content}」`;
 }
 
 export async function listReminders(ctx: Ctx, owner: string): Promise<string> {
-  const { results } = await ctx.db.prepare("SELECT content,remind_at FROM reminders WHERE owner=? AND done=0 ORDER BY remind_at LIMIT 10").bind(owner).all<{ content: string; remind_at: number }>();
+  const results = await ctx.db.all<{ content: string; remind_at: number }>("SELECT content,remind_at FROM reminders WHERE owner=? AND done=0 ORDER BY remind_at LIMIT 10", [owner]);
   if (!results.length) return "未配信のリマインダーはありません。";
   return results.map((r) => `・${new Date(r.remind_at * 1000).toISOString().slice(0, 16).replace("T", " ")} ${r.content}`).join("\n");
 }
@@ -26,13 +26,12 @@ export async function dueReminders(ctx: Ctx, owner?: string): Promise<{ id: stri
   const sql = owner
     ? "SELECT id,owner,content FROM reminders WHERE done=0 AND remind_at<=? AND owner=? ORDER BY remind_at LIMIT 20"
     : "SELECT id,owner,content FROM reminders WHERE done=0 AND remind_at<=? ORDER BY remind_at LIMIT 50";
-  const stmt = owner ? ctx.db.prepare(sql).bind(now, owner) : ctx.db.prepare(sql).bind(now);
-  const { results } = await stmt.all<{ id: string; owner: string; content: string }>();
+  const results = await ctx.db.all<{ id: string; owner: string; content: string }>(sql, owner ? [now, owner] : [now]);
   return results;
 }
 
 export async function markReminderDone(ctx: Ctx, id: string): Promise<void> {
-  await ctx.db.prepare("UPDATE reminders SET done=1 WHERE id=?").bind(id).run();
+  await ctx.db.run("UPDATE reminders SET done=1 WHERE id=?", [id]);
 }
 
 export const remindersPart: Part = {

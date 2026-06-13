@@ -1,20 +1,14 @@
 // 庶務／名簿パーツ。名簿照会は復号PIIを返すため特権ロールのみ（§14-1）。
-// データは ctx.db、復号鍵は masterKeyCtx（鍵保管は KvPort 経由＝§14-3。Worker Secret 優先）。
+// 復号鍵の解決は特権側（identity Port）に閉じる＝パーツは members:read で listMemberNames のみ使う（env/鍵に触れない）。
 import type { Part } from "../core/parts.ts";
 import type { Ctx } from "../core/ports.ts";
-import { decryptField } from "@baku-office/shared";
-import { masterKeyCtx } from "../lib/client.ts";
 
-// 名簿は暗号化されているため復号して照合（小規模前提）。
+// 名簿は暗号化PII。identity Port が復号して返す（members:read 権限が必要）。
 export async function searchMembers(ctx: Ctx, a: { query: string }): Promise<string> {
-  const { results } = await ctx.db.prepare("SELECT display_name,role,status FROM users WHERE status='active'").all<{ display_name: string | null; role: string; status: string }>();
-  const mk = await masterKeyCtx(ctx);
-  const out: string[] = [];
-  for (const u of results) {
-    let name = "";
-    try { name = u.display_name ? await decryptField(mk, u.display_name, "member-pii") : ""; } catch { /* skip */ }
-    if (!a.query || name.includes(a.query)) out.push(`・${name || "(無名)"}（${u.role}）`);
-  }
+  const members = await ctx.identity.listMemberNames();
+  const out = members
+    .filter((m) => !a.query || m.name.includes(a.query))
+    .map((m) => `・${m.name || "(無名)"}（${m.role}）`);
   return out.length ? out.join("\n") : "該当するメンバーはいません。";
 }
 
@@ -28,7 +22,7 @@ export const membersPart: Part = {
   menu: [{ href: "/membership", label: "会員管理" }],
   widgets: [
     { id: "members_count", title: "登録メンバー", run: async (ctx) => {
-      const r = await ctx.db.prepare("SELECT count(*) AS n FROM users WHERE status='active'").first<{ n: number }>();
+      const r = await ctx.db.first<{ n: number }>("SELECT count(*) AS n FROM users WHERE status='active'");
       return { value: String(r?.n ?? 0) + " 名", sub: "アクティブ会員" };
     } },
   ],
