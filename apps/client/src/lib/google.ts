@@ -5,6 +5,7 @@ import { kvPut } from "./kv.ts";
 // refresh_token（apikey:google_refresh）はクラウンジュエル：失効・最終利用日時・付与scopeを管理する。
 import { getApiKey, saveApiKey, deleteApiKey } from "./client.ts";
 import { nowSec } from "./accounting.ts";
+import { serviceAccountConfigured, serviceAccountAccessToken, clearServiceAccount } from "./google-sa.ts";
 
 // 用途別 scope グループ。UI でリスクを表示し、必要なものだけ同意させる。
 export type ScopeGroupId = "calendar" | "gmail_read" | "gmail_send" | "meet";
@@ -64,8 +65,20 @@ function scopesFor(groups: ScopeGroupId[]): string {
   return Array.from(new Set(groups.flatMap((g) => SCOPE_GROUPS[g].scopes))).join(" ");
 }
 
+// 「Googleが使える状態か」。サービスアカウント(SA)連携済み、または OAuth クライアント資格情報あり。
 export async function googleConfigured(env: Env): Promise<boolean> {
+  if (await serviceAccountConfigured(env)) return true;
   return !!(await clientId(env)) && !!(await clientSecret(env));
+}
+// 付与グループからスコープ文字列を作る（SA/OAuth 共通）。空なら非Restrictedの既定。
+export async function grantedScopeString(env: Env): Promise<string> {
+  const groups = await grantedGroups(env);
+  return scopesFor(groups.length ? groups : DEFAULT_GROUPS);
+}
+// 付与グループ＋連携日時を保存（SA連携の確定時などに使う）。
+export async function setGoogleGroups(env: Env, groups: ScopeGroupId[]): Promise<void> {
+  await kvPut(env, SCOPES_KEY, JSON.stringify(normalizeGroups(groups)));
+  await kvPut(env, CONNECTED_KEY, String(nowSec()));
 }
 function redirectUri(origin: string): string {
   return `${origin}/api/google/callback`;
@@ -115,13 +128,15 @@ export async function exchangeGoogleCode(env: Env, origin: string, code: string,
 export async function googleConnected(env: Env): Promise<boolean> {
   return !!(await getApiKey(env, REFRESH_KEY));
 }
-// 連携状態（管理画面表示用）：付与グループ・最終利用・連携日時。
-export async function googleStatus(env: Env): Promise<{ connected: boolean; groups: ScopeGroupId[]; lastUsed: number | null; connectedAt: number | null }> {
-  const connected = await googleConnected(env);
+// 連携状態（管理画面表示用）：方式(mode)・付与グループ・最終利用・連携日時。
+export async function googleStatus(env: Env): Promise<{ connected: boolean; mode: "sa" | "oauth" | null; groups: ScopeGroupId[]; lastUsed: number | null; connectedAt: number | null }> {
+  const sa = await serviceAccountConfigured(env);
+  const oauth = await googleConnected(env);
+  const connected = sa || oauth;
   const num = async (k: string) => { const v = Number(await env.LICENSE.get(k)); return Number.isFinite(v) && v > 0 ? v : null; };
-  return { connected, groups: connected ? await grantedGroups(env) : [], lastUsed: await num(LAST_USED_KEY), connectedAt: await num(CONNECTED_KEY) };
+  return { connected, mode: sa ? "sa" : oauth ? "oauth" : null, groups: connected ? await grantedGroups(env) : [], lastUsed: await num(LAST_USED_KEY), connectedAt: await num(CONNECTED_KEY) };
 }
-// 連携解除：Google 側で refresh_token を失効（revoke）し、ローカルの鍵・付与情報を削除（P0-3）。
+// 連携解除：OAuth は refresh_token を失効（revoke）、SA は鍵を破棄。共有の付与情報も削除（P0-3）。
 export async function disconnectGoogle(env: Env): Promise<void> {
   const refresh = await getApiKey(env, REFRESH_KEY);
   if (refresh) {
@@ -131,11 +146,18 @@ export async function disconnectGoogle(env: Env): Promise<void> {
     }).catch(() => {}); // 失効APIが落ちてもローカル削除は続行
   }
   await deleteApiKey(env, REFRESH_KEY);
+  await clearServiceAccount(env); // SA鍵・subject・トークンキャッシュも破棄
   await env.LICENSE.delete(SCOPES_KEY);
   await env.LICENSE.delete(LAST_USED_KEY);
   await env.LICENSE.delete(CONNECTED_KEY);
 }
 export async function googleAccessToken(env: Env): Promise<string | null> {
+  // SA連携が設定済みなら SA(DWD) でトークン発行。無ければ OAuth refresh_token。
+  if (await serviceAccountConfigured(env)) {
+    const token = await serviceAccountAccessToken(env, await grantedScopeString(env));
+    if (token) await kvPut(env, LAST_USED_KEY, String(nowSec()));
+    return token;
+  }
   const refresh = await getApiKey(env, REFRESH_KEY);
   const cid = await clientId(env); const cs = await clientSecret(env);
   if (!refresh || !cid || !cs) return null;
