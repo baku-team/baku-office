@@ -5,20 +5,16 @@ import App from "../layouts/App.astro";
 const { getSession } = await import("../lib/auth.ts");
 const ses = await getSession(env, Astro.request);
 if (!ses) return Astro.redirect("/login", 302);
-const { results } = await env.DB.prepare("SELECT id,title,start_at,end_at FROM schedules WHERE deleted_at IS NULL ORDER BY start_at").all<{ id: string; title: string; start_at: string; end_at: string | null }>();
-// Googleカレンダー連携の可否（Pro＋連携済み＋カレンダー権限）。連携時は今後の予定を表示し、追加時に同時登録できる。
+const { results } = await env.DB.prepare("SELECT id,title,start_at,end_at,google_event_id FROM schedules WHERE deleted_at IS NULL ORDER BY start_at").all<{ id: string; title: string; start_at: string; end_at: string | null; google_event_id: string | null }>();
+// Googleカレンダー連携の可否（Pro＋連携済み＋カレンダー権限）。連携時は双方向同期と追加時の同時登録ができる。
 const { atLeast } = await import("@baku-office/shared");
 const { cachedEntitlement } = await import("../lib/client.ts");
 const { googleConfigured, googleStatus } = await import("../lib/google.ts");
-let googleReady = false, googleEventsText = "";
+let googleReady = false;
 try {
   if (atLeast(await cachedEntitlement(env), "pro") && (await googleConfigured(env))) {
     const st = await googleStatus(env);
-    if (st.connected && st.groups.includes("calendar")) {
-      googleReady = true;
-      const { listEvents } = await import("../parts/calendar.ts");
-      googleEventsText = await listEvents(Astro.locals.ctx, { max: 15 });
-    }
+    googleReady = st.connected && st.groups.includes("calendar");
   }
 } catch { googleReady = false; }
 // 一覧の日時を日本語表示（YYYY-MM-DDTHH:MM 形式の naive 文字列を素直に整形）。終了時刻があれば併記。
@@ -39,10 +35,15 @@ const eventsJson = JSON.stringify(results).replace(/</g, "\\u003c");
   <h1>予定</h1>
   <p class="lead">カレンダーの<strong>日付をタップ</strong>すると、その日の予定を追加できます。</p>
 
-  {/* 表示切替（月／週）。 */}
-  <div class="seg" id="cal-view" role="group" aria-label="表示の切り替え" style="margin-bottom:.5rem">
-    <button class="seg-opt on" type="button" data-view="month">月</button>
-    <button class="seg-opt" type="button" data-view="week">週</button>
+  {/* 表示切替（月／週）＋Google同期。 */}
+  <div class="spread" style="flex-wrap:wrap;gap:8px;margin-bottom:.5rem">
+    <div class="seg" id="cal-view" role="group" aria-label="表示の切り替え">
+      <button class="seg-opt on" type="button" data-view="month">月</button>
+      <button class="seg-opt" type="button" data-view="week">週</button>
+    </div>
+    {googleReady && (
+      <button class="btn btn-sm" id="g-sync" type="button" title="Googleカレンダーと双方向に同期します（取り込み＋未連携の予定をGoogleへ登録）">⟳ Googleと同期</button>
+    )}
   </div>
 
   {/* 月めくり／週めくりカレンダー（主役）。日付セルは大きめ（タップしやすく誤タップを防ぐ）。 */}
@@ -90,14 +91,8 @@ const eventsJson = JSON.stringify(results).replace(/</g, "\\u003c");
     {results.length===0 && (<tr><td colspan="3" class="muted" style="text-align:center;padding:1.2rem">まだ予定がありません。上のカレンダーの日付をタップして、最初の予定を追加してみましょう。</td></tr>)}
   </tbody></table></div>
 
-  {googleReady ? (
-    <div class="card" style="margin-top:1rem">
-      <h2 style="margin-top:0;border:0">Googleカレンダーの予定（今後）</h2>
-      <p class="muted" style="font-size:.85rem">連携中のGoogleカレンダーの予定です。上で「Googleカレンダーにも登録する」にチェックして追加すると、こちらにも反映されます。</p>
-      <pre style="white-space:pre-wrap;font-family:inherit;font-size:.9rem;margin:0">{googleEventsText}</pre>
-    </div>
-  ) : (
-    <p class="muted" style="margin-top:1rem">Googleカレンダーと連動させたい場合は <a href="/calendar">カレンダー連携</a>（Proプラン）から設定できます。連携すると、ここでGoogleの予定も表示され、追加時に同時登録できます。</p>
+  {!googleReady && (
+    <p class="muted" style="margin-top:1rem">Googleカレンダーと連動させたい場合は <a href="/calendar">カレンダー連携</a>（Proプラン）から設定できます。連携すると、Googleの予定をこの画面に取り込み（双方向同期）、追加時に同時登録できます。</p>
   )}
 
   <style>
@@ -121,6 +116,8 @@ const eventsJson = JSON.stringify(results).replace(/</g, "\\u003c");
     /* 週表示：1週間を広く見せる。セルを高くし、予定を時刻つきで複数表示。 */
     .cal.week .cell { min-height: 120px; align-items: stretch; }
     .cal.week .ev { display: block !important; white-space: normal; }
+    /* Googleカレンダー同期済みの予定は色で区別。 */
+    .cal .ev.g { background: #e8f0fe; color: #1a56b0; }
     .add-panel { margin-top: 1rem; border: 2px solid var(--brand); }
     .add-date { font-size: 1.05rem; font-weight: 700; margin-bottom: .6rem; }
     .time-row { display: flex; align-items: center; gap: 8px; }
@@ -169,7 +166,7 @@ const eventsJson = JSON.stringify(results).replace(/</g, "\\u003c");
       cell.dataset.date = ds;
       cell.setAttribute("aria-label", `${dnum}日${evs.length ? "・予定" + evs.length + "件" : ""}`);
       const dn = document.createElement("span"); dn.className = "dn"; dn.textContent = String(dnum); cell.appendChild(dn);
-      evs.slice(0, max).forEach((e) => { const ev = document.createElement("span"); ev.className = "ev"; const t = evHHMM(e.start_at); ev.textContent = (t ? t + " " : "") + e.title; cell.appendChild(ev); });
+      evs.slice(0, max).forEach((e) => { const ev = document.createElement("span"); ev.className = "ev" + (e.google_event_id ? " g" : ""); const t = evHHMM(e.start_at); ev.textContent = (e.google_event_id ? "📅 " : "") + (t ? t + " " : "") + e.title; if (e.google_event_id) ev.title = "Googleカレンダーと同期済み"; cell.appendChild(ev); });
       if (evs.length > max) { const m = document.createElement("span"); m.className = "more"; m.textContent = "ほか" + (evs.length - max) + "件"; cell.appendChild(m); }
       cell.addEventListener("click", () => openPanel(ds));
       return cell;
@@ -251,5 +248,14 @@ const eventsJson = JSON.stringify(results).replace(/</g, "\\u003c");
       const r = await window.bo.api("/api/docs", { kind: "schedule", _action: "delete", id: e.target.closest("tr").dataset.id }, { btn: e.target, successMsg: "削除しました" });
       if (r.ok) setTimeout(() => location.reload(), 400);
     }));
+    // Googleカレンダーと双方向同期：取り込み＋未連携の予定をGoogleへ登録し、結果を表示して再読込。
+    document.getElementById("g-sync")?.addEventListener("click", async (e) => {
+      const r = await window.bo.api("/api/schedule-sync", {}, { btn: e.currentTarget, successMsg: null });
+      if (r.ok) {
+        const d = r.data;
+        window.bo.toast(`同期しました（取込 ${d.imported}・更新 ${d.updated}・Googleへ登録 ${d.pushed}${d.pushErrors ? "・失敗 " + d.pushErrors : ""}）`);
+        setTimeout(() => location.reload(), 1200);
+      }
+    });
   </script>
 </App>

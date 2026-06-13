@@ -15,17 +15,27 @@ export const POST: APIRoute = async ({ request, locals }) => {
   const b = (await request.json().catch(() => ({}))) as Record<string, string>;
 
   if (b.kind === "schedule") {
-    if (b._action === "delete") { await env.DB.prepare("UPDATE schedules SET deleted_at=? WHERE id=?").bind(nowSec(), b.id).run(); return json({ ok: true }); }
+    if (b._action === "delete") {
+      // 内部削除に合わせて、対応する Google 予定も削除（双方向）。ベストエフォート。
+      if (b.id) {
+        const row = await env.DB.prepare("SELECT google_event_id FROM schedules WHERE id=?").bind(b.id).first<{ google_event_id: string | null }>();
+        if (row?.google_event_id) {
+          try { const { deleteEventById } = await import("../../parts/calendar.ts"); await deleteEventById(locals.ctx, row.google_event_id); } catch { /* best-effort */ }
+        }
+      }
+      await env.DB.prepare("UPDATE schedules SET deleted_at=? WHERE id=?").bind(nowSec(), b.id).run();
+      return json({ ok: true });
+    }
     if (!b.title || !b.start_at) return json({ error: "title と start_at が必要" }, 400);
     const id = randomId();
     await env.DB.prepare("INSERT INTO schedules (id,title,start_at,end_at,body,created_by,created_at) VALUES (?,?,?,?,?,?,?)")
       .bind(id, b.title, b.start_at, b.end_at ?? null, b.body ?? null, ses.uid, nowSec()).run();
     await audit(env, ses.uid, "schedule.create", id);
-    // 任意：Googleカレンダーにも登録（ベストエフォート＝失敗しても内部保存は成立）。終了時刻が無ければ開始+1時間。
+    // 任意：Googleカレンダーにも登録（ベストエフォート）。成功時は event_id を内部行へ保存し双方向対応付け。
     let googlePushed = false, googleError = "";
     if (b.to_google) {
       try {
-        const { createEvent } = await import("../../parts/calendar.ts");
+        const { createEventStructured } = await import("../../parts/calendar.ts");
         const withSec = (s: string) => (/T\d{2}:\d{2}$/.test(s) ? `${s}:00` : s);
         const start = withSec(b.start_at);
         let end = b.end_at ? withSec(b.end_at) : "";
@@ -37,9 +47,10 @@ export const POST: APIRoute = async ({ request, locals }) => {
             end = `${d.getUTCFullYear()}-${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())}T${p(d.getUTCHours())}:${p(d.getUTCMinutes())}:00`;
           } else end = start;
         }
-        const res = await createEvent(locals.ctx, { title: b.title, start, end, description: b.body });
-        googlePushed = res.startsWith("予定を作成しました");
-        if (!googlePushed) googleError = res;
+        const res = await createEventStructured(locals.ctx, { title: b.title, start, end, description: b.body });
+        googlePushed = res.ok;
+        if (res.ok && res.id) await env.DB.prepare("UPDATE schedules SET google_event_id=?, google_synced_at=? WHERE id=?").bind(res.id, nowSec(), id).run();
+        if (!res.ok) googleError = res.error ?? "Googleカレンダーへの登録に失敗しました。";
       } catch (e) { googleError = (e as Error).message; }
     }
     return json({ ok: true, id, googlePushed, googleError });
