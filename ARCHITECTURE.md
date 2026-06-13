@@ -23,6 +23,7 @@ baku-team/baku-office-app (public・配布物のみ)
 
 - **CI**：`.github/workflows/publish-client.yml` が `apps/client` の変更を public 配布リポへ自動公開（要 `PUBLISH_TOKEN` シークレット）。
 - ホストポータルは当社アカウントへ `wrangler deploy`（顧客はフォークしない）。
+- **スタック＝Astro 6＋`@astrojs/cloudflare` 13系**。配布バンドルは v13構成で `server/`（`entry.mjs`＋事前バンドル済モジュール・`no_bundle`）＋`client/`（静的アセット）に分離＝顧客側に node_modules／ビルド不要。env は `import { env } from "cloudflare:workers"`、実行コンテキストは `Astro.locals.cfContext`（旧 `Astro.locals.runtime` は廃止）。
 
 ## 共通アップデート（全顧客が通常通り受け取る）
 
