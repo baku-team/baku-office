@@ -13,7 +13,7 @@ CREATE UNIQUE INDEX idx_account_items_code ON account_items (code);
 CREATE TABLE wallets (id TEXT PRIMARY KEY, name TEXT, type TEXT, opening_balance INTEGER DEFAULT 0, sort_order INTEGER, account_item_id TEXT);
 CREATE TABLE categories (id TEXT PRIMARY KEY, name TEXT, kind TEXT, parent_id TEXT, sort_order INTEGER, account_item_id TEXT);
 CREATE TABLE fiscal_periods (id TEXT PRIMARY KEY, name TEXT, start_date TEXT, end_date TEXT, status TEXT);
-CREATE TABLE transactions (id TEXT PRIMARY KEY, fiscal_period_id TEXT, date TEXT, wallet_id TEXT, kind TEXT, category_id TEXT, amount INTEGER, description TEXT, counter_wallet_id TEXT, created_by TEXT, receipt_ref TEXT, created_at INTEGER, updated_at INTEGER, deleted_at INTEGER);
+CREATE TABLE transactions (id TEXT PRIMARY KEY, fiscal_period_id TEXT, date TEXT, wallet_id TEXT, kind TEXT, category_id TEXT, amount INTEGER, description TEXT, counter_wallet_id TEXT, account_item_id TEXT, created_by TEXT, receipt_ref TEXT, created_at INTEGER, updated_at INTEGER, deleted_at INTEGER);
 CREATE TABLE journal_entries (id TEXT PRIMARY KEY, fiscal_period_id TEXT, date TEXT, description TEXT, source TEXT, source_ref TEXT, created_by TEXT, created_at INTEGER, updated_at INTEGER, deleted_at INTEGER);
 CREATE TABLE journal_lines (id TEXT PRIMARY KEY, entry_id TEXT, side TEXT, account_item_id TEXT, amount INTEGER, memo TEXT, sort_order INTEGER);
 `;

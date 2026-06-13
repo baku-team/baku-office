@@ -69,12 +69,13 @@ export async function buildEntriesForPeriod(env: Env, periodId: string): Promise
   const out: LedgerEntry[] = [];
   // 単式取引を橋渡し。
   const txs = (await env.DB.prepare(
-    "SELECT id,kind,amount,date,description,wallet_id,counter_wallet_id,category_id FROM transactions WHERE fiscal_period_id=? AND deleted_at IS NULL ORDER BY date, created_at",
-  ).bind(periodId).all<Tx & { wallet_id: string; counter_wallet_id: string | null; category_id: string | null }>()).results;
+    "SELECT id,kind,amount,date,description,wallet_id,counter_wallet_id,category_id,account_item_id FROM transactions WHERE fiscal_period_id=? AND deleted_at IS NULL ORDER BY date, created_at",
+  ).bind(periodId).all<Tx & { wallet_id: string; counter_wallet_id: string | null; category_id: string | null; account_item_id: string | null }>()).results;
   for (const t of txs) {
     const walletAccId = (m.walletAcc.get(t.wallet_id) ?? null) || fallbackWallet;
     const counterAccId = t.counter_wallet_id ? (m.walletAcc.get(t.counter_wallet_id) ?? null) || fallbackWallet : null;
-    const categoryAccId = t.category_id ? (m.catAcc.get(t.category_id) ?? null) || (t.kind === "income" ? fallbackIncome : fallbackExpense) : (t.kind === "income" ? fallbackIncome : fallbackExpense);
+    // 取引に直付けの勘定科目があれば優先（経費のAI/手動選択）。無ければ category 経由→既定。
+    const categoryAccId = t.account_item_id || (t.category_id ? (m.catAcc.get(t.category_id) ?? null) : null) || (t.kind === "income" ? fallbackIncome : fallbackExpense);
     const lines = txToJournalLines(t, { walletAccId, counterAccId, categoryAccId });
     out.push({ id: t.id, date: t.date, description: t.description ?? null, source: "tx", lines: toLedgerLines(lines, m.items) });
   }

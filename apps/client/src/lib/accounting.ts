@@ -17,6 +17,7 @@ export type Tx = {
   amount: number;
   description: string | null;
   counter_wallet_id: string | null;
+  account_item_id?: string | null;
   created_at: number;
 };
 
@@ -83,10 +84,10 @@ export async function createTx(env: Env, t: Omit<Tx, "id" | "created_at">): Prom
   const id = randomId();
   const now = nowSec();
   await env.DB.prepare(
-    `INSERT INTO transactions (id,fiscal_period_id,date,wallet_id,kind,category_id,amount,description,counter_wallet_id,created_at,updated_at)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+    `INSERT INTO transactions (id,fiscal_period_id,date,wallet_id,kind,category_id,amount,description,counter_wallet_id,account_item_id,created_at,updated_at)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
   )
-    .bind(id, t.fiscal_period_id, t.date, t.wallet_id, t.kind, t.category_id, t.amount, t.description, t.counter_wallet_id, now, now)
+    .bind(id, t.fiscal_period_id, t.date, t.wallet_id, t.kind, t.category_id, t.amount, t.description, t.counter_wallet_id, t.account_item_id ?? null, now, now)
     .run();
   return id;
 }

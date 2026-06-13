@@ -143,6 +143,64 @@ export async function extractInvoiceData(env: Env, file: { buf: ArrayBuffer; mim
   } catch { return {}; }
 }
 
+// 経費の勘定科目をAIが推定（候補から1つ選ぶ）。freeeに合わせた科目選択を補助。手動上書き前提。
+// Claudeキー無し or 失敗時は null（UI側で手動選択にフォールバック）。
+export async function suggestAccountItem(
+  env: Env,
+  input: { vendor?: string; description?: string; amount?: number },
+  candidates: { code: string; name: string }[],
+): Promise<{ code: string; reason: string } | null> {
+  const key = await getApiKey(env, "claude");
+  if (!key || candidates.length === 0) return null;
+  const list = candidates.map((c) => `${c.code}:${c.name}`).join(" / ");
+  const prompt =
+    `次の支出に最も適切な勘定科目を、候補から1つだけ選んでJSONのみ出力（前置き・コードフェンス無し）。\n` +
+    `候補: ${list}\n支払先: ${input.vendor ?? "(不明)"}\n内容: ${input.description ?? "(不明)"}\n金額: ${input.amount ?? "(不明)"}\n` +
+    `出力形式: {"code":"候補のcode","reason":"30字以内の理由"}`;
+  try {
+    const r = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+      body: JSON.stringify({ model: claudeModelId(env), max_tokens: 120, messages: [{ role: "user", content: prompt }] }),
+    });
+    await recordUsage(env, "claude");
+    if (!r.ok) { console.log("[suggest-account]", r.status); return null; }
+    const d = (await r.json()) as { content?: { text?: string }[]; usage?: { input_tokens?: number; output_tokens?: number } };
+    await recordTokens(env, "claude", { inputTokens: d.usage?.input_tokens ?? 0, outputTokens: d.usage?.output_tokens ?? 0 });
+    const raw = (d.content?.map((c) => c.text ?? "").join("") ?? "").replace(/^```(?:json)?|```$/g, "").trim();
+    const j = JSON.parse(raw) as { code?: string; reason?: string };
+    const hit = candidates.find((c) => c.code === j.code);
+    return hit ? { code: hit.code, reason: String(j.reason ?? "") } : null;
+  } catch { return null; }
+}
+
+// レジ締めの差異（想定額−実査額）の原因をAIが推定。直近取引と差額から日本語1〜2文。キー無は null。
+export async function estimateDiscrepancy(
+  env: Env,
+  difference: number,
+  recent: { date: string; kind: string; amount: number; description: string | null }[],
+): Promise<string | null> {
+  const key = await getApiKey(env, "claude");
+  if (!key) return null;
+  const lines = recent.slice(0, 30).map((t) => `${t.date} ${t.kind} ${t.amount} ${t.description ?? ""}`).join("\n");
+  const prompt =
+    `現金レジ締めで差異が出た。差異額（想定−実査）= ${difference} 円（プラスは現金が想定より不足、マイナスは過剰）。\n` +
+    `直近の取引:\n${lines}\n\n考えられる原因を、会計初心者にも分かる日本語で1〜2文・具体的に推定して。前置き不要。`;
+  try {
+    const r = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+      body: JSON.stringify({ model: claudeModelId(env), max_tokens: 200, messages: [{ role: "user", content: prompt }] }),
+    });
+    await recordUsage(env, "claude");
+    if (!r.ok) { console.log("[closure-estimate]", r.status); return null; }
+    const d = (await r.json()) as { content?: { text?: string }[]; usage?: { input_tokens?: number; output_tokens?: number } };
+    await recordTokens(env, "claude", { inputTokens: d.usage?.input_tokens ?? 0, outputTokens: d.usage?.output_tokens ?? 0 });
+    const txt = (d.content?.map((c) => c.text ?? "").join("") ?? "").trim();
+    return txt || null;
+  } catch { return null; }
+}
+
 // 会議トランスクリプトの議事録要約＋アクション抽出（Claude）。Meet パーツから ctx.ai 経由で呼ぶ（env非露出）。
 export async function summarizeTranscript(env: Env, transcript: string): Promise<{ summary: string; actions: { content: string; due?: string }[] } | null> {
   const key = await getApiKey(env, "claude");

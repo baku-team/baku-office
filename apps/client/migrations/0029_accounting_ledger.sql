@@ -20,6 +20,8 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_account_items_code ON account_items (code)
 -- 既存の科目・口座に勘定科目を紐付け（橋渡しで借方/貸方科目を解決）。
 ALTER TABLE categories ADD COLUMN account_item_id TEXT;
 ALTER TABLE wallets ADD COLUMN account_item_id TEXT;
+-- 取引に勘定科目を直付け（経費のAI勘定科目選択用。未設定なら category 経由で解決）。
+ALTER TABLE transactions ADD COLUMN account_item_id TEXT;
 
 -- 複式仕訳。単式取引は橋渡しで都度仕訳化するため、ここには手動仕訳・減価償却・レジ締め差異のみ保存。
 CREATE TABLE IF NOT EXISTS journal_entries (

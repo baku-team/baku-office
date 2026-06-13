@@ -26,7 +26,7 @@ const { getBookkeepingMode } = await import("../../lib/settings.ts");
 const mode = await getBookkeepingMode(env);
 const acctItems = await import("../../lib/account-items.ts");
 const jr = await import("../../lib/journal.ts");
-const accountItems = mode === "double" ? await acctItems.listAccountItems(env, { enabledOnly: true }) : [];
+const accountItems = await acctItems.listAccountItems(env, { enabledOnly: true });
 const trial = (mode === "double" && period) ? await jr.trialBalance(env, period.id) : [];
 const entries = (mode === "double" && period) ? await jr.buildEntriesForPeriod(env, period.id) : [];
 const trialDebit = trial.reduce((s, r) => s + r.debit, 0);
@@ -78,6 +78,10 @@ const SRC_JA: Record<string, string> = { tx: "出納帳", manual: "手動", depr
         <div style="flex:1"><label for="amount">金額（円）</label><input id="amount" type="number" min="1" inputmode="numeric" placeholder="0" /></div>
       </div>
       <div class="field"><label for="desc">内容（メモ）</label><input id="desc" placeholder="例：6月分の会費" /></div>
+      <div id="acctBox" class="row" style="align-items:flex-end">
+        <div style="flex:2"><label for="acct">勘定科目（freee用・任意）</label><select id="acct"><option value="">（指定しない＝分類から自動）</option>{accountItems.map((a)=>(<option value={a.id} data-code={a.code}>{a.code} {a.name}</option>))}</select></div>
+        <div style="flex:0 0 auto"><button class="btn" type="button" id="acctAi">AIでおすすめ</button></div>
+      </div>
       <input type="hidden" id="kind" value="income" />
       <div class="row">
         <button class="btn btn-primary btn-lg" id="reg" style="flex:1">この内容で記録する</button>
@@ -205,11 +209,12 @@ const SRC_JA: Record<string, string> = { tx: "出納帳", manual: "手動", depr
   </style>
 
   <script slot="scripts" is:inline>
-    const recForm=document.getElementById("recForm"),kindEl=document.getElementById("kind"),catBox=document.getElementById("catBox"),counterBox=document.getElementById("counterBox"),recLabel=document.getElementById("recLabel");
+    const recForm=document.getElementById("recForm"),kindEl=document.getElementById("kind"),catBox=document.getElementById("catBox"),counterBox=document.getElementById("counterBox"),recLabel=document.getElementById("recLabel"),acctBox=document.getElementById("acctBox");
     const LABELS={income:"＋ 入金を記録します",expense:"− 出金を記録します",transfer:"口座間の移動（振替）を記録します"};
     function openMode(k){
       kindEl.value=k;recLabel.textContent=LABELS[k]||"";recForm.hidden=false;
       catBox.style.display=k==="transfer"?"none":"";counterBox.style.display=k==="transfer"?"":"none";
+      if(acctBox)acctBox.style.display=k==="transfer"?"none":"flex";
       for(const o of document.querySelectorAll("#cat option")){const kk=o.dataset.kind;o.hidden=(k==="income"&&kk!=="income")||(k==="expense"&&kk!=="expense");}
       const v=[...document.querySelectorAll("#cat option")].find(o=>!o.hidden);if(v)v.selected=true;
       document.querySelectorAll(".rec-mode").forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.kind===k)));
@@ -218,8 +223,15 @@ const SRC_JA: Record<string, string> = { tx: "出納帳", manual: "手動", depr
     }
     document.querySelectorAll("[data-kind]").forEach(b=>b.addEventListener("click",()=>openMode(b.dataset.kind)));
     document.getElementById("recCancel").addEventListener("click",()=>{recForm.hidden=true;document.querySelectorAll(".rec-mode").forEach(b=>b.setAttribute("aria-pressed","false"));});
+    // AIで勘定科目をおすすめ（経費の科目推定・Plus以上）。
+    document.getElementById("acctAi")?.addEventListener("click",async(e)=>{
+      const body={vendor:document.getElementById("desc").value,description:document.getElementById("desc").value,amount:Number(document.getElementById("amount").value)||undefined};
+      const r=await window.bo.api("/api/accounting/suggest-account",body,{btn:e.currentTarget,successMsg:null});
+      if(r.ok&&r.suggestion){document.getElementById("acct").value=r.suggestion.id;window.bo.toast("おすすめ："+r.suggestion.name+(r.suggestion.reason?"（"+r.suggestion.reason+"）":""),"ok");}
+      else if(r.ok){window.bo.toast("おすすめ科目が見つかりませんでした。手動で選んでください","info");}
+    });
     document.getElementById("reg").addEventListener("click",async(e)=>{
-      const body={date:document.getElementById("date").value,kind:kindEl.value,wallet_id:document.getElementById("wallet").value,category_id:document.getElementById("cat").value,counter_wallet_id:document.getElementById("counter").value,amount:document.getElementById("amount").value,description:document.getElementById("desc").value};
+      const body={date:document.getElementById("date").value,kind:kindEl.value,wallet_id:document.getElementById("wallet").value,category_id:document.getElementById("cat").value,counter_wallet_id:document.getElementById("counter").value,amount:document.getElementById("amount").value,description:document.getElementById("desc").value,account_item_id:document.getElementById("acct").value};
       if(!body.date){window.bo.toast("日付を入力してください","err");return;}
       if(!(Number(body.amount)>0)){window.bo.toast("金額は1以上で入力してください","err");return;}
       if(!body.wallet_id){window.bo.toast("口座を選択してください","err");return;}
