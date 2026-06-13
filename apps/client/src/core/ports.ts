@@ -3,10 +3,19 @@
 // 過渡期のため env 素通しを残すが、段階的に ctx.db/storage/ai/agent へ寄せていく。
 import type { Role } from "@baku-office/shared";
 
-// DB（保存・問合せ）。現行 D1 の prepare/batch をそのまま見せる（呼び出し側の書き換え最小化）。
-export interface SqlStore {
+// DB（保存・問合せ）。方言中立IF：CF型(D1)を露出せず、読み(all/first)と書き(run)を分離する
+// （capability scoping の db:read / db:write の土台）。サードパーティ製パーツはこの中立IFのみに依存する。
+export type SqlParam = string | number | boolean | null | ArrayBuffer | ArrayBufferView;
+export interface QueryStore {
+  all<T = Record<string, unknown>>(sql: string, params?: readonly SqlParam[]): Promise<T[]>;
+  first<T = Record<string, unknown>>(sql: string, params?: readonly SqlParam[]): Promise<T | null>;
+  run(sql: string, params?: readonly SqlParam[]): Promise<{ rowsWritten: number; lastRowId: number | null }>;
+  batch(stmts: ReadonlyArray<{ sql: string; params?: readonly SqlParam[] }>): Promise<void>;
+}
+// 過渡期：未移行コードのため D1 直のメソッドを併存（Phase C で撤去予定・新規コードは使わない）。
+export interface SqlStore extends QueryStore {
+  /** @deprecated 中立IF(all/first/run)へ移行。CF型を露出するため撤去予定。 */
   prepare(sql: string): D1PreparedStatement;
-  batch<T = unknown>(stmts: D1PreparedStatement[]): Promise<D1Result<T>[]>;
 }
 
 // ストレージ（KV＋ファイル）。鍵保管・トークン等の小KVと、ファイル本体（KV/R2）を扱う。
