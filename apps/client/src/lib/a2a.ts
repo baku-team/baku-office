@@ -31,6 +31,18 @@ export async function sendInquiry(env: Env, to: string, message: string, args?: 
   return callPublic(env, to, "__inquiry__", { message, ...(args ?? {}) });
 }
 
+// 受付箱の承認時：相手を恒久接続へ昇格（以後は通常の接続経路で双方向）。
+export async function establishPublicConnection(env: Env, partner: string): Promise<{ ok: boolean; error?: string }> {
+  const token = await getToken(env);
+  if (!token) return { ok: false, error: "ライセンス未取得" };
+  try {
+    const r = await hostFetch(env, "/api/a2a/connect", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ _action: "establish_public", token, partner }) });
+    return (await r.json().catch(() => ({ ok: false, error: "応答不正" }))) as { ok: boolean; error?: string };
+  } catch (e) {
+    return { ok: false, error: "ホストへ到達できません：" + ((e as Error).message ?? "") };
+  }
+}
+
 // 接続操作（ホストへ中継）。
 export async function a2aHost(env: Env, action: "create" | "accept" | "list" | "revoke", body: Record<string, unknown> = {}): Promise<Record<string, unknown>> {
   const token = await getToken(env);

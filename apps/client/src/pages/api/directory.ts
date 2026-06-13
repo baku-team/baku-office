@@ -7,6 +7,7 @@ import { getPublicProfile, setPublicProfile, orgDisplayName, verifyOrgExistence,
 import { listActions, createAction, deleteAction } from "../../lib/a2a-actions.ts";
 import { getReceptionPolicy, setReceptionPolicy } from "../../lib/settings.ts";
 import { listInquiries, decideInquiry, getInquiry, addBlock } from "../../lib/reception.ts";
+import { establishPublicConnection } from "../../lib/a2a.ts";
 import { generateOrgProfile } from "../../lib/media-ai.ts";
 import { env } from "cloudflare:workers";
 
@@ -63,8 +64,10 @@ export const POST: APIRoute = async ({ request, locals }) => {
     const decision = String(b.decision ?? "");
     if (decision === "blocked") await addBlock(ctx, inq.from_license, "受付箱でブロック");
     await decideInquiry(ctx, inq.id, decision === "approved" ? "approved" : decision === "blocked" ? "blocked" : "rejected");
-    // 承認時の接続昇格は Phase D（host connect-from-public）。ここでは状態更新のみ。
-    return json({ ok: true });
+    // 承認時：相手を恒久接続へ昇格（以後は通常の接続経路で双方向にやり取りできる）。
+    let established = false;
+    if (decision === "approved" && inq.from_license) { const e = await establishPublicConnection(env, inq.from_license); established = e.ok; }
+    return json({ ok: true, established });
   }
   return json({ error: "不明な操作" }, 400);
 };

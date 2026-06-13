@@ -46,6 +46,21 @@ export async function listConnections(env: Env, license: string): Promise<{ id: 
     : { id: c.id, partner: c.org_a_license, status: c.status, role: "b" as const });
 }
 
+// 受付箱からの接続昇格：公開接触してきた相手(other)を受信側(approver)が承認したら active 接続を作る。
+// 双方の同意（other が接触＝申込／approver が承認）が揃うため即 active。既に有効接続があれば何もしない。
+export async function establishFromPublic(env: Env, approverLicense: string, otherLicense: string): Promise<{ ok: boolean; error?: string }> {
+  if (approverLicense === otherLicense) return { ok: false, error: "自団体とは接続できません" };
+  const other = await env.DB.prepare("SELECT 1 FROM licenses WHERE license_id=? AND status='active'").bind(otherLicense).first();
+  if (!other) return { ok: false, error: "相手のライセンスが無効です" };
+  const exists = await env.DB.prepare("SELECT 1 FROM a2a_connections WHERE status='active' AND ((org_a_license=? AND org_b_license=?) OR (org_a_license=? AND org_b_license=?)) LIMIT 1")
+    .bind(approverLicense, otherLicense, otherLicense, approverLicense).first();
+  if (exists) return { ok: true };
+  const now = nowSec();
+  await env.DB.prepare("INSERT INTO a2a_connections (id,org_a_license,org_b_license,status,created_at,updated_at) VALUES (?,?,?,'active',?,?)")
+    .bind(randomId(8), approverLicense, otherLicense, now, now).run();
+  return { ok: true };
+}
+
 export async function revokeConnection(env: Env, code: string, byLicense: string): Promise<void> {
   await env.DB.prepare("UPDATE a2a_connections SET status='revoked', updated_at=? WHERE id=? AND (org_a_license=? OR org_b_license=?)")
     .bind(nowSec(), code, byLicense, byLicense).run();
