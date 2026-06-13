@@ -5,14 +5,16 @@ import App from "../layouts/App.astro";
 const { getSession } = await import("../lib/auth.ts");
 const ses = await getSession(env, Astro.request);
 if (!ses) return Astro.redirect("/login", 302);
-const { results } = await env.DB.prepare("SELECT id,title,start_at FROM schedules WHERE deleted_at IS NULL ORDER BY start_at").all<{ id: string; title: string; start_at: string }>();
-// 一覧の日時を日本語表示（YYYY-MM-DDTHH:MM 形式の naive 文字列を素直に整形）。
-const jpDateTime = (s: string) => {
+const { results } = await env.DB.prepare("SELECT id,title,start_at,end_at FROM schedules WHERE deleted_at IS NULL ORDER BY start_at").all<{ id: string; title: string; start_at: string; end_at: string | null }>();
+// 一覧の日時を日本語表示（YYYY-MM-DDTHH:MM 形式の naive 文字列を素直に整形）。終了時刻があれば併記。
+const hhmm = (s: string | null) => { const m = /T(\d{2}):(\d{2})/.exec(s || ""); return m ? `${m[1]}:${m[2]}` : ""; };
+const jpDateTime = (s: string, e?: string | null) => {
   const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(s || "");
   if (!m) return s;
   const [, y, mo, d, h, mi] = m;
   const wd = ["日", "月", "火", "水", "木", "金", "土"][new Date(Number(y), Number(mo) - 1, Number(d)).getDay()];
-  return `${Number(mo)}月${Number(d)}日（${wd}）${h}:${mi}`;
+  const end = hhmm(e ?? null);
+  return `${Number(mo)}月${Number(d)}日（${wd}）${h}:${mi}${end ? "〜" + end : ""}`;
 };
 // `<` を < に退避し、件名に "</script>" が含まれても script タグから脱出できないようにする
 // （define:vars/インラインscript埋め込みのXSS対策・astro GHSA-j687-52p2-xcff の影響を構造的に無効化）。
@@ -22,11 +24,17 @@ const eventsJson = JSON.stringify(results).replace(/</g, "\\u003c");
   <h1>予定</h1>
   <p class="lead">カレンダーの<strong>日付をタップ</strong>すると、その日の予定を追加できます。</p>
 
-  {/* 月めくりカレンダー（主役）。日付セルは大きめ（タップしやすく誤タップを防ぐ）。 */}
+  {/* 表示切替（月／週）。 */}
+  <div class="seg" id="cal-view" role="group" aria-label="表示の切り替え" style="margin-bottom:.5rem">
+    <button class="seg-opt on" type="button" data-view="month">月</button>
+    <button class="seg-opt" type="button" data-view="week">週</button>
+  </div>
+
+  {/* 月めくり／週めくりカレンダー（主役）。日付セルは大きめ（タップしやすく誤タップを防ぐ）。 */}
   <div class="cal-head">
-    <button class="btn btn-ghost cal-nav" id="cal-prev" aria-label="前の月">‹ 前の月</button>
+    <button class="btn btn-ghost cal-nav" id="cal-prev" aria-label="前へ">‹ 前へ</button>
     <strong id="cal-label" class="cal-label"></strong>
-    <button class="btn btn-ghost cal-nav" id="cal-next" aria-label="次の月">次の月 ›</button>
+    <button class="btn btn-ghost cal-nav" id="cal-next" aria-label="次へ">次へ ›</button>
   </div>
   <div class="cal" id="cal" role="grid" aria-label="カレンダー"></div>
 
@@ -35,11 +43,20 @@ const eventsJson = JSON.stringify(results).replace(/</g, "\\u003c");
     <div class="add-date">📅 <strong id="sel-date"></strong> の予定を追加</div>
     <div class="field"><label for="title">予定の件名</label><input id="title" placeholder="例：定例会議" autocomplete="off" /></div>
     <div class="field">
-      <label for="time-h">時刻</label>
+      <label for="time-h">開始時刻</label>
       <div class="time-row">
-        <select id="time-h" aria-label="時"></select>
+        <select id="time-h" aria-label="開始時"></select>
         <span class="time-sep">時</span>
-        <select id="time-m" aria-label="分"></select>
+        <select id="time-m" aria-label="開始分"></select>
+        <span class="time-sep">分</span>
+      </div>
+    </div>
+    <div class="field">
+      <label for="end-h">終了時刻（任意）</label>
+      <div class="time-row">
+        <select id="end-h" aria-label="終了時"></select>
+        <span class="time-sep">時</span>
+        <select id="end-m" aria-label="終了分"></select>
         <span class="time-sep">分</span>
       </div>
     </div>
@@ -51,7 +68,7 @@ const eventsJson = JSON.stringify(results).replace(/</g, "\\u003c");
 
   <h2>予定の一覧</h2>
   <div class="table-wrap"><table><thead><tr><th>日時</th><th>件名</th><th></th></tr></thead><tbody>
-    {results.map((s)=>(<tr data-id={s.id}><td>{jpDateTime(s.start_at)}</td><td>{s.title}</td><td><button class="btn btn-sm btn-danger del">削除</button></td></tr>))}
+    {results.map((s)=>(<tr data-id={s.id}><td>{jpDateTime(s.start_at, s.end_at)}</td><td>{s.title}</td><td><button class="btn btn-sm btn-danger del">削除</button></td></tr>))}
     {results.length===0 && (<tr><td colspan="3" class="muted" style="text-align:center;padding:1.2rem">まだ予定がありません。上のカレンダーの日付をタップして、最初の予定を追加してみましょう。</td></tr>)}
   </tbody></table></div>
 
@@ -75,6 +92,9 @@ const eventsJson = JSON.stringify(results).replace(/</g, "\\u003c");
     .cal .sat .dn { color: #2c5aa0; }
     .cal .ev { font-size: .82rem; line-height: 1.25; background: var(--brand-soft); color: var(--accent-ink); border-radius: 4px; padding: 1px 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .cal .more { font-size: .82rem; color: var(--muted); }
+    /* 週表示：1週間を広く見せる。セルを高くし、予定を時刻つきで複数表示。 */
+    .cal.week .cell { min-height: 120px; align-items: stretch; }
+    .cal.week .ev { display: block !important; white-space: normal; }
     .add-panel { margin-top: 1rem; border: 2px solid var(--brand); }
     .add-date { font-size: 1.05rem; font-weight: 700; margin-bottom: .6rem; }
     .time-row { display: flex; align-items: center; gap: 8px; }
@@ -95,39 +115,62 @@ const eventsJson = JSON.stringify(results).replace(/</g, "\\u003c");
     const cal = document.getElementById("cal"), label = document.getElementById("cal-label");
     const panel = document.getElementById("add-panel"), selDateEl = document.getElementById("sel-date");
     const timeH = document.getElementById("time-h"), timeM = document.getElementById("time-m");
+    const endH = document.getElementById("end-h"), endM = document.getElementById("end-m");
     const WD = ["日", "月", "火", "水", "木", "金", "土"];
     const pad = (n) => String(n).padStart(2, "0");
     const todayStr = (() => { const t = new Date(); return `${t.getFullYear()}-${pad(t.getMonth() + 1)}-${pad(t.getDate())}`; })();
-    let vy, vm, selDate = "";
-    (function initMonth(){ const t = new Date(); vy = t.getFullYear(); vm = t.getMonth(); })();
+    let vy, vm, vd = 1, selDate = "", viewMode = "month";
+    (function initMonth(){ const t = new Date(); vy = t.getFullYear(); vm = t.getMonth(); vd = t.getDate(); })();
 
-    // 時刻は 15 分刻みの選択式（テキスト自由入力を廃止）。時=0〜23、分=00/15/30/45。既定 9:00。
+    // 時刻は 15 分刻みの選択式（テキスト自由入力を廃止）。時=0〜23、分=00/15/30/45。開始の既定 9:00。
     for (let h = 0; h < 24; h++) { const o = document.createElement("option"); o.value = pad(h); o.textContent = h + "時"; if (h === 9) o.selected = true; timeH.appendChild(o); }
     ["00", "15", "30", "45"].forEach((m) => { const o = document.createElement("option"); o.value = m; o.textContent = m + "分"; timeM.appendChild(o); });
+    // 終了時刻は任意。先頭に「未指定」を置き、既定は未指定。
+    { const oh = document.createElement("option"); oh.value = ""; oh.textContent = "—"; endH.appendChild(oh); }
+    for (let h = 0; h < 24; h++) { const o = document.createElement("option"); o.value = pad(h); o.textContent = h + "時"; endH.appendChild(o); }
+    { const om = document.createElement("option"); om.value = ""; om.textContent = "—"; endM.appendChild(om); }
+    ["00", "15", "30", "45"].forEach((m) => { const o = document.createElement("option"); o.value = m; o.textContent = m + "分"; endM.appendChild(o); });
 
-    function evOn(ds){ return EVENTS.filter((e) => (e.start_at || "").slice(0, 10) === ds); }
+    const evHHMM = (s) => { const m = /T(\d{2}):(\d{2})/.exec(s || ""); return m ? `${m[1]}:${m[2]}` : ""; };
+    function evOn(ds){ return EVENTS.filter((e) => (e.start_at || "").slice(0, 10) === ds).sort((a, b) => (a.start_at || "").localeCompare(b.start_at || "")); }
     function jpDate(ds){ const [y, mo, d] = ds.split("-").map(Number); const wd = WD[new Date(y, mo - 1, d).getDay()]; return `${mo}月${d}日（${wd}）`; }
-    function render(){
+    // 1日分のセルを生成（月・週で共用）。週表示は予定をより多く・時刻つきで見せる。
+    function dayCell(ds, dnum, wd, max){
+      const evs = evOn(ds);
+      const cell = document.createElement("button");
+      cell.type = "button";
+      cell.className = "cell" + (wd === 0 ? " sun" : wd === 6 ? " sat" : "") + (ds === todayStr ? " today" : "") + (ds === selDate ? " sel" : "") + (evs.length ? " has" : "");
+      cell.dataset.date = ds;
+      cell.setAttribute("aria-label", `${dnum}日${evs.length ? "・予定" + evs.length + "件" : ""}`);
+      const dn = document.createElement("span"); dn.className = "dn"; dn.textContent = String(dnum); cell.appendChild(dn);
+      evs.slice(0, max).forEach((e) => { const ev = document.createElement("span"); ev.className = "ev"; const t = evHHMM(e.start_at); ev.textContent = (t ? t + " " : "") + e.title; cell.appendChild(ev); });
+      if (evs.length > max) { const m = document.createElement("span"); m.className = "more"; m.textContent = "ほか" + (evs.length - max) + "件"; cell.appendChild(m); }
+      cell.addEventListener("click", () => openPanel(ds));
+      return cell;
+    }
+    function render(){ cal.innerHTML = ""; cal.classList.toggle("week", viewMode === "week"); if (viewMode === "week") renderWeek(); else renderMonth(); }
+    function renderMonth(){
       label.textContent = `${vy}年${vm + 1}月`;
-      cal.innerHTML = "";
       WD.forEach((w) => { const h = document.createElement("div"); h.className = "wd"; h.textContent = w; cal.appendChild(h); });
       const startWd = new Date(vy, vm, 1).getDay();
       const days = new Date(vy, vm + 1, 0).getDate();
       for (let i = 0; i < startWd; i++) { const b = document.createElement("div"); b.className = "cell blank"; cal.appendChild(b); }
       for (let d = 1; d <= days; d++) {
         const ds = `${vy}-${pad(vm + 1)}-${pad(d)}`;
-        const wd = new Date(vy, vm, d).getDay();
-        const evs = evOn(ds);
-        const cell = document.createElement("button");
-        cell.type = "button";
-        cell.className = "cell" + (wd === 0 ? " sun" : wd === 6 ? " sat" : "") + (ds === todayStr ? " today" : "") + (ds === selDate ? " sel" : "") + (evs.length ? " has" : "");
-        cell.dataset.date = ds;
-        cell.setAttribute("aria-label", `${vm + 1}月${d}日${evs.length ? "・予定" + evs.length + "件" : ""}`);
-        const dn = document.createElement("span"); dn.className = "dn"; dn.textContent = String(d); cell.appendChild(dn);
-        evs.slice(0, 2).forEach((e) => { const ev = document.createElement("span"); ev.className = "ev"; ev.textContent = e.title; cell.appendChild(ev); });
-        if (evs.length > 2) { const m = document.createElement("span"); m.className = "more"; m.textContent = "ほか" + (evs.length - 2) + "件"; cell.appendChild(m); }
-        cell.addEventListener("click", () => openPanel(ds));
-        cal.appendChild(cell);
+        cal.appendChild(dayCell(ds, d, new Date(vy, vm, d).getDay(), 2));
+      }
+    }
+    function renderWeek(){
+      // vy/vm/vd を含む週の日曜始まり。
+      const base = new Date(vy, vm, vd);
+      const sun = new Date(base); sun.setDate(base.getDate() - base.getDay());
+      const last = new Date(sun); last.setDate(sun.getDate() + 6);
+      label.textContent = `${sun.getMonth() + 1}月${sun.getDate()}日 〜 ${last.getMonth() + 1}月${last.getDate()}日`;
+      for (let i = 0; i < 7; i++) { const h = document.createElement("div"); h.className = "wd"; h.textContent = WD[i]; cal.appendChild(h); }
+      for (let i = 0; i < 7; i++) {
+        const dt = new Date(sun); dt.setDate(sun.getDate() + i);
+        const ds = `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}`;
+        cal.appendChild(dayCell(ds, dt.getDate(), dt.getDay(), 6));
       }
     }
     function openPanel(ds){
@@ -138,9 +181,24 @@ const eventsJson = JSON.stringify(results).replace(/</g, "\\u003c");
       panel.scrollIntoView({ behavior: "smooth", block: "nearest" });
       document.getElementById("title").focus();
     }
+    // 月／週 切替。
+    document.getElementById("cal-view").querySelectorAll(".seg-opt").forEach((b) => b.addEventListener("click", () => {
+      viewMode = b.dataset.view;
+      document.getElementById("cal-view").querySelectorAll(".seg-opt").forEach((x) => x.classList.toggle("on", x === b));
+      render();
+    }));
     document.getElementById("add-cancel").addEventListener("click", () => { panel.hidden = true; selDate = ""; render(); });
-    document.getElementById("cal-prev").addEventListener("click", () => { vm--; if (vm < 0) { vm = 11; vy--; } render(); });
-    document.getElementById("cal-next").addEventListener("click", () => { vm++; if (vm > 11) { vm = 0; vy++; } render(); });
+    // 前へ／次へ：月表示は±1か月、週表示は±7日。
+    document.getElementById("cal-prev").addEventListener("click", () => {
+      if (viewMode === "week") { const d = new Date(vy, vm, vd - 7); vy = d.getFullYear(); vm = d.getMonth(); vd = d.getDate(); }
+      else { vm--; if (vm < 0) { vm = 11; vy--; } }
+      render();
+    });
+    document.getElementById("cal-next").addEventListener("click", () => {
+      if (viewMode === "week") { const d = new Date(vy, vm, vd + 7); vy = d.getFullYear(); vm = d.getMonth(); vd = d.getDate(); }
+      else { vm++; if (vm > 11) { vm = 0; vy++; } }
+      render();
+    });
     render();
 
     const P = (b, btn) => window.bo.api("/api/docs", { kind: "schedule", ...b }, { btn, successMsg: "予定を追加しました" });
@@ -149,7 +207,13 @@ const eventsJson = JSON.stringify(results).replace(/</g, "\\u003c");
       if (!selDate) { window.bo.toast("カレンダーで日付を選んでください", "err"); return; }
       if (!t) { window.bo.toast("予定の件名を入力してください", "err"); return; }
       const start = `${selDate}T${timeH.value}:${timeM.value}`;
-      const r = await P({ title: t, start_at: start }, e.currentTarget);
+      // 終了時刻は任意（時・分とも選んだときだけ設定）。開始より前なら警告。
+      let end = null;
+      if (endH.value && endM.value) {
+        end = `${selDate}T${endH.value}:${endM.value}`;
+        if (end <= start) { window.bo.toast("終了時刻は開始時刻より後にしてください", "err"); return; }
+      }
+      const r = await P({ title: t, start_at: start, end_at: end }, e.currentTarget);
       if (r.ok) setTimeout(() => location.reload(), 500);
     });
     document.querySelectorAll("tr[data-id] .del").forEach((b) => b.addEventListener("click", async (e) => {
