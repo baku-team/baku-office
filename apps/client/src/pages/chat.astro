@@ -88,10 +88,10 @@ const waModelActive = isOrgAdmin && env.AI ? await (await import("../lib/setting
           </div>
           <div class="chat-dl">
             <span class="muted">この会話を保存：</span>
-            <button class="btn btn-sm dlc" type="button" data-ext="txt">TXT</button>
-            <button class="btn btn-sm dlc" type="button" data-ext="md">MD</button>
-            <button class="btn btn-sm dlc" type="button" data-ext="html">HTML</button>
-            <button class="btn btn-sm dlc" type="button" data-ext="pdf">PDF</button>
+            <button class="btn btn-sm dlc" type="button" data-ext="txt" title="文字だけのシンプルな形式。どんな端末でも開け、メモ帳などで読めます。" aria-label="TXT形式で保存（文字だけのシンプルな形式）">TXT</button>
+            <button class="btn btn-sm dlc" type="button" data-ext="md" title="見出しや箇条書きの体裁を残せる形式。技術系のメモやNotion等への貼り付け向き。" aria-label="MD（Markdown）形式で保存（見出し・箇条書きを残せる）">MD</button>
+            <button class="btn btn-sm dlc" type="button" data-ext="html" title="ブラウザでそのまま開けて見やすい形式。体裁を保って共有したいとき向き。" aria-label="HTML形式で保存（ブラウザで開け、体裁を保てる）">HTML</button>
+            <button class="btn btn-sm dlc" type="button" data-ext="pdf" title="印刷や正式な配布・保管向き。レイアウトが固定され、改変されにくい形式。" aria-label="PDF形式で保存（印刷・配布向き、レイアウト固定）">PDF</button>
           </div>
           <div id="log"></div>
           {hasPro && (
