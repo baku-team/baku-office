@@ -2,7 +2,7 @@
 
 本書は実装済みシステムの**操作手順**をまとめたもの。設計の根拠は `integrated_design_package_v1.0.md`、技術構成は `ARCHITECTURE.md` を参照。
 
-- **ホスト（当社・株式会社貘）**：申込受付・ライセンス発行・配信・通知・課金。`baku-office-portal`。
+- **ホスト（当社・合同会社貘）**：申込受付・ライセンス発行・配信・通知・課金。`baku-office-portal`。
 - **クライアント（利用団体）**：自分のCloudflareでアプリを自己ホストし、会計・庶務に利用。`baku-office-app`。
 - 表記：🟢=通常運用 ／ 🧪=dev（API未設定時の代替動作）。
 
