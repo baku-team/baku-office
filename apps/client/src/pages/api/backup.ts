@@ -23,7 +23,8 @@ export const GET: APIRoute = async ({ request, locals }) => {
     return new Response(body, {
       status: 200,
       headers: {
-        "content-type": "application/json; charset=utf-8",
+        // octet-stream＝直アクセス時もブラウザがインライン表示せず確実に添付ファイル扱いにする。
+        "content-type": "application/octet-stream",
         "content-disposition": `attachment; filename="${backupFileName(mode === "decrypted")}"`,
         "cache-control": "no-store",
       },
