@@ -1,3 +1,4 @@
+import { kvPut } from "./kv.ts";
 // 第2層更新のクライアント側ロジック（deploy仕様§3.3-3.4）。
 //   案①：Deploy Hook をアプリKVに「暗号化保存」し、アプリ内ボタンで自分のプロジェクトを再ビルド。
 //   フックURLはアプリKV内だけに保持し、ホストへは送らない（原則1の強い担保）。
@@ -26,7 +27,7 @@ export async function hasDeployHook(env: Env): Promise<boolean> {
 
 export async function saveDeployHook(env: Env, url: string): Promise<void> {
   const enc = await encryptField(await masterKey(env), url, DOMAIN);
-  await env.LICENSE.put(KV_HOOK, enc);
+  await kvPut(env, KV_HOOK, enc);
 }
 
 export async function getDeployHook(env: Env): Promise<string | null> {

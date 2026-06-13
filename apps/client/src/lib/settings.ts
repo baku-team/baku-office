@@ -1,5 +1,21 @@
+import { kvPut } from "./kv.ts";
 // クライアント設定（高度なオプション）。LICENSE KV に保存。組織単位の軽量設定。
+import { DEFAULT_MODELS, isValidWorkersAiModel } from "../core/models/config.ts";
+
 export type AiEngine = "gemini" | "claude";
+
+// クラウドAI（Workers AI）の使用モデル。管理者が上位モデルを選択できる。
+// 解決順：KV設定 > env.WORKERS_AI_MODEL > 既定。妥当でないIDは既定へフォールバック。
+export async function getWorkersAiModel(env: Env): Promise<string> {
+  const saved = (await env.LICENSE.get("workers_ai_model"))?.trim();
+  if (saved && isValidWorkersAiModel(saved)) return saved;
+  return env.WORKERS_AI_MODEL?.trim() || DEFAULT_MODELS.workers_ai;
+}
+export async function setWorkersAiModel(env: Env, id: string): Promise<string> {
+  const v = isValidWorkersAiModel(id) ? id : DEFAULT_MODELS.workers_ai;
+  await kvPut(env, "workers_ai_model", v);
+  return v;
+}
 
 // AIエンジン選択（既定 gemini=無料／claude=BYOK）。Plus以上で Claude を任意選択可。
 export async function getAiEngine(env: Env): Promise<AiEngine> {
@@ -7,7 +23,7 @@ export async function getAiEngine(env: Env): Promise<AiEngine> {
 }
 export async function setAiEngine(env: Env, e: string): Promise<AiEngine> {
   const v: AiEngine = e === "claude" ? "claude" : "gemini";
-  await env.LICENSE.put("ai_engine", v);
+  await kvPut(env, "ai_engine", v);
   return v;
 }
 
@@ -18,7 +34,7 @@ export async function getCustomPrompt(env: Env): Promise<string> {
 }
 export async function setCustomPrompt(env: Env, s: string): Promise<string> {
   const v = (s ?? "").slice(0, CUSTOM_PROMPT_MAX);
-  await env.LICENSE.put("custom_prompt", v);
+  await kvPut(env, "custom_prompt", v);
   return v;
 }
 
@@ -28,7 +44,7 @@ export async function getWorkersPaid(env: Env): Promise<boolean> {
   return (await env.LICENSE.get("workers_paid")) === "true";
 }
 export async function setWorkersPaid(env: Env, enabled: boolean): Promise<boolean> {
-  await env.LICENSE.put("workers_paid", enabled ? "true" : "false");
+  await kvPut(env, "workers_paid", enabled ? "true" : "false");
   return enabled;
 }
 
@@ -38,7 +54,7 @@ export async function getNotifyWebhook(env: Env): Promise<string> {
 }
 export async function setNotifyWebhook(env: Env, url: string): Promise<string> {
   const v = (url ?? "").trim().slice(0, 500);
-  await env.LICENSE.put("notify_webhook_url", v);
+  await kvPut(env, "notify_webhook_url", v);
   return v;
 }
 

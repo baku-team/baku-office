@@ -1,3 +1,4 @@
+import { kvPut } from "../../../lib/kv.ts";
 import type { APIRoute } from "astro";
 import { importVerifyKey, verifyEnvelope, payloadOf, type Envelope } from "@baku-office/shared";
 import { getVerifyJwk, nowSec } from "../../../lib/client.ts";
@@ -27,7 +28,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
   if (!nonce) return json({ ok: false, error: "nonce が必要" }, 401);
   const nk = "a2anonce:" + nonce;
   if (await env.LICENSE.get(nk)) return json({ ok: false, error: "リプレイ検出（使用済み nonce）" }, 409);
-  await env.LICENSE.put(nk, "1", { expirationTtl: 120 });
+  await kvPut(env, nk, "1", { expirationTtl: 120 });
   const name = String(p.action ?? "");
   if (!name) return json({ ok: false, error: "action が必要" }, 400);
   const groupId = p.groupId ? String(p.groupId) : "";

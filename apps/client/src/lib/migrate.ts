@@ -29,6 +29,7 @@ import m0024 from "../../migrations/0024_agent_approvals.sql?raw";
 import m0025 from "../../migrations/0025_files_ctx.sql?raw";
 import m0026 from "../../migrations/0026_user_leave.sql?raw";
 import m0027 from "../../migrations/0027_perf_indexes.sql?raw";
+import m0028 from "../../migrations/0028_op_usage.sql?raw";
 import { logDiag } from "./diag.ts";
 
 // 並び順＝適用順。新しいマイグレーションはここに追記するだけ。
@@ -60,6 +61,7 @@ const MIGRATIONS: { id: string; sql: string }[] = [
   { id: "0025_files_ctx", sql: m0025 },
   { id: "0026_user_leave", sql: m0026 },
   { id: "0027_perf_indexes", sql: m0027 },
+  { id: "0028_op_usage", sql: m0028 },
 ];
 
 export const SCHEMA_VERSION = MIGRATIONS.length;

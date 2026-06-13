@@ -1,3 +1,4 @@
+import { kvPut } from "./kv.ts";
 // 本番起動 preflight（レビュー003 §7・action#7）。
 // WHY: ENV/ENVIRONMENT/MASTER_KEY/Stripe/Google など本番分岐が複数箇所にあり、設定漏れで
 //   「暗号処理が無言で止まる」「dev経路が露出する」等の事故になりやすい。起動時に一括点検し診断へ残す。
@@ -53,6 +54,6 @@ export async function bootCheck(env: Env): Promise<void> {
     }
     // 鍵保管が未確定（初回リクエストで暗号未実行＝"unknown"）のうちは KV_FLAG を立てず、次リクエストで再点検する。
     // WHY: bootCheck は1回しか走らないため、鍵生成より前に確定させると kv-autogen 警告を取り逃す。
-    if (src !== "unknown") await env.LICENSE.put(KV_FLAG, "1");
+    if (src !== "unknown") await kvPut(env, KV_FLAG, "1");
   } catch { /* 点検自体の失敗は本処理を止めない */ }
 }

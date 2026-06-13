@@ -1,3 +1,4 @@
+import { kvPut } from "./kv.ts";
 // Googleドライブ連携（§将来バックログ）。OAuth同意でリフレッシュトークンを暗号保存し、
 // メタ情報をD1へ同期（検索・参照）＋ KV/R2 のファイルを Drive へ定期バックアップ（任意設定）。
 import { randomId } from "@baku-office/shared";
@@ -91,7 +92,7 @@ export async function getDriveBackup(env: Env): Promise<{ enabled: boolean }> {
   try { return JSON.parse((await env.LICENSE.get("drive_backup")) ?? '{"enabled":false}') as { enabled: boolean }; } catch { return { enabled: false }; }
 }
 export async function setDriveBackup(env: Env, enabled: boolean): Promise<void> {
-  await env.LICENSE.put("drive_backup", JSON.stringify({ enabled: !!enabled }));
+  await kvPut(env, "drive_backup", JSON.stringify({ enabled: !!enabled }));
 }
 
 async function uploadToDrive(token: string, name: string, mime: string, buf: ArrayBuffer): Promise<string | null> {

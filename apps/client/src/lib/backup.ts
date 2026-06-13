@@ -1,3 +1,4 @@
+import { kvPut } from "./kv.ts";
 // 全データバックアップ／復元（P0-5）。
 // D1 全テーブル＋ LICENSE KV（設定・APIキー等）＋ ファイル実体（R2/KV）を 1 つの JSON アーカイブにまとめ、
 // ローカルダウンロード／Google ドライブへ出力する。アーカイブ単体で別環境へ復元可能。
@@ -39,13 +40,13 @@ export async function getBackupState(env: Env): Promise<BackupState | null> {
   try { const s = await env.LICENSE.get(STATE_KEY); return s ? (JSON.parse(s) as BackupState) : null; } catch { return null; }
 }
 async function setBackupState(env: Env, s: BackupState): Promise<void> {
-  await env.LICENSE.put(STATE_KEY, JSON.stringify(s));
+  await kvPut(env, STATE_KEY, JSON.stringify(s));
 }
 export async function getBackupSchedule(env: Env): Promise<BackupSchedule> {
   try { return JSON.parse((await env.LICENSE.get(SCHED_KEY)) ?? '{"enabled":false,"mode":"raw"}') as BackupSchedule; } catch { return { enabled: false, mode: "raw" }; }
 }
 export async function setBackupSchedule(env: Env, s: BackupSchedule): Promise<void> {
-  await env.LICENSE.put(SCHED_KEY, JSON.stringify({ enabled: !!s.enabled, mode: s.mode === "decrypted" ? "decrypted" : "raw" }));
+  await kvPut(env, SCHED_KEY, JSON.stringify({ enabled: !!s.enabled, mode: s.mode === "decrypted" ? "decrypted" : "raw" }));
 }
 
 // 未実施 or 最終実行から7日超過か（ホームのアラート判定）。
@@ -172,7 +173,7 @@ export async function restoreBackup(env: Env, archive: unknown): Promise<{ table
     if (a.decrypted && name === "master_key") continue;
     let out = val;
     if (a.decrypted && name.startsWith("apikey:")) out = await encryptField(key, val, "api-keys");
-    await env.LICENSE.put(name, out);
+    await kvPut(env, name, out);
     kvCount++;
   }
 

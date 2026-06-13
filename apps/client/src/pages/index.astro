@@ -1,4 +1,5 @@
 ---
+import { kvPut } from "../lib/kv.ts";
 import { env } from "cloudflare:workers";
 export const prerender = false;
 import App from "../layouts/App.astro";
@@ -14,6 +15,7 @@ const { cmpVersion } = await import("../lib/update.ts");
 await import("../parts/index.ts"); // パーツ登録（カタログ参照の前提）
 const { appCatalog, installedAppIds } = await import("../core/apps.ts");
 const { getStorageUsage, fmtBytes } = await import("../lib/storage-usage.ts");
+const { kvWritesToday, KV_WRITE_FREE_LIMIT } = await import("../lib/kv.ts");
 const { scopedWidgets, enabledParts } = await import("../core/parts.ts");
 const { getHomeLayout, orderedSections, HOME_SECTIONS } = await import("../core/home.ts");
 const { brandName, getTheme } = await import("../core/theme.ts");
@@ -63,7 +65,7 @@ if (!kpi) {
   kpi = { balance: balanceRow?.b ?? 0, monthIncome: mi, monthExpense: me, pending, storage: st, at: nowSec() };
   const blob = JSON.stringify(kpi);
   // KV書き込み（kpi_cache）は失敗しても描画を止めない。上限超過時に put が同期例外/拒否のどちらでも500にしない。
-  try { Astro.locals.cfContext.waitUntil(env.LICENSE.put("kpi_cache", blob).catch(() => {})); } catch { /* KV上限など：無視 */ }
+  try { Astro.locals.cfContext.waitUntil(kvPut(env, "kpi_cache", blob).catch(() => {})); } catch { /* KV上限など：無視 */ }
 }
 const balance = kpi.balance;
 const monthIncome = kpi.monthIncome, monthExpense = kpi.monthExpense;
@@ -77,6 +79,9 @@ const lastAt = Number(lastAtRaw);
 const online = Number.isFinite(lastAt) && nowSec() - lastAt < 86400;
 
 const pct = (u: number, l: number) => (u < 0 || l <= 0 ? 0 : Math.min(100, Math.round((u / l) * 100)));
+// 通信量（KV書き込み）：管理者向け詳細にのみ表示。一般ユーザーには出さない（専門情報のマスク）。
+const kvWrites = isOrgAdmin ? await kvWritesToday(env).catch(() => 0) : 0;
+const kvPct = KV_WRITE_FREE_LIMIT > 0 ? Math.min(100, Math.round((kvWrites / KV_WRITE_FREE_LIMIT) * 100)) : 0;
 // 一般ユーザー向けは内訳（D1/KV/R2）を見せず「保存できる容量」1本に合算する。
 const measurable = storage.filter((s) => s.enabled && s.used >= 0 && s.limit > 0);
 const totalUsed = measurable.reduce((a, s) => a + s.used, 0);
@@ -200,6 +205,12 @@ const clampSpan = (n?: number) => Math.max(1, Math.min(3, Number(n) || 1));
                   {s.key === "drive" && !s.enabled && (<div class="muted" style="font-size:.85rem;margin-top:2px"><a href="/drive">連携する</a></div>)}
                 </div>
               ))}
+              <div class="card">
+                <div class="label">通信量（保存・更新の回数）</div>
+                <div class="gauge"><div class={`gfill ${kvPct >= 80 ? "hot" : ""}`} style={`width:${kvPct}%`}></div></div>
+                <div class="muted" style="font-size:.85rem;margin-top:4px">本日 {kvWrites.toLocaleString()} / {KV_WRITE_FREE_LIMIT.toLocaleString()} 回（{kvPct}%）</div>
+                <div class="muted" style="font-size:.85rem;margin-top:2px">毎日UTC0時にリセット ・ <a href="/usage">使用量を見る</a></div>
+              </div>
             </div>
           </details>
         )}

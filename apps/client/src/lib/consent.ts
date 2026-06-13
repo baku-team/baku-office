@@ -1,3 +1,4 @@
+import { kvPut } from "./kv.ts";
 // 導入時の規約同意ゲート（GA要件）。団体管理者（admin・org）が baku-office を使い始める前に、
 // 当社（ホスト＝提供者）が定める利用規約・プライバシーポリシー・重要事項を必ず全文確認し同意する。
 // 同意済みバージョンを KV に記録し、CONSENT_VERSION と一致しなければ（＝未同意/改訂後）再同意を求める。
@@ -47,5 +48,5 @@ export async function needsConsent(env: Env): Promise<boolean> {
 }
 
 export async function recordConsent(env: Env): Promise<void> {
-  await env.LICENSE.put(KV_CONSENT, CONSENT_VERSION);
+  await kvPut(env, KV_CONSENT, CONSENT_VERSION);
 }

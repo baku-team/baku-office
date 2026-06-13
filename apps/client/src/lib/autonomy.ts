@@ -1,3 +1,4 @@
+import { kvPut } from "./kv.ts";
 // オートパイロット（Pro・opt-in・管理者）：団体自身の Cloudflare/GitHub を、破壊的（コア損害）以外の範囲でAIに任せる。
 // 方針：read/create 中心。削除・force-push・課金/権限変更・シークレット開示・他テナントは「ツール自体を提供しない」。
 import { getApiKey, saveApiKey, hostFetch } from "./client.ts";
@@ -19,7 +20,7 @@ export async function isAutonomyOn(env: Env): Promise<boolean> {
   return (await env.LICENSE.get(KV_ON)) === "true";
 }
 export async function setAutonomy(env: Env, on: boolean): Promise<void> {
-  await env.LICENSE.put(KV_ON, on ? "true" : "false");
+  await kvPut(env, KV_ON, on ? "true" : "false");
 }
 export async function getAutonomyConfig(env: Env): Promise<{ on: boolean; cfToken: boolean; cfAccount: string; ghToken: boolean; ghRepo: string }> {
   return {
@@ -37,13 +38,13 @@ export async function saveAutonomyConfig(env: Env, a: { cfToken?: string; cfAcco
     // アカウントIDを自動検出（初心者は入力不要）。明示指定があればそちらを優先。
     if (!a.cfAccount) {
       const det = await cfDetectAccount(a.cfToken.trim());
-      if (det) { await env.LICENSE.put(KV_CF_ACCT, det); out.cfAccount = det; }
+      if (det) { await kvPut(env, KV_CF_ACCT, det); out.cfAccount = det; }
       else out.cfError = "トークンからアカウントを検出できませんでした。権限（Account 読み取り）をご確認ください。";
     }
   }
   if (a.ghToken) await saveApiKey(env, "github_token", a.ghToken.trim());
-  if (a.cfAccount) await env.LICENSE.put(KV_CF_ACCT, a.cfAccount.trim());
-  if (a.ghRepo !== undefined) await env.LICENSE.put(KV_GH_REPO, a.ghRepo.trim());
+  if (a.cfAccount) await kvPut(env, KV_CF_ACCT, a.cfAccount.trim());
+  if (a.ghRepo !== undefined) await kvPut(env, KV_GH_REPO, a.ghRepo.trim());
   return out;
 }
 
@@ -67,7 +68,7 @@ export async function resolveGhClientId(env: Env): Promise<string> {
   if (cached) return cached;
   try {
     const r = await hostFetch(env, "/api/gh-client-id");
-    if (r.ok) { const j = (await r.json()) as { clientId?: string }; if (j.clientId) { await env.LICENSE.put("gh_client_id", j.clientId, { expirationTtl: 86400 }); return j.clientId; } }
+    if (r.ok) { const j = (await r.json()) as { clientId?: string }; if (j.clientId) { await kvPut(env, "gh_client_id", j.clientId, { expirationTtl: 86400 }); return j.clientId; } }
   } catch { /* offline */ }
   return "";
 }

@@ -1,3 +1,4 @@
+import { kvPut } from "./kv.ts";
 // Google連携の自動巡回（cron/drain から呼ぶ）。未処理の受信メールを検知し、エージェントジョブに積む。
 // エージェント主体：cron は「未処理メールの検知＋ジョブ投入」だけ行い、分類・登録は runAgent が既存道具で実行。
 // コスト/無料枠対策：1巡回の件数上限＋KVの既処理マーカー（message_id）で重複処理を防ぐ。
@@ -37,6 +38,6 @@ export async function pollUnprocessedEmails(env: Env, ctx: Ctx, limit = 3): Prom
     }).catch(() => {});
     seen.add(id);
   }
-  await env.LICENSE.put(SEEN_KEY, JSON.stringify([...seen].slice(-200))).catch(() => {});
+  await kvPut(env, SEEN_KEY, JSON.stringify([...seen].slice(-200))).catch(() => {});
   return fresh.length;
 }

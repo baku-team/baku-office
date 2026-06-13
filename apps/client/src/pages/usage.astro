@@ -45,6 +45,12 @@ const { getRetentionDays } = await import("../lib/storage.ts");
 const retentionDays = hasPlus && isAdmin ? await getRetentionDays(env).catch(() => 0) : 0;
 const slimits: Partial<Record<string, number>> = hasPlus && isAdmin ? await getStorageLimits(env).catch(() => ({})) : {};
 const spct = (u: number, l: number) => (u < 0 || l <= 0 ? 0 : Math.min(100, Math.round((u / l) * 100)));
+// 通信量（KV書き込み）：CFは実行時に書込回数を出さないため自前カウント（op_usage）。無料枠は1日1000・UTC0時リセット。
+const { kvWritesToday, KV_WRITE_FREE_LIMIT } = await import("../lib/kv.ts");
+const { getWorkersPaid } = await import("../lib/settings.ts");
+const kvWrites = hasPlus ? await kvWritesToday(env).catch(() => 0) : 0;
+const kvPaid = hasPlus ? await getWorkersPaid(env).catch(() => false) : false;
+const kvPct = KV_WRITE_FREE_LIMIT > 0 ? Math.min(100, Math.round((kvWrites / KV_WRITE_FREE_LIMIT) * 100)) : 0;
 ---
 <App title="使用量・上限" active="/usage">
   <h1>使用量・上限</h1>
@@ -61,6 +67,7 @@ const spct = (u: number, l: number) => (u < 0 || l <= 0 ? 0 : Math.min(100, Math
 
       {overs.map((r) => (<div class="banner banner-danger">⛔ <strong>{r.label}</strong> が当月の上限（{r.lim.monthlyUsdCap && r.usd >= (r.lim.monthlyUsdCap ?? 0) ? `推定 $${(r.lim.monthlyUsdCap ?? 0).toFixed(2)}` : r.lim.monthlyCap}）に達しました。{r.lim.onExceed === "switch_free" ? "無料エンジン（Gemini）へ自動切替されます。" : "該当APIの利用を一時停止します。"} リセット：{reset.monthly}</div>))}
       {warns.map((r) => (<div class="banner banner-warn">⚠️ <strong>{r.label}</strong> が本日の無料枠（{r.lim.freeQuota}）に近づいています（本日 {r.today}）。リセット：{reset.daily}</div>))}
+      {kvPct >= 80 && (<div class="banner banner-warn">⚠️ <strong>クラウドの保存・更新（通信量）</strong>が本日の無料枠（{KV_WRITE_FREE_LIMIT.toLocaleString()}）に近づいています（本日 {kvWrites.toLocaleString()}）。リセット：{reset.daily}</div>)}
 
       <h2>直近14日の利用</h2>
       <div class="card">
@@ -142,6 +149,14 @@ const spct = (u: number, l: number) => (u < 0 || l <= 0 ? 0 : Math.min(100, Math
       </table></div>
       {isAdmin && (<button class="btn btn-primary" id="saveStorage">容量上限を保存</button>)}
 
+      <h2>通信量（クラウドの保存・更新）</h2>
+      <p class="muted">設定やデータの保存・更新の本日の回数（KV書き込み・アプリ全体の概算）です。無料枠は1日 {KV_WRITE_FREE_LIMIT.toLocaleString()} 回・<strong>毎日UTC0時にリセット</strong>されます。{kvPaid ? "有料プラン申告中のため、実際の枠はこれより大きく、表示は目安です。" : "上限に近づくと保存に失敗することがあります。"}</p>
+      <div class="kv-quota">
+        <div class="kv-bar"><span class={kvPct >= 80 ? "over" : ""} style={`width:${kvPct}%`}></span></div>
+        <div class="reset-line"><span>本日の保存・更新（KV書き込み）</span><strong class={kvPct >= 80 ? "u-warn" : ""}>{kvWrites.toLocaleString()} / {KV_WRITE_FREE_LIMIT.toLocaleString()} 回（{kvPct}%）</strong></div>
+        <div class="reset-line"><span>リセットまで（毎日・UTC0時）</span><strong>{reset.daily}</strong></div>
+      </div>
+
       {isAdmin && (
         <Fragment>
           <h2>ファイルの保存と保持</h2>
@@ -206,6 +221,11 @@ const spct = (u: number, l: number) => (u < 0 || l <= 0 ? 0 : Math.min(100, Math
   .bar .bl { font-size: .55rem; color: var(--muted); margin-top: 3px; white-space: nowrap; }
   .u-warn { color: var(--warn); font-weight: 700; }
   .u-over { color: var(--danger); font-weight: 700; }
+  /* 通信量（KV書き込み）バー */
+  .kv-quota { margin: .4rem 0 1rem; }
+  .kv-bar { height: 14px; background: var(--line, #e5e7eb); border-radius: 7px; overflow: hidden; margin-bottom: .5rem; }
+  .kv-bar > span { display: block; height: 100%; background: var(--navy); border-radius: 7px; transition: width .25s; }
+  .kv-bar > span.over { background: var(--warn); }
   /* リセット情報を複数行で見やすく */
   .reset-line { display: flex; justify-content: space-between; gap: 14px; padding: 3px 0; flex-wrap: wrap; }
   .reset-line > span { color: var(--muted); }

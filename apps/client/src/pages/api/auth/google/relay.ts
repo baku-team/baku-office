@@ -1,3 +1,4 @@
+import { kvPut } from "../../../../lib/kv.ts";
 import type { APIRoute } from "astro";
 import { makeSessionCookie, sessionExp } from "../../../../lib/auth.ts";
 import { getVerifyJwk, getToken, saveToken, hostFetch } from "../../../../lib/client.ts";
@@ -38,7 +39,7 @@ export const GET: APIRoute = async ({ url, request, locals }) => {
 
   // 組織コンテキスト：初回ログインで組織Googleアカウントを束縛、以後は一致必須（§6.2）。
   const stored = await env.LICENSE.get("org_google_sub");
-  if (!stored) await env.LICENSE.put("org_google_sub", p.sub);
+  if (!stored) await kvPut(env, "org_google_sub", p.sub);
   else if (stored !== p.sub) return redir("/login?e=notorg");
   const cookie = await makeSessionCookie(env, { uid: "org", role: "admin", ctx: "org", name: p.name || "組織管理者", exp: sessionExp() });
   return redir("/", cookie);

@@ -1,3 +1,4 @@
+import { kvPut } from "./kv.ts";
 // Google Workspace 連携（Calendar / Gmail / Meet）。用途別に scope を分割し、顧客が必要な権限だけを
 // 段階的に同意する（incremental auth）。gmail.readonly / gmail.send は Google の Restricted scope で審査対象のため、
 // 既定では付与せず、必要な顧客だけが明示的に有効化できるようにする（第三者レビュー P0-3/P1-1・§6.2）。
@@ -107,8 +108,8 @@ export async function exchangeGoogleCode(env: Env, origin: string, code: string,
   await saveApiKey(env, REFRESH_KEY, t.refresh_token);
   // 付与グループを積み増し（incremental auth）。連携日時を記録。
   const merged = Array.from(new Set([...(await grantedGroups(env)), ...normalizeGroups(groups)]));
-  await env.LICENSE.put(SCOPES_KEY, JSON.stringify(merged));
-  await env.LICENSE.put(CONNECTED_KEY, String(nowSec()));
+  await kvPut(env, SCOPES_KEY, JSON.stringify(merged));
+  await kvPut(env, CONNECTED_KEY, String(nowSec()));
   return true;
 }
 export async function googleConnected(env: Env): Promise<boolean> {
@@ -143,7 +144,7 @@ export async function googleAccessToken(env: Env): Promise<string | null> {
     body: new URLSearchParams({ grant_type: "refresh_token", refresh_token: refresh, client_id: cid, client_secret: cs }),
   });
   if (!r.ok) return null;
-  await env.LICENSE.put(LAST_USED_KEY, String(nowSec())); // 最終利用を記録（クラウンジュエル監視）
+  await kvPut(env, LAST_USED_KEY, String(nowSec())); // 最終利用を記録（クラウンジュエル監視）
   return ((await r.json()) as { access_token?: string }).access_token ?? null;
 }
 

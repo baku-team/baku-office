@@ -1,3 +1,4 @@
+import { kvPut } from "./kv.ts";
 // クライアント側の共通ロジック：ライセンストークンの保持・統合チェック・APIキーの暗号保存（§4/7/10）。
 import { encryptField, decryptField, generateMasterKey, type CheckResponse, type Entitlement, type Ed25519Jwk } from "@baku-office/shared";
 import { logDiag } from "./diag.ts";
@@ -24,7 +25,7 @@ export async function getToken(env: Env): Promise<string | null> {
   return env.LICENSE.get(KV_TOKEN);
 }
 export async function saveToken(env: Env, token: string): Promise<void> {
-  await env.LICENSE.put(KV_TOKEN, token);
+  await kvPut(env, KV_TOKEN, token);
 }
 
 // 統合チェック（§13.1）：ホストへトークン＋deploy_url/version を送り {entitlement,latestVersion,notices}。
@@ -42,11 +43,11 @@ export async function pollHost(env: Env, deployUrl?: string, apps?: { id: string
     const r = await hostFetch(env, "/api/check?" + qs.toString(), { headers: { "x-bo-license": token } });
     if (!r.ok) return null;
     const data = (await r.json()) as CheckResponse;
-    await env.LICENSE.put(KV_ENTITLEMENT, data.entitlement).catch(() => {});
-    await env.LICENSE.put(KV_ENTITLEMENT_AT, String(nowSec())).catch(() => {}); // 鮮度（重要ゲートのダウングレード窓を縮小）。KV上限時も pollHost を止めない
+    await kvPut(env, KV_ENTITLEMENT, data.entitlement).catch(() => {});
+    await kvPut(env, KV_ENTITLEMENT_AT, String(nowSec())).catch(() => {}); // 鮮度（重要ゲートのダウングレード窓を縮小）。KV上限時も pollHost を止めない
     // ホーム描画をブロックしないための表示用キャッシュ（pollHost は背景実行・§体感速度）。
-    if (data.latestVersion) await env.LICENSE.put("latest_version", data.latestVersion).catch(() => {});
-    await env.LICENSE.put("notices_cache", JSON.stringify(data.notices ?? [])).catch(() => {});
+    if (data.latestVersion) await kvPut(env, "latest_version", data.latestVersion).catch(() => {});
+    await kvPut(env, "notices_cache", JSON.stringify(data.notices ?? [])).catch(() => {});
     // 緊急停止：ホストが blocked/deleted にしたアプリを取り込み済みでも削除する（キルスイッチ）。
     if (Array.isArray(data.revokedApps) && data.revokedApps.length) {
       const ph = data.revokedApps.map(() => "?").join(",");
@@ -56,7 +57,7 @@ export async function pollHost(env: Env, deployUrl?: string, apps?: { id: string
     }
     // 標準同梱アプリの除外：ホストが除外した同梱アプリ id を KV に保存（導入集合の絞り込みに使う）。
     if (Array.isArray(data.disabledBuiltins)) {
-      await env.LICENSE.put(KV_DISABLED_BUILTINS, JSON.stringify(data.disabledBuiltins)).catch(() => {});
+      await kvPut(env, KV_DISABLED_BUILTINS, JSON.stringify(data.disabledBuiltins)).catch(() => {});
     }
     // ホストからの対応返信（resolved/wontfix）を保存（利用者へ「対応済み」を表示）。
     if (Array.isArray(data.reportUpdates) && data.reportUpdates.length) {
@@ -185,7 +186,7 @@ export async function getVerifyJwk(env: Env): Promise<Ed25519Jwk | null> {
   if (cached) return parse(cached);
   try {
     const r = await hostFetch(env, "/api/pubkey");
-    if (r.ok) { const t = await r.text(); if (parse(t)) { await env.LICENSE.put("verify_jwk", t); return parse(t); } }
+    if (r.ok) { const t = await r.text(); if (parse(t)) { await kvPut(env, "verify_jwk", t); return parse(t); } }
   } catch { /* offline */ }
   return null;
 }
@@ -193,7 +194,7 @@ export async function getVerifyJwk(env: Env): Promise<Ed25519Jwk | null> {
 // APIキーの暗号保存（§10.3）。domain=api-keys でサブ鍵分離。
 export async function saveApiKey(env: Env, name: string, value: string): Promise<void> {
   const enc = await encryptField(await masterKey(env), value, "api-keys");
-  await env.LICENSE.put(KEY_PREFIX + name, enc);
+  await kvPut(env, KEY_PREFIX + name, enc);
 }
 export async function getApiKey(env: Env, name: string): Promise<string | null> {
   const stored = await env.LICENSE.get(KEY_PREFIX + name);
