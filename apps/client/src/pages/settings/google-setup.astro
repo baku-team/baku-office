@@ -18,6 +18,10 @@ const gstatus = isAdmin ? await googleStatus(env).catch(() => null) : null;
 const grantedSet = new Set(gstatus?.groups ?? []);
 // 利用機能グループ（DWDに登録するスコープの提示にも使う）。
 const groupList = (Object.keys(SCOPE_GROUPS) as ScopeGroupId[]).map((g) => ({ id: g, label: SCOPE_GROUPS[g].label, restricted: SCOPE_GROUPS[g].restricted, scopes: SCOPE_GROUPS[g].scopes.join(" ") }));
+// Cloud Shell（ブラウザ内ターミナル）で公開バンドルの cloudshell/ を clone し、チュートリアル付きで開く。
+// スクリプトは公開配布リポに同梱（build-release が cloudshell/ を生成）。
+const CLOUDSHELL_REPO = "https://github.com/baku-team/baku-office-app";
+const cloudshellUrl = "https://shell.cloud.google.com/cloudshell/editor?cloudshell_git_repo=" + encodeURIComponent(CLOUDSHELL_REPO) + "&cloudshell_workspace=cloudshell&cloudshell_tutorial=cloudshell%2Ftutorial.md";
 const bySecret = { id: !!env.GOOGLE_CLIENT_ID, secret: !!env.GOOGLE_CLIENT_SECRET };
 // ID・シークレットとも Worker Secret 投入済み＝画面の入力欄は両方 disabled になり、
 // 保存ボタンを押しても変更しようがない。ボタン自体を無効化して「押せない理由」を明示する。
@@ -58,15 +62,19 @@ const allScopes = (Object.keys(SCOPE_GROUPS) as (keyof typeof SCOPE_GROUPS)[]).f
         <ol class="steps">
           <li>
             <h3>1. サービスアカウントと鍵を作成（自動）</h3>
-            <p class="muted">技術者の環境で gcloud を使い、プロジェクト作成・API有効化・サービスアカウント作成・鍵(JSON)発行までを自動化します。</p>
-            <pre style="background:#0f172a;color:#e2e8f0;padding:.8rem;border-radius:8px;overflow:auto;font-size:.8rem"><code>gcloud auth login
+            <p class="muted">下のボタンで <strong>Cloud Shell（ブラウザ内ターミナル）</strong> が開きます。ログイン済み・インストール不要で、プロジェクト作成・API有効化・サービスアカウント作成・鍵(JSON)発行までを自動実行し、手順ガイドも表示されます。</p>
+            <a class="btn btn-primary" href={cloudshellUrl} target="_blank" rel="noopener">▶ Cloud Shell で開いて自動セットアップ ↗</a>
+            <p class="muted" style="font-size:.82rem;margin-top:6px">開いたら「Authorize（承認）」→ ガイドのステップ1の実行ボタン（▶）を押すだけです。完了後に表示される<strong>鍵(JSON)</strong>・<strong>クライアントID</strong>・<strong>スコープ</strong>を次の手順で使います。</p>
+            <details class="adv" style="margin-top:6px"><summary>自分の端末の gcloud で実行する場合</summary>
+              <pre style="background:#0f172a;color:#e2e8f0;padding:.8rem;border-radius:8px;overflow:auto;font-size:.8rem"><code>gcloud auth login
 scripts/google-service-account-setup.sh</code></pre>
-            <p class="muted">完了すると、鍵ファイル（<code>*.json</code>）と、次の手順で使う<strong>クライアントID</strong>・<strong>スコープ</strong>が出力されます。</p>
+            </details>
           </li>
           <li>
             <h3>2. 鍵ファイルと代理ユーザーを登録</h3>
             <p class="muted">発行した鍵(JSON)を選び、Google の予定・メール等を「誰として」操作するか（Workspace 内のユーザーのメール）を入力します。</p>
             <div class="field"><label for="sa-file">サービスアカウント鍵（JSON）</label><input id="sa-file" type="file" accept="application/json,.json" /></div>
+            <div class="field"><label for="sa-paste">または鍵(JSON)を貼り付け</label><textarea id="sa-paste" rows="4" placeholder={'{ "type": "service_account", "client_email": "...", "private_key": "...", "client_id": "..." }'} style="width:100%;font-family:monospace;font-size:.78rem"></textarea><div class="muted" style="font-size:.8rem">Cloud Shell で <code>cat *-key.json</code> の出力をそのまま貼り付けできます。</div></div>
             <div class="field"><label for="sa-subject">代理するユーザーのメール（Workspace）</label><input id="sa-subject" type="email" placeholder="admin@yourdomain.co.jp" value={saInfo?.subject ?? ""} autocomplete="off" /></div>
             <fieldset style="border:1px solid #dde3ea;border-radius:6px;padding:.5rem .8rem">
               <legend class="muted" style="font-size:.85rem">利用する機能（委任するスコープ）</legend>
@@ -171,15 +179,18 @@ scripts/google-oauth-setup.sh</code></pre>
           syncScopes();
           let keyJson = "";
           document.getElementById("sa-file")?.addEventListener("change", async (e) => { const f = e.target.files?.[0]; if (f) keyJson = await f.text(); });
+          // 鍵の取得元：ファイル選択を優先し、無ければ貼り付けテキストを使う。
+          const resolveKey = () => keyJson || (document.getElementById("sa-paste")?.value || "").trim();
           const copy = async (id) => { const t = document.getElementById(id); try { await navigator.clipboard.writeText(t.value); window.bo?.toast?.("コピーしました"); } catch { t.select(); document.execCommand("copy"); } };
           document.getElementById("sa-copy-cid")?.addEventListener("click", () => copy("sa-cid"));
           document.getElementById("sa-copy-scopes")?.addEventListener("click", () => copy("sa-scopes"));
           document.getElementById("sa-save")?.addEventListener("click", async (e) => {
             const subject = document.getElementById("sa-subject").value.trim();
-            if (!keyJson) { window.bo.toast("サービスアカウント鍵（JSON）を選んでください", "err"); return; }
+            const key = resolveKey();
+            if (!key) { window.bo.toast("鍵(JSON)をアップロードするか貼り付けてください", "err"); return; }
             if (!subject) { window.bo.toast("代理するユーザーのメールを入力してください", "err"); return; }
             const groups = grps().map((c) => c.value);
-            const r = await window.bo.api("/api/google", { _action: "connect_sa", keyJson, subject, groups }, { btn: e.currentTarget, successMsg: null });
+            const r = await window.bo.api("/api/google", { _action: "connect_sa", keyJson: key, subject, groups }, { btn: e.currentTarget, successMsg: null });
             if (r.ok) { window.bo.toast("登録しました。手順3のドメイン全体の委任を承認してください。"); setTimeout(() => location.reload(), 900); }
           });
           document.getElementById("sa-test")?.addEventListener("click", async (e) => {

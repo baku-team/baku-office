@@ -34,6 +34,12 @@ copyFileSync(join(root, "deploy", "README.template.md"), join(out, "README.md"))
 if (existsSync(join(root, "public", ".assetsignore"))) {
   copyFileSync(join(root, "public", ".assetsignore"), join(out, ".assetsignore"));
 }
+// Google サービスアカウント連携の Cloud Shell 用スクリプト＋チュートリアルを公開バンドルに同梱。
+// 設定画面の「Cloud Shell で開く」ボタンが、この公開リポの cloudshell/ を clone して実行する。
+const repoRoot = join(root, "..", "..");
+mkdirSync(join(out, "cloudshell"), { recursive: true });
+copyFileSync(join(repoRoot, "scripts", "google-service-account-setup.sh"), join(out, "cloudshell", "google-service-account-setup.sh"));
+copyFileSync(join(repoRoot, "scripts", "google-cloudshell-tutorial.md"), join(out, "cloudshell", "tutorial.md"));
 
 // deploy スクリプト群（§2.4・§3.2）：
 //   deploy = prebuild-update（日和見ローダ）→ wrangler deploy（deploy.log へ出力）→ postdeploy（初回URL報告）。
