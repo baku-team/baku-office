@@ -198,8 +198,8 @@ baku-office/
     src/overrides/    UI上書き（配布時・第3層）
     src/lib/          会計/認証/チャットセッション/ストレージ/メディアAI/外部アプリ/マイグレーション 等
     test/             適合性テスト（Node + node:sqlite・node:test）
-    migrations/       D1スキーマ（src/lib/migrate.ts の schema_migrations が初回リクエストで未適用分のみ自動適用・KV schema_version でゲート。wrangler d1_migrations は不使用。現 SCHEMA_VERSION=20）
-    deploy/           配布テンプレ（wrangler.release.jsonc・DeployボタンREADME）
+    migrations/       D1スキーマ（src/lib/migrate.ts の schema_migrations が初回リクエストで未適用分のみ自動適用・KV schema_version でゲート。wrangler d1_migrations は不使用。SCHEMA_VERSION=migrations本数＝動的）
+    deploy/           配布テンプレ（wrangler.release.jsonc・DeployボタンREADME・v13は server/＋client/ 分離バンドル）
   packages/shared/  暗号(AES-GCM/Ed25519)・ライセンストークン・型（Entitlement: free/plus/pro/nonprofit/enterprise/test）・GitHub(provisionRepo/createIssue)
   docs/spec/        仕様書（正本＝integrated_design_package・移植性アーキ・設置/更新仕様・脅威モデル）
   docs/archive/     検証/実装済みの背景・レガシー資料（旧cf-line-agent-kit 期の 01/02/03/05・第三者レビュー記録）
@@ -208,10 +208,10 @@ baku-office/
 
 ## 技術スタック
 
-- **Astro 5 + `@astrojs/cloudflare`**（単一Workerで静的アセット＋APIエンドポイント同居）。
-- **D1**（業務データ／チャット履歴等）・**KV**（ライセンス/セッション/暗号化キー/通知/UI設定）・**R2**（高度モード）。
+- **Astro 6 + `@astrojs/cloudflare` v13**（単一Workerで静的アセット＋APIエンドポイント同居）。env は `import { env } from "cloudflare:workers"`、実行コンテキストは `Astro.locals.cfContext`（v13で `Astro.locals.runtime` は廃止）。配布バンドルは `server/`（事前バンドル済モジュール）＋`client/`（静的アセット）に分離し `no_bundle` で展開＝顧客側に node_modules／ビルド不要。
+- **D1**（業務データ／チャット履歴等）・**KV**（ライセンス/セッション/暗号化キー/通知/UI設定。書込回数は op_usage に自前カウントし「使用量」画面で可視化）・**R2**（高度モード）。
 - **WebCrypto**：Ed25519（ライセンス署名／リリース署名）、AES-256-GCM（`MASTER_KEY`・鍵保管は KvPort 経由）、PBKDF2（ローカルパスワード）、HMAC（セッション/一時Cookie/署名検証）。
-- **AI（BYOK）**：Gemini（無料スタック）、Claude（上位・資料生成/スキル）、ローカルLLM（OpenAI互換・オフライン）、任意API（画像/音声/動画）。すべて `ChatModel` で統一。
+- **AI（BYOK）**：Gemini（無料スタック）、Claude（上位・資料生成/スキル）、クラウドAI（Cloudflare Workers AI・`env.AI`・API未登録時の既定／障害時フォールバック・管理者がモデルを選択可）、ローカルLLM（OpenAI互換・オフライン）、任意API（画像/音声/動画）。すべて `ChatModel` で統一。
 - 認証：組織=Google OAuth、個人=LINE/Discord/ローカル（PBKDF2・未設定時は dev ログインに自動フォールバック）。
 - テスト：`node --experimental-strip-types --test`（外部依存なし・Node 22 の `node:sqlite`/`node:test`）。
 
@@ -225,12 +225,12 @@ npm -w apps/client run typecheck # astro check
 npm -w apps/client run build     # ビルド
 
 # デプロイ
-npm -w apps/client run deploy    # astro build && wrangler deploy（自己ホスト）
-npm -w apps/host run deploy      # ホストポータル（当社アカウント）
-npm -w apps/scheduler run deploy # 定期巡回（Cron Triggers・自己修復 sweep/drain）
+npm -w apps/client run deploy:prod # 本番（CLOUDFLARE_ENV=production astro build && wrangler deploy。--env付け忘れ防止）
+npm -w apps/host run deploy         # ホストポータル（当社アカウント）
+npm -w apps/scheduler run deploy    # 定期巡回（Cron Triggers・自己修復 sweep/drain）
 
-# 公開配布バンドル（難読化）の生成
-npm -w apps/client run release   # apps/client/release/ に _worker.js+migrations+wrangler.jsonc
+# 公開配布バンドル（v13：server/＋client/ 分離）の生成
+npm -w apps/client run release   # scripts/build-release.mjs（server/entry.mjs＋client/＋migrations＋wrangler）
 # 本番リリースは CI（apps/client 変更を main へ push → baku-office-app へ自動公開・要 PUBLISH_TOKEN）
 ```
 

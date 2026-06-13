@@ -16,6 +16,13 @@
   - **apply** = `baku-office-apply`
   - **scheduler** = `baku-office-scheduler`（Cron `*/5`・Service Binding 経由で host `/api/cron/sweep`・client `/api/cron/drain` を起動）
 
+## Astro / アダプタ（v13・コード規約）
+
+- スタックは **Astro 6 ＋ `@astrojs/cloudflare` 13系**（`apps/client`）。
+- **env アクセスは `import { env } from "cloudflare:workers"`**（モジュールスコープで取得）。**旧 `Astro.locals.runtime.env` は v13 で廃止**＝新規コードで使わない。実行コンテキスト（`waitUntil` 等）は **`Astro.locals.cfContext`**（旧 `runtime.ctx` の後継）。
+- API ルート（`.ts`）も `cloudflare:workers` の `env` を読む。テストは `test/_cf-hooks.mjs` が `cloudflare:workers` をスタブへ差し替え、ケースごとに中身を入れ替えて注入する。
+- 配布バンドルは v13構成：`server/`（`entry.mjs`＋事前バンドル済モジュール）＋`client/`（静的アセット）。`wrangler.release.jsonc` は `main: ./server/entry.mjs`・`base_dir: ./server`・`no_bundle: true`・`assets: ./client`＝**顧客側に node_modules／ビルド不要**。
+
 ## CFデプロイ（手動・CIには無い）
 
 - **client（最大の落とし穴）**：本番は **`npm -w apps/client run deploy:prod`** を使う（`astro build && wrangler deploy --env production` を内包＝`--env` 付け忘れの footgun を排除）。
@@ -34,6 +41,11 @@
 - **`wrangler d1 migrations apply` は使わない**（別系統の `d1_migrations` テーブルを作り不整合の原因になる）。
 - 状態確認：`npx wrangler d1 execute baku-office-app-db --remote --env production --command "SELECT id FROM schema_migrations ORDER BY id"`。
 - host の D1 マイグレーションは手動：`npx wrangler d1 execute baku-office-portal-db --remote --file apps/host/migrations/<n>.sql`。
+
+## 認可・CSRF（規約）
+
+- 状態変更 API（POST/PUT/PATCH/DELETE）は middleware の `sameOrigin()` で同一オリジン必須（CSRF 中央防御）。
+- **`CSRF_EXEMPT`（`apps/client/src/middleware.ts`）への経路追加は、その経路が独自の検証（Webhook署名／A2A Ed25519署名／`INTERNAL_KEY` 共有秘密 等）を持つ場合のみ許可**。検証の根拠を同箇所にコメントで明記すること。独自検証なしの追加は CSRF 穴になるため禁止。`test/csrf.contract.test.ts` が allowlist の後退を検出する。
 
 ## CI/CD
 
@@ -56,4 +68,4 @@
 
 ---
 
-最終更新：2026-06-09
+最終更新：2026-06-13
