@@ -2,6 +2,7 @@ import type { APIRoute } from "astro";
 import { nowSec, signingJwk } from "../../lib/host.ts";
 import { recordReport } from "../../lib/reports.ts";
 import { openLicense, type Envelope } from "@baku-office/shared";
+import { env } from "cloudflare:workers";
 
 export const prerender = false;
 const json = (o: unknown, s = 200) => new Response(JSON.stringify(o), { status: s, headers: { "content-type": "application/json" } });
@@ -9,7 +10,6 @@ const json = (o: unknown, s = 200) => new Response(JSON.stringify(o), { status: 
 // クライアント→ホストの報告受信（自動エラー・不具合/要望）。認証＝ライセンストークン（なりすまし防止）。
 // PII を載せない方針：本文/コンテキストは要約・スタック等に限る（クライアント側で配慮）。
 export const POST: APIRoute = async ({ request, locals }) => {
-  const env = locals.runtime.env;
   const b = (await request.json().catch(() => ({}))) as {
     token?: string; kind?: string; severity?: string; category?: string;
     title?: string; message?: string; context?: string; appVersion?: string; fingerprint?: string;

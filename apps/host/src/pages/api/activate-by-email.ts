@@ -2,6 +2,7 @@ import type { APIRoute } from "astro";
 import { issueLicenseToken, nowSec, signingJwk, isSafeDeployUrl } from "../../lib/host.ts";
 import { importVerifyKey, verifyEnvelope, payloadOf, deleteRepo } from "@baku-office/shared";
 import type { Entitlement } from "@baku-office/shared";
+import { env } from "cloudflare:workers";
 
 export const prerender = false;
 const json = (o: unknown, s = 200) => new Response(JSON.stringify(o), { status: s, headers: { "content-type": "application/json" } });
@@ -11,7 +12,6 @@ const json = (o: unknown, s = 200) => new Response(JSON.stringify(o), { status: 
 // WHY: 以前は生の email を信頼していたため、申込メールを知る第三者が POST だけで署名トークンを取得し
 // 被害者の deploy_url/last_seen を上書きできた。ホスト署名の検証で「実際のGoogleログイン経由」を必須化する。
 export const POST: APIRoute = async ({ request, locals }) => {
-  const env = locals.runtime.env;
   const b = (await request.json().catch(() => ({}))) as { relay?: string; deployUrl?: string };
   if (!b.relay) return json({ error: "認証情報（relay）が必要" }, 401);
 

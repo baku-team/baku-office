@@ -1,13 +1,13 @@
 import type { APIRoute } from "astro";
 import { getSession, canAccess } from "../../lib/auth.ts";
 import { approveItem, rejectItem } from "../../lib/users.ts";
+import { env } from "cloudflare:workers";
 
 export const prerender = false;
 const json = (o: unknown, s = 200) => new Response(JSON.stringify(o), { status: s, headers: { "content-type": "application/json" } });
 
 // 共有承認（§9）：会計系=accounting/admin、文書系=clerical/admin。
 export const POST: APIRoute = async ({ request, locals }) => {
-  const env = locals.runtime.env;
   const ses = await getSession(env, request);
   if (!ses) return json({ error: "ログインが必要" }, 401);
   // Phase1のゲート：会計・文書いずれかの承認権限があれば可（細分化はUI側で表示制御）。

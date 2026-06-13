@@ -2,13 +2,13 @@ import type { APIRoute } from "astro";
 import { getHostSession } from "../../lib/hostauth.ts";
 import { recordAudit } from "../../lib/host.ts";
 import { updateReport, syncReportToGithub, syncOpenReports } from "../../lib/reports.ts";
+import { env } from "cloudflare:workers";
 
 export const prerender = false;
 const json = (o: unknown, s = 200) => new Response(JSON.stringify(o), { status: s, headers: { "content-type": "application/json" } });
 
 // クライアント報告の統制（ホスト管理者のみ）：状態更新／対応メモ／GitHub集積。
 export const POST: APIRoute = async ({ request, locals }) => {
-  const env = locals.runtime.env;
   const ses = await getHostSession(env, request);
   if (!ses?.isAdmin) return json({ error: "管理者のみ" }, 403);
   const b = (await request.json().catch(() => ({}))) as { _action?: string; id?: string; status?: string; resolution?: string; prUrl?: string; limit?: number };

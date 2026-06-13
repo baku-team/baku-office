@@ -1,7 +1,7 @@
 ---
+import { env } from "cloudflare:workers";
 export const prerender = false;
 import Host from "../layouts/Host.astro";
-const env = Astro.locals.runtime.env;
 const { getHostSession } = await import("../lib/hostauth.ts");
 const ses = await getHostSession(env, Astro.request);
 if (!ses?.isAdmin) return Astro.redirect("/login", 302);

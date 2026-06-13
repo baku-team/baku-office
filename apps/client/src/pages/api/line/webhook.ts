@@ -7,6 +7,7 @@ import { enqueueSummary, transcribeAudio } from "../../../lib/media-ai.ts";
 import { randomId, atLeast } from "@baku-office/shared";
 import { nowSec } from "../../../lib/accounting.ts";
 import { logDiag, looksLikeLimit, PAID_HINT } from "../../../lib/diag.ts";
+import { env } from "cloudflare:workers";
 
 export const prerender = false;
 
@@ -14,7 +15,6 @@ type LineEvent = { type: string; replyToken?: string; source?: { userId?: string
 
 // Proプランのエージェント受け口。text/image/file/audio を処理。各AI機能は対応キー設定時のみ実行。
 export const POST: APIRoute = async ({ request, locals }) => {
-  const env = locals.runtime.env;
   const origin = new URL(request.url).origin;
   const body = await request.text();
   const secret = await getApiKey(env, "line_secret");
@@ -30,13 +30,13 @@ export const POST: APIRoute = async ({ request, locals }) => {
     const userId = ev.source?.userId ?? "anon";
     const reply = ev.replyToken;
     if (!atLeast(entitlement, "pro")) {
-      locals.runtime.ctx.waitUntil(lineReply(accessToken, reply, "エージェント機能は Pro プランで有効になります（管理画面のプラン・課金から）。"));
+      locals.cfContext.waitUntil(lineReply(accessToken, reply, "エージェント機能は Pro プランで有効になります（管理画面のプラン・課金から）。"));
       continue;
     }
     // §1🔴 発話者を登録済み active 会員に限定。非会員は組織名簿・ナレッジに到達させない。
     const member = await locals.ctx.identity.memberOf("line", userId);
     if (!member || member.status !== "active") {
-      locals.runtime.ctx.waitUntil(lineReply(accessToken, reply, "このアシスタントは登録メンバー専用です。管理者から招待コードを受け取り、アプリで参加申請してください。"));
+      locals.cfContext.waitUntil(lineReply(accessToken, reply, "このアシスタントは登録メンバー専用です。管理者から招待コードを受け取り、アプリで参加申請してください。"));
       continue;
     }
     const role = member.role;
@@ -80,7 +80,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
         await lineReply(accessToken, reply, limit ? "処理が混み合い完了できませんでした。\n" + PAID_HINT : "処理中にエラーが発生しました。時間をおいて再度お試しください。").catch(() => {});
       }
     })();
-    locals.runtime.ctx.waitUntil(work);
+    locals.cfContext.waitUntil(work);
   }
   return new Response("ok");
 };

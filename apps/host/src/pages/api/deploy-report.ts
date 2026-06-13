@@ -1,5 +1,6 @@
 import type { APIRoute } from "astro";
 import { nowSec } from "../../lib/host.ts";
+import { env } from "cloudflare:workers";
 
 export const prerender = false;
 const json = (o: unknown, s = 200) => new Response(JSON.stringify(o), { status: s, headers: { "content-type": "application/json" } });
@@ -11,7 +12,6 @@ const json = (o: unknown, s = 200) => new Response(JSON.stringify(o), { status: 
 //   （/api/activate-by-email・deploy_url_verified=1）を確定の正とする。確定済みは本経路で上書きしない。
 // ホストはトークン等を保持しない。受け取るのは公開URLのみ（原則1）。
 export const POST: APIRoute = async ({ request, locals }) => {
-  const env = locals.runtime.env;
   // IPレート制限：GitHubスキャンによる総当たり的な偽報告を抑止（無料枠KV）。
   const ip = request.headers.get("cf-connecting-ip") ?? "unknown";
   const rlKey = `deployreportrl:${ip}`;

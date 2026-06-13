@@ -3,7 +3,7 @@
   // クライアントアプリ（顧客の単一Worker）。Astro静的アセット＋API同居（設計書§3.4）。
   // top-level＝開発/動作確認（amber-links.jp）。env.production＝本番自社用（baku-llc.co.jp）。
   "name": "baku-office-app",
-  "main": "./dist/_worker.js/index.js",
+  "main": "@astrojs/cloudflare/entrypoints/server",
   "compatibility_date": "2025-04-01",
   "compatibility_flags": ["nodejs_compat"],
   "assets": { "binding": "ASSETS", "directory": "./dist" },

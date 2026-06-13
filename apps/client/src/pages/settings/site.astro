@@ -1,8 +1,8 @@
 ---
+import { env } from "cloudflare:workers";
 export const prerender = false;
 import App from "../../layouts/App.astro";
 import { atLeast } from "@baku-office/shared";
-const env = Astro.locals.runtime.env;
 const { getSession } = await import("../../lib/auth.ts");
 const ses = await getSession(env, Astro.request);
 if (!ses || ses.role !== "admin" || ses.ctx !== "org") return Astro.redirect("/login", 302);

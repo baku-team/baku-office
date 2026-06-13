@@ -1,7 +1,7 @@
 /// <reference path="../.astro/types.d.ts" />
 /// <reference types="astro/client" />
 
-interface Env {
+interface EnvVars {
   DB: D1Database;
   PORTAL: KVNamespace;
   ASSETS: Fetcher;
@@ -44,8 +44,13 @@ interface Env {
   ENV?: string;
 }
 
-type Runtime = import("@astrojs/cloudflare").Runtime<Env>;
+interface Env extends EnvVars {}
+declare namespace Cloudflare {
+  interface Env extends EnvVars {}
+}
 
 declare namespace App {
-  interface Locals extends Runtime {}
+  interface Locals {
+    cfContext: ExecutionContext;
+  }
 }

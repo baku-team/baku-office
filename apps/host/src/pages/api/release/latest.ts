@@ -1,4 +1,5 @@
 import type { APIRoute } from "astro";
+import { env } from "cloudflare:workers";
 
 export const prerender = false;
 const json = (o: unknown, s = 200) => new Response(JSON.stringify(o), { status: s, headers: { "content-type": "application/json" } });
@@ -8,7 +9,6 @@ const json = (o: unknown, s = 200) => new Response(JSON.stringify(o), { status: 
 //   検証鍵は /api/release/pubkey。恒久運用では CI が /api/release/publish で PORTAL KV に登録する。
 //   KV 未設定時は env(後方互換)→version のみ にフォールバック（ローダは「取得失敗→現行版維持」で非破壊）。
 export const GET: APIRoute = async ({ locals }) => {
-  const env = locals.runtime.env;
   let rel: { version?: string; tarballUrl?: string; sig?: string } = {};
   try { const raw = await env.PORTAL.get("release_latest"); if (raw) rel = JSON.parse(raw); } catch { /* fallback */ }
   return json({

@@ -6,6 +6,7 @@ import cloudflare from "@astrojs/cloudflare";
 export default defineConfig({
   adapter: cloudflare({
     platformProxy: { enabled: true, configPath: "wrangler.jsonc" },
+    imageService: "compile",
   }),
   vite: {
     ssr: { noExternal: ["@baku-office/shared"] },

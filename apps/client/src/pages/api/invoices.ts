@@ -4,13 +4,13 @@ import { cachedEntitlement } from "../../lib/client.ts";
 import { atLeast } from "@baku-office/shared";
 import { saveFile } from "../../lib/storage.ts";
 import { registerInvoiceFromFile, setInvoiceStatus } from "../../parts/invoices.ts";
+import { env } from "cloudflare:workers";
 
 export const prerender = false;
 const json = (o: unknown, s = 200) => new Response(JSON.stringify(o), { status: s, headers: { "content-type": "application/json" } });
 
 // 請求書の手動アップロード（multipart）＋ステータス更新（JSON）。Pro以上・管理者・org のみ。
 export const POST: APIRoute = async ({ request, locals }) => {
-  const env = locals.runtime.env;
   const ctx = locals.ctx;
   const ses = await getSession(env, request);
   if (!ses || ses.role !== "admin" || ses.ctx !== "org") return json({ error: "管理者のみ" }, 403);

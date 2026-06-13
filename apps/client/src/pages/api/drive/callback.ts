@@ -1,12 +1,12 @@
 import type { APIRoute } from "astro";
 import { getSession } from "../../../lib/auth.ts";
 import { exchangeDriveCode } from "../../../lib/drive.ts";
+import { env } from "cloudflare:workers";
 
 export const prerender = false;
 
 // Google ドライブ連携のコールバック：code → リフレッシュトークンを暗号保存。
 export const GET: APIRoute = async ({ request, locals, url, cookies, redirect }) => {
-  const env = locals.runtime.env;
   const ses = await getSession(env, request);
   if (!ses || ses.role !== "admin" || ses.ctx !== "org") return new Response("管理者のみ", { status: 403 });
   const code = url.searchParams.get("code");

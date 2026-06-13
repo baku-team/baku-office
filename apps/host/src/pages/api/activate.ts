@@ -1,6 +1,7 @@
 import type { APIRoute } from "astro";
 import { nowSec, randomId } from "../../lib/host.ts";
 import { isDevEnv } from "../../lib/hostauth.ts";
+import { env } from "cloudflare:workers";
 
 export const prerender = false;
 
@@ -10,7 +11,6 @@ export const prerender = false;
 // WHY: 本経路は無認証で、licenseId（公開リポ名 app-<id> から判明）だけで被害者ライセンスの
 //   コード発行・deploy_url 上書きができてしまうため、本番では塞ぐ（dev 限定）。
 export const GET: APIRoute = async ({ url, locals }) => {
-  const env = locals.runtime.env;
   if (!isDevEnv(env)) return new Response("本番は Google ログインで活性化してください", { status: 403 });
   const licenseId = url.searchParams.get("license_id");
   const callback = url.searchParams.get("callback");

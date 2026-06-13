@@ -1,7 +1,7 @@
 ---
+import { env } from "cloudflare:workers";
 export const prerender = false;
 import SitePublic from "../../layouts/SitePublic.astro";
-const env = Astro.locals.runtime.env;
 const { slug } = Astro.params;
 const { getPublishedSite } = await import("../../lib/sites.ts");
 const site = slug ? await getPublishedSite(env, slug) : null;

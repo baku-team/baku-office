@@ -2,13 +2,13 @@ import type { APIRoute } from "astro";
 import { getHostSession } from "../../lib/hostauth.ts";
 import { recordAudit } from "../../lib/host.ts";
 import { listApps, registerApp, setAppStatus, usageByApp, hostSetListed, deleteApp, revokeApp, unrevokeApp, setBuiltinEnabled } from "../../lib/registry.ts";
+import { env } from "cloudflare:workers";
 
 export const prerender = false;
 const json = (o: unknown, s = 200) => new Response(JSON.stringify(o), { status: s, headers: { "content-type": "application/json" } });
 
 // アプリ・レジストリ中枢の管理（ホスト管理者のみ）。
 export const POST: APIRoute = async ({ request, locals }) => {
-  const env = locals.runtime.env;
   const ses = await getHostSession(env, request);
   if (!ses?.isAdmin) return json({ error: "管理者のみ" }, 403);
   const b = (await request.json().catch(() => ({}))) as { _action?: string; id?: string; name?: string; version?: string; repoUrl?: string; publisher?: string; category?: string; permissions?: string[]; description?: string; status?: string; listed?: boolean; minEntitlement?: string; kind?: string; reason?: string; enabled?: boolean };

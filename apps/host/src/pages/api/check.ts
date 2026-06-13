@@ -2,13 +2,13 @@ import type { APIRoute } from "astro";
 import { nowSec, buildCheck, signingJwk, isSafeDeployUrl } from "../../lib/host.ts";
 import { recordUsage, parseAppsParam } from "../../lib/registry.ts";
 import { openLicense, type Envelope } from "@baku-office/shared";
+import { env } from "cloudflare:workers";
 
 export const prerender = false;
 
 // 統合チェック（§13.1）：トークン検証 → {entitlement, latestVersion, notices}。
 // 検証は署名鍵の公開部分（importVerifyKey が x のみ使用）。最新エンタイトルメントはD1から再取得。
 export const GET: APIRoute = async ({ request, url, locals }) => {
-  const env = locals.runtime.env;
   // トークンはヘッダ優先（GETクエリだと observability ログにライセンストークンが残るため）。
   // 旧クライアント互換のためクエリも受理（前方/後方互換）。
   const token = request.headers.get("x-bo-license") ?? url.searchParams.get("token");

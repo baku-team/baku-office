@@ -4,7 +4,7 @@
   "name": "baku-office-portal",
   // 本番ホストは baku-llc.co.jp の CF アカウント。
   "account_id": "027ff037909969dea1fc303b4f4fe7fe",
-  "main": "./dist/_worker.js/index.js",
+  "main": "@astrojs/cloudflare/entrypoints/server",
   "compatibility_date": "2025-04-01",
   "compatibility_flags": ["nodejs_compat"],
   "assets": { "binding": "ASSETS", "directory": "./dist" },

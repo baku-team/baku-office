@@ -4,13 +4,13 @@ import { cachedEntitlement } from "../../../lib/client.ts";
 import { atLeast } from "@baku-office/shared";
 import { a2aHost, groupHost } from "../../../lib/a2a.ts";
 import { listActions, createAction, updateAction, deleteAction, getOrgProfile, setOrgProfile, type ActionScope } from "../../../lib/a2a-actions.ts";
+import { env } from "cloudflare:workers";
 
 export const prerender = false;
 const json = (o: unknown, s = 200) => new Response(JSON.stringify(o), { status: s, headers: { "content-type": "application/json" } });
 
 // A2A 管理（Pro・管理者）：接続/グループ操作＋公開アクション(CRUD)＋組織プロフィール。
 export const POST: APIRoute = async ({ request, locals }) => {
-  const env = locals.runtime.env;
   const ctx = locals.ctx;
   const ses = await getSession(env, request);
   if (!ses || ses.role !== "admin" || ses.ctx !== "org") return json({ error: "管理者のみ" }, 403);

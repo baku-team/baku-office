@@ -2,6 +2,7 @@ import type { APIRoute } from "astro";
 import { makeSessionCookie, sessionExp } from "../../../../lib/auth.ts";
 import { getVerifyJwk, getToken, saveToken, hostFetch } from "../../../../lib/client.ts";
 import { importVerifyKey, verifyEnvelope, payloadOf } from "@baku-office/shared";
+import { env } from "cloudflare:workers";
 
 export const prerender = false;
 const redir = (loc: string, cookie?: string) =>
@@ -9,7 +10,6 @@ const redir = (loc: string, cookie?: string) =>
 
 // ログイン中継の受け口：ホストが署名した {sub,email,name} を VERIFY_PUBLIC_JWK で検証して組織ログイン。
 export const GET: APIRoute = async ({ url, request, locals }) => {
-  const env = locals.runtime.env;
   const token = url.searchParams.get("relay");
   const state = url.searchParams.get("state");
   const cookieState = /oauth_state=([^;]+)/.exec(request.headers.get("cookie") ?? "")?.[1];

@@ -4,13 +4,13 @@ import { cachedEntitlement, nowSec } from "../../lib/client.ts";
 import { atLeast } from "@baku-office/shared";
 import { saveFile } from "../../lib/storage.ts";
 import { ownedSession, createSession, getMessages, appendMessage, ensureTitle, toTurns, type ChatModelId } from "../../lib/chat-sessions.ts";
+import { env } from "cloudflare:workers";
 
 export const prerender = false;
 const json = (o: unknown, s = 200) => new Response(JSON.stringify(o), { status: s, headers: { "content-type": "application/json" } });
 
 // AIチャット（Plus以上）：セッション履歴＋モデル選択でエージェントを実行（§11）。
 export const POST: APIRoute = async ({ request, locals }) => {
-  const env = locals.runtime.env;
   const ctx = locals.ctx;
   const ses = await getSession(env, request);
   if (!ses) return json({ error: "ログインが必要" }, 401);

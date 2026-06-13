@@ -1,13 +1,13 @@
 import type { APIRoute } from "astro";
 import { getSession } from "../../lib/auth.ts";
 import { createPersonalItem, shareItem } from "../../lib/users.ts";
+import { env } from "cloudflare:workers";
 
 export const prerender = false;
 const json = (o: unknown, s = 200) => new Response(JSON.stringify(o), { status: s, headers: { "content-type": "application/json" } });
 
 // 個人コンテキスト：個人アイテムの作成・組織への共有申請（→承認待ち §9）。
 export const POST: APIRoute = async ({ request, locals }) => {
-  const env = locals.runtime.env;
   const ses = await getSession(env, request);
   if (!ses || ses.ctx !== "personal") return json({ error: "個人ログインが必要" }, 401);
 

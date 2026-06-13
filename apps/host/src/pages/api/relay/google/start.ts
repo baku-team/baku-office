@@ -1,13 +1,13 @@
 import type { APIRoute } from "astro";
 import { googleEnabled } from "../../../../lib/hostauth.ts";
 import { randomId } from "@baku-office/shared";
+import { env } from "cloudflare:workers";
 
 export const prerender = false;
 
 // ログイン中継（共有OAuthアプリ）：当社の1つの Google OAuth でクライアントの組織ログインを代行。
 // クライアントは Google 設定不要。return（クライアントの relay 受け口）は登録済みテナント（deploy_url）に限定（オープンリダイレクト防止）。
 export const GET: APIRoute = async ({ url, locals }) => {
-  const env = locals.runtime.env;
   if (!googleEnabled(env)) return new Response("Google未設定（中継不可）", { status: 404 });
   const ret = url.searchParams.get("return");
   const cstate = url.searchParams.get("cstate");

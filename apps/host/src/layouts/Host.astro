@@ -1,6 +1,6 @@
 ---
+import { env } from "cloudflare:workers";
 import "../styles/app.css";
-const env = Astro.locals.runtime.env;
 interface Props { title: string; active?: string; auth?: boolean }
 const { title, active = "", auth = true } = Astro.props as Props;
 const { getHostSession } = await import("../lib/hostauth.ts");

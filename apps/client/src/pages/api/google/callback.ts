@@ -1,13 +1,13 @@
 import type { APIRoute } from "astro";
 import { getSession } from "../../../lib/auth.ts";
 import { exchangeGoogleCode, normalizeGroups } from "../../../lib/google.ts";
+import { env } from "cloudflare:workers";
 
 export const prerender = false;
 
 // Google Workspace 連携のコールバック：code → リフレッシュトークンを暗号保存（apikey:google_refresh）。
 // 開始時に選んだ用途別グループ（cookie）を付与scopeとして記録（P0-3）。
 export const GET: APIRoute = async ({ request, locals, url, cookies, redirect }) => {
-  const env = locals.runtime.env;
   const ses = await getSession(env, request);
   if (!ses || ses.role !== "admin" || ses.ctx !== "org") return new Response("管理者のみ", { status: 403 });
   const code = url.searchParams.get("code");

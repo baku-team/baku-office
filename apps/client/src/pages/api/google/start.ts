@@ -2,6 +2,7 @@ import type { APIRoute } from "astro";
 import { getSession } from "../../../lib/auth.ts";
 import { googleAuthUrl, normalizeGroups } from "../../../lib/google.ts";
 import { newState } from "../../../lib/oauth.ts";
+import { env } from "cloudflare:workers";
 
 export const prerender = false;
 
@@ -9,7 +10,6 @@ export const prerender = false;
 // 用途別 scope を選んで段階同意（incremental auth・P0-3）。
 // groups 未指定は非Restrictedの既定（calendar/meet）のみ＝Gmail等は明示指定したときだけ要求（P1-1）。
 export const GET: APIRoute = async ({ request, locals, url, cookies, redirect }) => {
-  const env = locals.runtime.env;
   const ses = await getSession(env, request);
   if (!ses || ses.role !== "admin" || ses.ctx !== "org") return new Response("管理者のみ", { status: 403 });
   const param = url.searchParams.get("groups");

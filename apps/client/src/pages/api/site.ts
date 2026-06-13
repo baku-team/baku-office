@@ -3,13 +3,13 @@ import { getSession } from "../../lib/auth.ts";
 import { cachedEntitlement } from "../../lib/client.ts";
 import { upsertSite, deleteSite } from "../../lib/sites.ts";
 import { atLeast } from "@baku-office/shared";
+import { env } from "cloudflare:workers";
 
 export const prerender = false;
 const json = (o: unknown, s = 200) => new Response(JSON.stringify(o), { status: s, headers: { "content-type": "application/json" } });
 
 // HP/LP 管理（Pro以上・管理者）。作成/更新/公開切替/削除。
 export const POST: APIRoute = async ({ request, locals }) => {
-  const env = locals.runtime.env;
   const ses = await getSession(env, request);
   if (!ses || ses.role !== "admin" || ses.ctx !== "org") return json({ error: "管理者のみ" }, 403);
   if (!atLeast(await cachedEntitlement(env), "pro")) return json({ error: "HP/LP は Pro プランで利用できます" }, 403);

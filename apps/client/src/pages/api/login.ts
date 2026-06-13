@@ -2,6 +2,7 @@ import type { APIRoute } from "astro";
 import { makeSessionCookie, clearSessionCookie, sessionExp } from "../../lib/auth.ts";
 import { authLocal } from "../../lib/users.ts";
 import { logDiag } from "../../lib/diag.ts";
+import { env } from "cloudflare:workers";
 
 export const prerender = false;
 const json = (o: unknown, s = 200, headers: Record<string, string> = {}) =>
@@ -27,7 +28,6 @@ async function rlReset(env: Env, key: string): Promise<void> {
 
 // ログイン。mode=org（dev：本番はGoogle OAuth＝P6）／mode=local（個人・id/pass）。
 export const POST: APIRoute = async ({ request, locals }) => {
-  const env = locals.runtime.env;
   const b = (await request.json().catch(() => ({}))) as { mode?: string; loginId?: string; password?: string };
 
   if (b.mode === "org") {

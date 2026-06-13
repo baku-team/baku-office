@@ -1,5 +1,6 @@
 import type { APIRoute } from "astro";
 import { initialEntitlement, randomId, provisionRepo, type Plan } from "@baku-office/shared";
+import { env } from "cloudflare:workers";
 
 export const prerender = false;
 const nowSec = (): number => Math.floor(Date.now() / 1000);
@@ -12,7 +13,6 @@ const RL_MAX = 5;
 const RL_TTL = 3600;
 
 export const POST: APIRoute = async ({ request, locals }) => {
-  const env = locals.runtime.env;
   const ip = request.headers.get("cf-connecting-ip") ?? "unknown";
   const rlKey = `apply_rl:${ip}`;
   const cur = Number((await env.SESSION.get(rlKey)) ?? "0");

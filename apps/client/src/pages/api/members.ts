@@ -2,13 +2,13 @@ import type { APIRoute } from "astro";
 import { getSession } from "../../lib/auth.ts";
 import { createInvite, approveUser, rejectUser, setRole, deleteUser, activeAdminCount } from "../../lib/users.ts";
 import type { Role } from "@baku-office/shared";
+import { env } from "cloudflare:workers";
 
 export const prerender = false;
 const json = (o: unknown, s = 200) => new Response(JSON.stringify(o), { status: s, headers: { "content-type": "application/json" } });
 
 // 人管理（§6.4：管理者のみ）。招待発行・承認・却下・ロール変更。
 export const POST: APIRoute = async ({ request, locals }) => {
-  const env = locals.runtime.env;
   const ses = await getSession(env, request);
   if (!ses || ses.role !== "admin" || ses.ctx !== "org") return json({ error: "権限がありません" }, 403);
 

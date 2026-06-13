@@ -3,6 +3,7 @@ import { importVerifyKey, verifyEnvelope, payloadOf, type Envelope } from "@baku
 import { getVerifyJwk, nowSec } from "../../../lib/client.ts";
 import { resolveAction, runResolvedAction } from "../../../lib/a2a-actions.ts";
 import { logDiag } from "../../../lib/diag.ts";
+import { env } from "cloudflare:workers";
 
 export const prerender = false;
 const json = (o: unknown, s = 200) => new Response(JSON.stringify(o), { status: s, headers: { "content-type": "application/json" } });
@@ -10,7 +11,6 @@ const json = (o: unknown, s = 200) => new Response(JSON.stringify(o), { status: 
 // A2A 受信：ホスト署名を検証し、公開アクション（名前＋スコープ）を解決して read 専用で実行。
 // 公開アクション定義(a2a_actions)に無い／スコープ外は拒否。相手データへ直アクセスは不可。
 export const POST: APIRoute = async ({ request, locals }) => {
-  const env = locals.runtime.env;
   const ctx = locals.ctx;
   const envlp = (await request.json().catch(() => null)) as Envelope | null;
   if (!envlp || typeof envlp.body !== "string" || typeof envlp.sig !== "string") return json({ ok: false, error: "形式不正" }, 400);

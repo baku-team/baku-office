@@ -12,6 +12,7 @@ import { flushReports } from "../../../lib/reports.ts";
 import { addNotification, pushWebhook } from "../../../lib/notifications.ts";
 import { getNotifyWebhook } from "../../../lib/settings.ts";
 import { purgeFiles } from "../../../lib/storage.ts";
+import { env } from "cloudflare:workers";
 
 export const prerender = false;
 const json = (o: unknown, s = 200) => new Response(JSON.stringify(o), { status: s, headers: { "content-type": "application/json" } });
@@ -20,7 +21,6 @@ const json = (o: unknown, s = 200) => new Response(JSON.stringify(o), { status: 
 // Astro単一Workerはネイティブcron非対応のため、当社運用は apps/scheduler（Cron Triggers）が
 // Service Binding 経由で起動。配布クライアント（別アカウント）は外部スケジューラ等で起動する。
 export const POST: APIRoute = async ({ request, locals }) => {
-  const env = locals.runtime.env;
   if (!env.INTERNAL_KEY || request.headers.get("x-internal-key") !== env.INTERNAL_KEY) return json({ error: "forbidden" }, 403);
   // 要約ジョブのステップ処理（Geminiキーがある時のみ進む）。CF制限時は診断記録。
   const g = await guardHeavy(env, "summary jobs", () => processSummaryJobs(env));
