@@ -45,15 +45,13 @@ export async function runDeclAction(ctx: Ctx, type: string, config: Record<strin
   if (type === "knowledge") return searchKnowledge(ctx, { query: String(args.query ?? config.query ?? "") });
   if (type === "files") {
     const limit = clampLimit(config.limit);
-    const { results } = await ctx.db.prepare("SELECT title,source,mime,size,imported_at FROM imported_items ORDER BY imported_at DESC LIMIT ?").bind(limit).all();
-    return results;
+    return await ctx.db.all("SELECT title,source,mime,size,imported_at FROM imported_items ORDER BY imported_at DESC LIMIT ?", [limit]);
   }
   if (type === "progress") {
     const limit = clampLimit(config.limit);
     const kind = String(config.kind ?? "");
     const sql = "SELECT type,title,date,due_at,status FROM personal_items WHERE share_scope='org' AND review_status='approved'" + (kind ? " AND type=?" : "") + " ORDER BY created_at DESC LIMIT ?";
-    const stmt = kind ? ctx.db.prepare(sql).bind(kind, limit) : ctx.db.prepare(sql).bind(limit);
-    return (await stmt.all()).results;
+    return await ctx.db.all(sql, kind ? [kind, limit] : [limit]);
   }
   if (type === "db") {
     const table = String(config.table ?? "");
@@ -63,39 +61,39 @@ export async function runDeclAction(ctx: Ctx, type: string, config: Record<strin
     if (!cols.length) throw new Error("公開する列が選ばれていません");
     const limit = clampLimit(config.limit);
     let where = table === "transactions" ? " WHERE deleted_at IS NULL" : "";
-    const binds: unknown[] = [];
+    const binds: (string | number)[] = [];
     const fc = String(config.filterColumn ?? "");
-    if (fc && allow.includes(fc) && config.filterValue !== undefined) { where += (where ? " AND " : " WHERE ") + `${fc}=?`; binds.push(config.filterValue); }
+    if (fc && allow.includes(fc) && config.filterValue !== undefined) { where += (where ? " AND " : " WHERE ") + `${fc}=?`; binds.push(config.filterValue as string | number); }
     binds.push(limit);
     const sql = `SELECT ${cols.join(",")} FROM ${table}${where} LIMIT ?`;
-    return (await ctx.db.prepare(sql).bind(...binds).all()).results;
+    return await ctx.db.all(sql, binds);
   }
   throw new Error("未知のアクション種別です");
 }
 
 // ===== 公開アクション定義 CRUD（D1 a2a_actions） =====
 export async function listActions(ctx: Ctx): Promise<ActionRow[]> {
-  return (await ctx.db.prepare("SELECT id,name,kind,spec,scope,target,enabled,created_at FROM a2a_actions ORDER BY created_at DESC").all<ActionRow>()).results;
+  return await ctx.db.all<ActionRow>("SELECT id,name,kind,spec,scope,target,enabled,created_at FROM a2a_actions ORDER BY created_at DESC");
 }
 export async function createAction(ctx: Ctx, a: { name: string; kind: "app" | "decl"; spec: unknown; scope: ActionScope; target?: string }): Promise<string> {
   const id = randomId(8);
-  await ctx.db.prepare("INSERT INTO a2a_actions (id,name,kind,spec,scope,target,enabled,created_at) VALUES (?,?,?,?,?,?,1,?)")
-    .bind(id, a.name, a.kind, JSON.stringify(a.spec ?? {}), a.scope, a.target ?? "", nowSec()).run();
+  await ctx.db.run("INSERT INTO a2a_actions (id,name,kind,spec,scope,target,enabled,created_at) VALUES (?,?,?,?,?,?,1,?)",
+    [id, a.name, a.kind, JSON.stringify(a.spec ?? {}), a.scope, a.target ?? "", nowSec()]);
   return id;
 }
 export async function updateAction(ctx: Ctx, id: string, a: { name?: string; spec?: unknown; scope?: ActionScope; target?: string; enabled?: boolean }): Promise<void> {
-  const cur = await ctx.db.prepare("SELECT name,spec,scope,target,enabled FROM a2a_actions WHERE id=?").bind(id).first<{ name: string; spec: string; scope: string; target: string; enabled: number }>();
+  const cur = await ctx.db.first<{ name: string; spec: string; scope: string; target: string; enabled: number }>("SELECT name,spec,scope,target,enabled FROM a2a_actions WHERE id=?", [id]);
   if (!cur) return;
-  await ctx.db.prepare("UPDATE a2a_actions SET name=?, spec=?, scope=?, target=?, enabled=? WHERE id=?")
-    .bind(a.name ?? cur.name, a.spec !== undefined ? JSON.stringify(a.spec) : cur.spec, a.scope ?? cur.scope, a.target ?? cur.target, a.enabled === undefined ? cur.enabled : (a.enabled ? 1 : 0), id).run();
+  await ctx.db.run("UPDATE a2a_actions SET name=?, spec=?, scope=?, target=?, enabled=? WHERE id=?",
+    [a.name ?? cur.name, a.spec !== undefined ? JSON.stringify(a.spec) : cur.spec, a.scope ?? cur.scope, a.target ?? cur.target, a.enabled === undefined ? cur.enabled : (a.enabled ? 1 : 0), id]);
 }
 export async function deleteAction(ctx: Ctx, id: string): Promise<void> {
-  await ctx.db.prepare("DELETE FROM a2a_actions WHERE id=?").bind(id).run();
+  await ctx.db.run("DELETE FROM a2a_actions WHERE id=?", [id]);
 }
 
 // 受信時の解決：公開名＋スコープ（common ∪ group:target=groupId ∪ conn:target=from）で1件取得。
 export async function resolveAction(ctx: Ctx, name: string, opts: { groupId?: string; from?: string }): Promise<ActionRow | null> {
-  const rows = (await ctx.db.prepare("SELECT id,name,kind,spec,scope,target,enabled,created_at FROM a2a_actions WHERE name=? AND enabled=1").bind(name).all<ActionRow>()).results;
+  const rows = await ctx.db.all<ActionRow>("SELECT id,name,kind,spec,scope,target,enabled,created_at FROM a2a_actions WHERE name=? AND enabled=1", [name]);
   for (const r of rows) {
     if (r.scope === "common") return r;
     if (opts.groupId && r.scope === "group" && r.target === opts.groupId) return r;

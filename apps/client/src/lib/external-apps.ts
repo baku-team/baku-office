@@ -24,20 +24,21 @@ export async function fetchAndInstall(ctx: Ctx, id: string): Promise<{ ok: boole
   if (!(await verifyEnvelope(await importVerifyKey(jwk), envlp))) return { ok: false, error: "署名検証に失敗（改竄の可能性）" };
   const p = payloadOf(envlp) as AppPkg;
   if (!p.id || !p.exp || p.exp < nowSec()) return { ok: false, error: "パッケージの有効期限切れ" };
-  await ctx.db.prepare(
+  await ctx.db.run(
     `INSERT INTO external_apps (id,name,version,category,description,permissions,definition,installed_at) VALUES (?,?,?,?,?,?,?,?)
      ON CONFLICT(id) DO UPDATE SET name=excluded.name,version=excluded.version,category=excluded.category,
        description=excluded.description,permissions=excluded.permissions,definition=excluded.definition,installed_at=excluded.installed_at`,
-  ).bind(p.id, p.name, p.version, p.category ?? null, p.description ?? null, JSON.stringify(p.permissions ?? []), p.definition != null ? JSON.stringify(p.definition) : null, nowSec()).run();
+    [p.id, p.name, p.version, p.category ?? null, p.description ?? null, JSON.stringify(p.permissions ?? []), p.definition != null ? JSON.stringify(p.definition) : null, nowSec()],
+  );
   return { ok: true };
 }
 
 export async function listExternalApps(ctx: Ctx): Promise<{ id: string; name: string; version: string; category: string | null; description: string | null; permissions: string[] }[]> {
-  const { results } = await ctx.db.prepare("SELECT id,name,version,category,description,permissions FROM external_apps ORDER BY installed_at DESC").all<{ id: string; name: string; version: string; category: string | null; description: string | null; permissions: string }>();
+  const results = await ctx.db.all<{ id: string; name: string; version: string; category: string | null; description: string | null; permissions: string }>("SELECT id,name,version,category,description,permissions FROM external_apps ORDER BY installed_at DESC");
   return results.map((r) => ({ ...r, permissions: JSON.parse(r.permissions || "[]") }));
 }
 export async function uninstallExternal(ctx: Ctx, id: string): Promise<void> {
-  await ctx.db.prepare("DELETE FROM external_apps WHERE id=?").bind(id).run();
+  await ctx.db.run("DELETE FROM external_apps WHERE id=?", [id]);
 }
 
 // ---- AI開発：ドラフト（生成）→レビュー→公開申請 ----
@@ -48,26 +49,27 @@ export async function createDraft(ctx: Ctx, d: { name: string; description?: str
   const id = slug(d.name);
   const pf = await preflight(ctx, { name: d.name, permissions: d.permissions, definition: d.definition, spec: d.spec, estTokens: d.estTokens });
   const gate = pf.ok ? "ready" : "blocked";
-  await ctx.db.prepare(
+  await ctx.db.run(
     `INSERT INTO app_drafts (id,name,version,description,spec,permissions,definition,est_tokens,preflight,gate_status,status,created_by,created_at)
      VALUES (?,?,?,?,?,?,?,?,?,?, 'pending', ?, ?)
      ON CONFLICT(id) DO UPDATE SET name=excluded.name,version=excluded.version,description=excluded.description,spec=excluded.spec,
        permissions=excluded.permissions,definition=excluded.definition,est_tokens=excluded.est_tokens,preflight=excluded.preflight,gate_status=excluded.gate_status,status='pending'`,
-  ).bind(id, d.name, d.version ?? "0.1.0", d.description ?? null, d.spec ?? null, JSON.stringify(d.permissions ?? []), d.definition != null ? JSON.stringify(d.definition) : null, d.estTokens ?? null, JSON.stringify(pf), gate, by ?? null, nowSec()).run();
+    [id, d.name, d.version ?? "0.1.0", d.description ?? null, d.spec ?? null, JSON.stringify(d.permissions ?? []), d.definition != null ? JSON.stringify(d.definition) : null, d.estTokens ?? null, JSON.stringify(pf), gate, by ?? null, nowSec()],
+  );
   return { id, preflight: pf, gate };
 }
 export async function listDrafts(ctx: Ctx): Promise<{ id: string; name: string; version: string; description: string | null; spec: string | null; permissions: string[]; status: string; gate_status: string; preflight: PreflightResult | null }[]> {
-  const { results } = await ctx.db.prepare("SELECT id,name,version,description,spec,permissions,status,gate_status,preflight FROM app_drafts ORDER BY created_at DESC").all<{ id: string; name: string; version: string; description: string | null; spec: string | null; permissions: string; status: string; gate_status: string; preflight: string | null }>();
+  const results = await ctx.db.all<{ id: string; name: string; version: string; description: string | null; spec: string | null; permissions: string; status: string; gate_status: string; preflight: string | null }>("SELECT id,name,version,description,spec,permissions,status,gate_status,preflight FROM app_drafts ORDER BY created_at DESC");
   return results.map((r) => ({ ...r, permissions: JSON.parse(r.permissions || "[]"), preflight: r.preflight ? (JSON.parse(r.preflight) as PreflightResult) : null }));
 }
 export async function deleteDraft(ctx: Ctx, id: string): Promise<void> {
-  await ctx.db.prepare("DELETE FROM app_drafts WHERE id=?").bind(id).run();
+  await ctx.db.run("DELETE FROM app_drafts WHERE id=?", [id]);
 }
 
 // レビュー後、ホストレジストリへ公開申請（pending 登録・ホスト管理者が承認）。
 export async function submitDraft(ctx: Ctx, id: string): Promise<{ ok: boolean; error?: string }> {
   const env = ctx.env;
-  const d = await ctx.db.prepare("SELECT * FROM app_drafts WHERE id=?").bind(id).first<{ id: string; name: string; version: string; description: string | null; permissions: string; definition: string | null; gate_status: string }>();
+  const d = await ctx.db.first<{ id: string; name: string; version: string; description: string | null; permissions: string; definition: string | null; gate_status: string }>("SELECT * FROM app_drafts WHERE id=?", [id]);
   if (!d) return { ok: false, error: "ドラフトが見つかりません" };
   if (d.gate_status !== "ready") return { ok: false, error: "事前確認（環境/権限/安全/コスト）に未通過のため公開申請できません。" };
   const token = await getToken(env);
@@ -76,6 +78,6 @@ export async function submitDraft(ctx: Ctx, id: string): Promise<{ ok: boolean; 
   let r: Response;
   try { r = await hostFetch(env, "/api/registry/submit", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ token, app }) }); } catch { return { ok: false, error: "ホストへ接続できません" }; }
   if (!r.ok) { const j = (await r.json().catch(() => ({}))) as { error?: string }; return { ok: false, error: j.error ?? "申請に失敗" }; }
-  await ctx.db.prepare("UPDATE app_drafts SET status='submitted' WHERE id=?").bind(id).run();
+  await ctx.db.run("UPDATE app_drafts SET status='submitted' WHERE id=?", [id]);
   return { ok: true };
 }

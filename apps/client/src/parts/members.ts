@@ -7,7 +7,7 @@ import { masterKeyCtx } from "../lib/client.ts";
 
 // 名簿は暗号化されているため復号して照合（小規模前提）。
 export async function searchMembers(ctx: Ctx, a: { query: string }): Promise<string> {
-  const { results } = await ctx.db.prepare("SELECT display_name,role,status FROM users WHERE status='active'").all<{ display_name: string | null; role: string; status: string }>();
+  const results = await ctx.db.all<{ display_name: string | null; role: string; status: string }>("SELECT display_name,role,status FROM users WHERE status='active'");
   const mk = await masterKeyCtx(ctx);
   const out: string[] = [];
   for (const u of results) {
@@ -28,7 +28,7 @@ export const membersPart: Part = {
   menu: [{ href: "/membership", label: "会員管理" }],
   widgets: [
     { id: "members_count", title: "登録メンバー", run: async (ctx) => {
-      const r = await ctx.db.prepare("SELECT count(*) AS n FROM users WHERE status='active'").first<{ n: number }>();
+      const r = await ctx.db.first<{ n: number }>("SELECT count(*) AS n FROM users WHERE status='active'");
       return { value: String(r?.n ?? 0) + " 名", sub: "アクティブ会員" };
     } },
   ],

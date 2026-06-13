@@ -105,11 +105,12 @@ async function summarizeMeeting(ctx: Ctx, owner: string, a: { record_id: string;
   }
 
   // ③ meet_records にキャッシュ（画面一覧・二重要約防止）
-  await ctx.db.prepare(
+  await ctx.db.run(
     `INSERT INTO meet_records (id,space_name,title,start_time,end_time,summary,actions,knowledge_saved,reminders_saved,owner,created_at,updated_at)
      VALUES (?,?,?,?,?,?,?,1,?,?,?,?)
      ON CONFLICT(id) DO UPDATE SET title=excluded.title, summary=excluded.summary, actions=excluded.actions, knowledge_saved=1, reminders_saved=excluded.reminders_saved, updated_at=excluded.updated_at`,
-  ).bind(a.record_id, null, title, null, null, result.summary.slice(0, 8000), JSON.stringify(result.actions).slice(0, 8000), reminded > 0 ? 1 : 0, owner, nowSec(), nowSec()).run().catch(() => {});
+    [a.record_id, null, title, null, null, result.summary.slice(0, 8000), JSON.stringify(result.actions).slice(0, 8000), reminded > 0 ? 1 : 0, owner, nowSec(), nowSec()],
+  ).catch(() => {});
 
   return `議事録を作成しました：「${title}」\nナレッジに保存・アクション${result.actions.length}件（うち${reminded}件をリマインダ登録）。`;
 }
@@ -126,7 +127,7 @@ export async function pollNewConferences(env: Env, ctx: Ctx, owner = "org", limi
   let done = 0;
   for (const c of recs.slice(0, 8)) {
     if (done >= limit) break;
-    const existing = await ctx.db.prepare("SELECT knowledge_saved FROM meet_records WHERE id=?").bind(c.name).first<{ knowledge_saved: number }>().catch(() => null);
+    const existing = await ctx.db.first<{ knowledge_saved: number }>("SELECT knowledge_saved FROM meet_records WHERE id=?", [c.name]).catch(() => null);
     if (existing?.knowledge_saved === 1) continue; // 処理済みはスキップ
     const msg = await summarizeMeeting(ctx, owner, { record_id: c.name }).catch(() => "");
     if (msg.startsWith("議事録を作成しました")) done++;

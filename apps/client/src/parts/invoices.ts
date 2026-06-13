@@ -20,9 +20,10 @@ const STATUSES = ["unpaid", "paid", "overdue", "canceled"];
 export async function saveInvoice(ctx: Ctx, owner: string, d: { fileId?: string; vendor?: string; amount?: number; issued_date?: string; due_date?: string; notes?: string; source?: string }): Promise<string> {
   const id = randomId();
   const now = nowSec();
-  await ctx.db.prepare(
+  await ctx.db.run(
     "INSERT INTO invoices (id,owner,file_id,vendor,amount,issued_date,due_date,status,notes,source,created_at,updated_at) VALUES (?,?,?,?,?,?,?, 'unpaid', ?,?,?,?)",
-  ).bind(id, owner, d.fileId ?? null, d.vendor ?? null, d.amount ?? null, d.issued_date ?? null, d.due_date ?? null, d.notes ?? null, d.source ?? "manual", now, now).run();
+    [id, owner, d.fileId ?? null, d.vendor ?? null, d.amount ?? null, d.issued_date ?? null, d.due_date ?? null, d.notes ?? null, d.source ?? "manual", now, now],
+  );
   if (d.due_date) {
     const due = new Date(d.due_date).getTime();
     if (Number.isFinite(due)) {
@@ -48,15 +49,15 @@ export async function registerInvoiceFromFile(ctx: Ctx, owner: string, fileId: s
 
 export async function listInvoices(ctx: Ctx, opts: { status?: string; limit?: number } = {}): Promise<InvoiceRow[]> {
   const where = ["deleted_at IS NULL"];
-  const binds: unknown[] = [];
+  const binds: (string | number)[] = [];
   if (opts.status && STATUSES.includes(opts.status)) { where.push("status=?"); binds.push(opts.status); }
   binds.push(Math.min(opts.limit ?? 200, 500));
-  return (await ctx.db.prepare(`SELECT * FROM invoices WHERE ${where.join(" AND ")} ORDER BY due_date IS NULL, due_date ASC LIMIT ?`).bind(...binds).all<InvoiceRow>()).results;
+  return await ctx.db.all<InvoiceRow>(`SELECT * FROM invoices WHERE ${where.join(" AND ")} ORDER BY due_date IS NULL, due_date ASC LIMIT ?`, binds);
 }
 
 export async function setInvoiceStatus(ctx: Ctx, id: string, status: string): Promise<{ ok: boolean; error?: string }> {
   if (!STATUSES.includes(status)) return { ok: false, error: "不正なステータスです" };
-  await ctx.db.prepare("UPDATE invoices SET status=?, updated_at=? WHERE id=?").bind(status, nowSec(), id).run();
+  await ctx.db.run("UPDATE invoices SET status=?, updated_at=? WHERE id=?", [status, nowSec(), id]);
   return { ok: true };
 }
 
@@ -88,7 +89,7 @@ export const invoicesPart: Part = {
     {
       id: "unpaid_invoices", title: "未払請求書",
       run: async (ctx) => {
-        const r = await ctx.db.prepare("SELECT COUNT(*) AS n FROM invoices WHERE status='unpaid' AND deleted_at IS NULL").first<{ n: number }>();
+        const r = await ctx.db.first<{ n: number }>("SELECT COUNT(*) AS n FROM invoices WHERE status='unpaid' AND deleted_at IS NULL");
         return { value: `${r?.n ?? 0} 件`, sub: "未払い" };
       },
     },

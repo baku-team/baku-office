@@ -12,11 +12,6 @@ export interface QueryStore {
   run(sql: string, params?: readonly SqlParam[]): Promise<{ rowsWritten: number; lastRowId: number | null }>;
   batch(stmts: ReadonlyArray<{ sql: string; params?: readonly SqlParam[] }>): Promise<void>;
 }
-// 過渡期：未移行コードのため D1 直のメソッドを併存（Phase C で撤去予定・新規コードは使わない）。
-export interface SqlStore extends QueryStore {
-  /** @deprecated 中立IF(all/first/run)へ移行。CF型を露出するため撤去予定。 */
-  prepare(sql: string): D1PreparedStatement;
-}
 
 // ストレージ（KV＋ファイル）。鍵保管・トークン等の小KVと、ファイル本体（KV/R2）を扱う。
 export interface KvPort {
@@ -48,7 +43,7 @@ export interface AgentPort {
 export type Ctx = {
   profile: string; // "cf" 等。診断用（コアは分岐に使わない）。
   env: Env;        // 過渡期：未移行コードのための素通し（段階的に削減）。
-  db: SqlStore;
+  db: QueryStore;
   storage: StoragePort;
   ai: AiPort;
   agent: AgentPort;

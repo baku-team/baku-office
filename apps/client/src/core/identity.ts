@@ -14,18 +14,17 @@ export interface IdentityPort {
 
 export function localIdentity(ctx: Ctx): IdentityPort {
   const memberOf = async (type: string, externalId: string) => {
-    const idn = await ctx.db.prepare("SELECT user_id FROM identities WHERE type=? AND external_id=?").bind(type, externalId).first<{ user_id: string }>();
+    const idn = await ctx.db.first<{ user_id: string }>("SELECT user_id FROM identities WHERE type=? AND external_id=?", [type, externalId]);
     if (!idn) return null;
-    return (await ctx.db.prepare("SELECT id, role, status FROM users WHERE id=?").bind(idn.user_id).first<{ id: string; role: Role; status: string }>()) ?? null;
+    return (await ctx.db.first<{ id: string; role: Role; status: string }>("SELECT id, role, status FROM users WHERE id=?", [idn.user_id])) ?? null;
   };
   return {
     memberOf,
     roleOf: async (type, externalId) => (await memberOf(type, externalId))?.role ?? null,
     authenticate: async (loginId, password) => {
-      const idn = await ctx.db.prepare("SELECT user_id, password_hash FROM identities WHERE type='local' AND external_id=?")
-        .bind(loginId).first<{ user_id: string; password_hash: string | null }>();
+      const idn = await ctx.db.first<{ user_id: string; password_hash: string | null }>("SELECT user_id, password_hash FROM identities WHERE type='local' AND external_id=?", [loginId]);
       if (!idn?.password_hash || !(await verifyPassword(idn.password_hash, password))) return null;
-      return (await ctx.db.prepare("SELECT id, role, status FROM users WHERE id=? AND status='active'").bind(idn.user_id).first<{ id: string; role: Role; status: string }>()) ?? null;
+      return (await ctx.db.first<{ id: string; role: Role; status: string }>("SELECT id, role, status FROM users WHERE id=? AND status='active'", [idn.user_id])) ?? null;
     },
   };
 }
