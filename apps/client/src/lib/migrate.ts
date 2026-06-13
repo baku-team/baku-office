@@ -32,6 +32,7 @@ import m0027 from "../../migrations/0027_perf_indexes.sql?raw";
 import m0028 from "../../migrations/0028_op_usage.sql?raw";
 import m0029 from "../../migrations/0029_accounting_ledger.sql?raw";
 import m0030 from "../../migrations/0030_a2a_public.sql?raw";
+import m0031 from "../../migrations/0031_membership_fee.sql?raw";
 import { logDiag } from "./diag.ts";
 
 // 並び順＝適用順。新しいマイグレーションはここに追記するだけ。
@@ -66,6 +67,7 @@ const MIGRATIONS: { id: string; sql: string }[] = [
   { id: "0028_op_usage", sql: m0028 },
   { id: "0029_accounting_ledger", sql: m0029 },
   { id: "0030_a2a_public", sql: m0030 },
+  { id: "0031_membership_fee", sql: m0031 },
 ];
 
 export const SCHEMA_VERSION = MIGRATIONS.length;
