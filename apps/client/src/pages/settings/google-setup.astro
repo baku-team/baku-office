@@ -71,7 +71,7 @@ const allScopes = (Object.keys(SCOPE_GROUPS) as (keyof typeof SCOPE_GROUPS)[]).f
             <h3>1. サービスアカウントと鍵を作成（ほぼ自動）</h3>
             <p class="muted">下のボタンで <strong>Cloud Shell（ブラウザ内ターミナル）</strong> が開きます。ログイン済み・インストール不要で、プロジェクト作成・API有効化・サービスアカウント作成・鍵(JSON)発行までを行い、右側に手順ガイドが出ます。</p>
             <a class="btn btn-primary" href={cloudshellUrl} target="_blank" rel="noopener">Cloud Shell で開く ↗</a>
-            <p class="muted" style="font-size:.82rem;margin-top:6px">開いたら ①「Authorize（承認）」→ ②右の手順<strong>ステップ1の黒いコマンド枠にある「Cloud Shell にコピー」アイコン</strong>をクリック（コマンドがターミナルに入ります）→ ③ターミナルで <strong>Enter</strong>。完了後に表示される<strong>鍵(JSON)</strong>・<strong>クライアントID</strong>・<strong>スコープ</strong>を次の手順で使います。</p>
+            <p class="muted" style="font-size:.82rem;margin-top:6px">開いたら ①「Authorize（承認）」→ ②右の手順<strong>ステップ1の黒いコマンド枠にある「Cloud Shell にコピー」アイコン</strong>をクリック（コマンドがターミナルに入ります）→ ③<strong>ターミナルで「Enter」キーを押す</strong>（⚠️ コピーしただけでは実行されません）。完了後に表示される<strong>鍵(JSON)</strong>・<strong>クライアントID</strong>・<strong>スコープ</strong>を次の手順で使います。</p>
             <details class="adv" style="margin-top:6px"><summary>自分の端末の gcloud で実行する場合</summary>
               <pre style="background:#0f172a;color:#e2e8f0;padding:.8rem;border-radius:8px;overflow:auto;font-size:.8rem"><code>gcloud auth login
 scripts/google-service-account-setup.sh</code></pre>
