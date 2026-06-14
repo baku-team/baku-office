@@ -16,6 +16,8 @@ const { getServiceAccountInfo } = await import("../../lib/google-sa.ts");
 const saInfo = isAdmin ? await getServiceAccountInfo(env).catch(() => null) : null;
 const gstatus = isAdmin ? await googleStatus(env).catch(() => null) : null;
 const grantedSet = new Set(gstatus?.groups ?? []);
+// 代理ユーザー欄の既定値：団体のGoogleアカウント（ログイン時に保存したメール）。未保存なら空。
+const orgEmail = isAdmin ? ((await env.LICENSE.get("org_google_email")) ?? "") : "";
 // 利用機能グループ（DWDに登録するスコープの提示にも使う）。
 const groupList = (Object.keys(SCOPE_GROUPS) as ScopeGroupId[]).map((g) => ({ id: g, label: SCOPE_GROUPS[g].label, restricted: SCOPE_GROUPS[g].restricted, scopes: SCOPE_GROUPS[g].scopes.join(" ") }));
 // Cloud Shell（ブラウザ内ターミナル）で公開バンドルの cloudshell/ を clone し、チュートリアル付きで開く。
@@ -77,7 +79,7 @@ scripts/google-service-account-setup.sh</code></pre>
             <p class="muted">発行した鍵(JSON)を選び、Google の予定・メール等を「誰として」操作するか（Workspace 内のユーザーのメール）を入力します。</p>
             <div class="field"><label for="sa-file">サービスアカウント鍵（JSON）</label><input id="sa-file" type="file" accept="application/json,.json" /></div>
             <div class="field"><label for="sa-paste">または鍵(JSON)を貼り付け</label><textarea id="sa-paste" rows="4" placeholder={'{ "type": "service_account", "client_email": "...", "private_key": "...", "client_id": "..." }'} style="width:100%;font-family:monospace;font-size:.78rem"></textarea><div class="muted" style="font-size:.8rem">Cloud Shell で <code>cat *-key.json</code> の出力をそのまま貼り付けできます。</div></div>
-            <div class="field"><label for="sa-subject">代理するユーザーのメール（Workspace）</label><input id="sa-subject" type="email" placeholder="admin@yourdomain.co.jp" value={saInfo?.subject ?? ""} autocomplete="off" /></div>
+            <div class="field"><label for="sa-subject">代理するユーザーのメール（Workspace）</label><input id="sa-subject" type="email" placeholder="admin@yourdomain.co.jp" value={saInfo?.subject ?? orgEmail} autocomplete="off" /><div class="muted" style="font-size:.8rem">{orgEmail && !saInfo ? `ログイン中の団体アカウント（${orgEmail}）を既定表示しています。別ユーザーを代理させる場合は変更してください。` : "予定/メールを操作する Workspace ユーザーのメール。"}</div></div>
             <fieldset style="border:1px solid #dde3ea;border-radius:6px;padding:.5rem .8rem">
               <legend class="muted" style="font-size:.85rem">利用する機能（委任するスコープ）</legend>
               {groupList.map((g) => (

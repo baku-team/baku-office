@@ -41,6 +41,8 @@ export const GET: APIRoute = async ({ url, request, locals }) => {
   const stored = await env.LICENSE.get("org_google_sub");
   if (!stored) await kvPut(env, "org_google_sub", p.sub);
   else if (stored !== p.sub) return redir("/login?e=notorg");
+  // 団体のGoogleアカウントのメールを保持（SA連携の代理ユーザー欄の既定値に使う）。毎回更新で最新に保つ。
+  if (p.email) await kvPut(env, "org_google_email", p.email);
   const cookie = await makeSessionCookie(env, { uid: "org", role: "admin", ctx: "org", name: p.name || "組織管理者", exp: sessionExp() });
   return redir("/", cookie);
 };
