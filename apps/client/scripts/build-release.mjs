@@ -10,7 +10,7 @@ import { dirname, join } from "node:path";
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const out = join(root, "release");
 // 配布バージョン（第2層更新の日和見ローダが同梱 VERSION として比較・§3.2）。
-const VERSION = "0.2.11";
+const VERSION = "0.2.12";
 
 console.log("1) Astro 本番ビルド（minify）…");
 execSync("npx astro build", { cwd: root, stdio: "inherit" });
