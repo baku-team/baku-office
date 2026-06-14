@@ -29,6 +29,9 @@ const groupList = (Object.keys(SCOPE_GROUPS) as ScopeGroupId[]).map((g) => ({ id
 // 「Cloud Shell にコピー」ボタン（1クリックでターミナル投入→Enter）に委ねる。
 const CLOUDSHELL_REPO = "https://github.com/baku-team/baku-office-app";
 const cloudshellUrl = "https://shell.cloud.google.com/cloudshell/editor?cloudshell_git_repo=" + encodeURIComponent(CLOUDSHELL_REPO) + "&cloudshell_workspace=cloudshell&cloudshell_tutorial=tutorial.md";
+// Cloud Shell に貼り付ける実行コマンド。WORKER_URL（OIDC issuer）にこの Worker の origin を埋め込む
+// （スクリプトの issuer-uri＝WIFプロバイダの issuer と一致させるため）。
+const wifCommand = `WORKER_URL=${Astro.url.origin} bash google-service-account-setup.sh`;
 const bySecret = { id: !!env.GOOGLE_CLIENT_ID, secret: !!env.GOOGLE_CLIENT_SECRET };
 // ID・シークレットとも Worker Secret 投入済み＝画面の入力欄は両方 disabled になり、
 // 保存ボタンを押しても変更しようがない。ボタン自体を無効化して「押せない理由」を明示する。
@@ -62,26 +65,26 @@ const allScopes = (Object.keys(SCOPE_GROUPS) as (keyof typeof SCOPE_GROUPS)[]).f
         <button class="seg-opt" type="button" data-m="oauth">OAuthクライアント（個人Gmail等）</button>
       </div>
 
-      {/* 方法A：サービスアカウント＋ドメイン全体の委任(DWD)。クライアントID/シークレット・同意画面が不要で、資格情報の発行をほぼ自動化できる。 */}
+      {/* 方法A：サービスアカウント＋ドメイン全体の委任(DWD)。**キーレス（WIF）**＝SA鍵JSONを作らず、Workerが自署名したOIDC JWTでフェデレーションする。 */}
       <div class="gpanel" data-panel="sa">
-        <div class="banner banner-info">Google Workspace を使う組織向け。<strong>OAuth クライアントID/シークレットや同意画面は不要</strong>です。サービスアカウントの鍵（gcloud で自動生成可）を登録し、管理コンソールで「ドメイン全体の委任」を<strong>一度だけ</strong>承認すれば連携できます。</div>
-        {saInfo && (<div class="banner banner-ok">✅ サービスアカウント設定済み（代理ユーザー：{saInfo.subject}）。接続が不安定なら下の「接続テスト」で確認してください。</div>)}
+        <div class="banner banner-info">Google Workspace を使う組織向け。<strong>OAuth クライアントID/シークレットも、サービスアカウント鍵(JSON)も不要</strong>です（<strong>キーレス＝鍵を発行しません</strong>。組織ポリシーで鍵作成が禁止されていても使えます）。Cloud Shell で WIF を設定し、管理コンソールで「ドメイン全体の委任」を<strong>一度だけ</strong>承認すれば連携できます。</div>
+        {saInfo && (<div class="banner banner-ok">✅ サービスアカウント設定済み（方式：{saInfo.mode === "wif" ? "キーレス(WIF)" : "鍵(JSON)"}・代理ユーザー：{saInfo.subject}）。接続が不安定なら下の「接続テスト」で確認してください。</div>)}
         <ol class="steps">
           <li>
-            <h3>1. サービスアカウントと鍵を作成（ほぼ自動）</h3>
-            <p class="muted">下のボタンで <strong>Cloud Shell（ブラウザ内ターミナル）</strong> が開きます。ログイン済み・インストール不要で、プロジェクト作成・API有効化・サービスアカウント作成・鍵(JSON)発行までを行い、右側に手順ガイドが出ます。</p>
+            <h3>1. WIF を設定（ほぼ自動・鍵は作りません）</h3>
+            <p class="muted">下のボタンで <strong>Cloud Shell（ブラウザ内ターミナル）</strong> が開きます。ログイン済み・インストール不要で、プロジェクト作成・API有効化・サービスアカウント作成・WIF プール/プロバイダ設定までを行い、右側に手順ガイドが出ます。</p>
             <a class="btn btn-primary" href={cloudshellUrl} target="_blank" rel="noopener">Cloud Shell で開く ↗</a>
-            <p class="muted" style="font-size:.82rem;margin-top:6px">開いたら ①「Authorize（承認）」→ ②右の手順<strong>ステップ1の黒いコマンド枠にある「Cloud Shell にコピー」アイコン</strong>をクリック（コマンドがターミナルに入ります）→ ③<strong>ターミナルで「Enter」キーを押す</strong>（⚠️ コピーしただけでは実行されません）。完了後に表示される<strong>鍵(JSON)</strong>・<strong>クライアントID</strong>・<strong>スコープ</strong>を次の手順で使います。</p>
+            <p class="muted" style="font-size:.82rem;margin-top:6px">開いたら ①「Authorize（承認）」→ ②ターミナルに<strong>下の実行コマンド</strong>を貼り付け（このコマンドにはあなたのアプリURLが埋め込まれています）→ ③<strong>「Enter」キーを押す</strong>（⚠️ 貼り付けただけでは実行されません）。完了後に表示される<strong>WIF設定(JSON)</strong>・<strong>クライアントID</strong>・<strong>スコープ</strong>を次の手順で使います。</p>
+            <div class="field" style="margin-top:8px"><label>Cloud Shell に貼り付ける実行コマンド</label><div class="row"><input id="wif-cmd" type="text" readonly value={wifCommand} style="flex:1;font-family:monospace;font-size:.78rem" /><button class="btn" id="copy-wif-cmd" type="button">コピー</button></div><div class="muted" style="font-size:.8rem">先頭の <code>WORKER_URL</code> はこの画面のURLから自動設定されています。</div></div>
             <details class="adv" style="margin-top:6px"><summary>自分の端末の gcloud で実行する場合</summary>
               <pre style="background:#0f172a;color:#e2e8f0;padding:.8rem;border-radius:8px;overflow:auto;font-size:.8rem"><code>gcloud auth login
-scripts/google-service-account-setup.sh</code></pre>
+{wifCommand.replace("bash ", "bash scripts/")}</code></pre>
             </details>
           </li>
           <li>
-            <h3>2. 鍵と代理ユーザーを登録して接続</h3>
-            <p class="muted">発行した鍵(JSON)を選び、Google の予定・メール等を「誰として」操作するか（Workspace 内のユーザーのメール）を入力します。</p>
-            <div class="field"><label for="sa-file">サービスアカウント鍵（JSON）</label><input id="sa-file" type="file" accept="application/json,.json" /></div>
-            <div class="field"><label for="sa-paste">または鍵(JSON)を貼り付け</label><textarea id="sa-paste" rows="4" placeholder={'{ "type": "service_account", "client_email": "...", "private_key": "...", "client_id": "..." }'} style="width:100%;font-family:monospace;font-size:.78rem"></textarea><div class="muted" style="font-size:.8rem">Cloud Shell で <code>cat *-key.json</code> の出力をそのまま貼り付けできます。</div></div>
+            <h3>2. WIF設定と代理ユーザーを登録して接続</h3>
+            <p class="muted">Cloud Shell の最後に出た <strong>WIF設定（1行 JSON）</strong> を貼り付け、Google の予定・メール等を「誰として」操作するか（Workspace 内のユーザーのメール）を入力します。</p>
+            <div class="field"><label for="sa-wif">WIF設定（JSON）</label><textarea id="sa-wif" rows="3" placeholder={'{ "sa_email": "...", "client_id": "...", "project_number": "...", "pool": "...", "provider": "..." }'} style="width:100%;font-family:monospace;font-size:.78rem"></textarea><div class="muted" style="font-size:.8rem">Cloud Shell 出力の「┌─ … └─」の間の 1 行をそのまま貼り付けてください。</div></div>
             <div class="field"><label for="sa-subject">代理するユーザーのメール（Workspace）</label><input id="sa-subject" type="email" placeholder="admin@yourdomain.co.jp" value={saInfo?.subject ?? orgEmail} autocomplete="off" /><div class="muted" style="font-size:.8rem">{orgEmail && !saInfo ? `ログイン中の団体アカウント（${orgEmail}）を既定表示しています。別ユーザーを代理させる場合は変更してください。` : "予定/メールを操作する Workspace ユーザーのメール。"}</div></div>
             <fieldset style="border:1px solid #dde3ea;border-radius:6px;padding:.5rem .8rem">
               <legend class="muted" style="font-size:.85rem">利用する機能（委任するスコープ）</legend>
@@ -185,11 +188,17 @@ scripts/google-oauth-setup.sh</code></pre>
           const syncScopes = () => { const el = document.getElementById("sa-scopes"); if (el) el.value = grps().map((c) => c.dataset.scopes).join(" ").split(" ").filter(Boolean).join(", "); };
           document.querySelectorAll(".sa-grp").forEach((c) => c.addEventListener("change", syncScopes));
           syncScopes();
-          let keyJson = "";
-          document.getElementById("sa-file")?.addEventListener("change", async (e) => { const f = e.target.files?.[0]; if (f) keyJson = await f.text(); });
-          // 鍵の取得元：ファイル選択を優先し、無ければ貼り付けテキストを使う。
-          const resolveKey = () => keyJson || (document.getElementById("sa-paste")?.value || "").trim();
+          // WIF設定(JSON)をパース。必須キーが揃っていなければ null。
+          const resolveWif = () => {
+            const raw = (document.getElementById("sa-wif")?.value || "").trim();
+            if (!raw) return null;
+            let o; try { o = JSON.parse(raw); } catch { return null; }
+            const need = ["sa_email", "client_id", "project_number", "pool", "provider"];
+            if (need.some((k) => !o || !String(o[k] ?? "").trim())) return null;
+            return { sa_email: String(o.sa_email), client_id: String(o.client_id), project_number: String(o.project_number), pool: String(o.pool), provider: String(o.provider) };
+          };
           const copy = async (id) => { const t = document.getElementById(id); try { await navigator.clipboard.writeText(t.value); window.bo?.toast?.("コピーしました"); } catch { t.select(); document.execCommand("copy"); } };
+          document.getElementById("copy-wif-cmd")?.addEventListener("click", () => copy("wif-cmd"));
           document.getElementById("sa-copy-cid")?.addEventListener("click", () => copy("sa-cid"));
           document.getElementById("sa-copy-scopes")?.addEventListener("click", () => copy("sa-scopes"));
           // connect_sa の応答から、手順3のクライアントID/スコープをリロード無しで埋める。
@@ -208,12 +217,12 @@ scripts/google-oauth-setup.sh</code></pre>
           // 1ボタン集約：登録 → クライアントID/スコープ反映 → 接続テストまで。DWD承認後はもう一度押すと成功する。
           document.getElementById("sa-go")?.addEventListener("click", async (e) => {
             const subject = document.getElementById("sa-subject").value.trim();
-            const key = resolveKey();
-            if (!key) { window.bo.toast("鍵(JSON)をアップロードするか貼り付けてください", "err"); return; }
+            const wif = resolveWif();
+            if (!wif) { window.bo.toast("WIF設定(JSON)を貼り付けてください（Cloud Shell 出力の1行）", "err"); return; }
             if (!subject) { window.bo.toast("代理するユーザーのメールを入力してください", "err"); return; }
             const groups = grps().map((c) => c.value);
-            const r = await window.bo.api("/api/google", { _action: "connect_sa", keyJson: key, subject, groups }, { btn: e.currentTarget, successMsg: null });
-            if (!r.ok) return; // connect_sa の失敗は bo.api がトースト済み
+            const r = await window.bo.api("/api/google", { _action: "connect_wif", wif, subject, groups }, { btn: e.currentTarget, successMsg: null });
+            if (!r.ok) return; // connect_wif の失敗は bo.api がトースト済み
             fillSa(r.data?.sa);
             const ok = await testSa();
             document.getElementById("sa-disconnect")?.removeAttribute("hidden");
@@ -226,7 +235,7 @@ scripts/google-oauth-setup.sh</code></pre>
             }
           });
           document.getElementById("sa-disconnect")?.addEventListener("click", async (e) => {
-            if (!(await window.bo.confirm("Google 連携を解除しますか？（サービスアカウント鍵を削除します）", { confirmLabel: "解除", danger: true }))) return;
+            if (!(await window.bo.confirm("Google 連携を解除しますか？（WIF設定・代理ユーザー設定を削除します）", { confirmLabel: "解除", danger: true }))) return;
             const r = await window.bo.api("/api/google", { _action: "disconnect" }, { btn: e.currentTarget, successMsg: "解除しました" });
             if (r.ok) setTimeout(() => location.reload(), 700);
           });

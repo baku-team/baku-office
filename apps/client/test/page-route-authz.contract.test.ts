@@ -14,7 +14,12 @@ const API_DIR = join(PAGES_DIR, "api");
 const AUTH_SIGNALS = [/getSession\s*\(/, /requireOrgAdmin\s*\(/, /getFileForSession\s*\(/];
 
 // 設計上「公開」が正しいページ系ルート（理由つき allowlist）。
-const PUBLIC_ALLOWLIST: Record<string, string> = {};
+const PUBLIC_ALLOWLIST: Record<string, string> = {
+  // OIDC discovery/JWKS は無認証で公開する（Google STS が issuer から取得してWIF subject_tokenを検証する）。
+  // 秘密は返さない（公開鍵JWKと公開メタのみ）。キーレスWIFの必須要件。
+  ".well-known/openid-configuration.ts": "OIDC discovery（Google STSが無認証取得・公開メタのみ）",
+  ".well-known/jwks.json.ts": "OIDC JWKS（公開鍵のみ・Google STSが無認証取得）",
+};
 
 const HANDLER = /export\s+const\s+(GET|POST|PUT|DELETE|PATCH)\b/;
 
