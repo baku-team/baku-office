@@ -3,13 +3,16 @@
 // Calendar/Gmail/Meet にアクセスする。鍵はクラウンジュエル＝暗号化KVに保管（saveApiKey 経由）。
 // WHY: OAuth クライアントID/シークレットの自動発行は Google が許可しないため、SA鍵（gcloud で生成可能）＋
 // 管理コンソールでの一度きりの DWD 承認に置き換えることで、資格情報の発行をほぼ自動化できる。
-import { getApiKey, saveApiKey, deleteApiKey } from "./client.ts";
+import { getApiKey, saveApiKey, deleteApiKey, hasApiKey } from "./client.ts";
 import { kvPut } from "./kv.ts";
 import { nowSec } from "./accounting.ts";
+import { ensureOidcKey, signOidcJwt } from "./oidc-idp.ts";
 
-const SA_KEY = "google_sa_key";          // SA鍵JSON（暗号化保管）
+const SA_KEY = "google_sa_key";          // SA鍵JSON（暗号化保管・key方式のみ）
 const SA_SUBJECT = "google_sa_subject";   // 代理する Workspace ユーザーのメール（LICENSE KV）
 const SA_TOKEN = "google_sa_token";       // アクセストークンのキャッシュ（LICENSE KV）
+const SA_MODE = "google_sa_mode";         // "key" | "wif"（LICENSE KV）
+const WIF_CONFIG = "google_wif_config";   // WIF設定JSON（非秘密・平文KV。秘密はOIDC秘密鍵のみで別保管）
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
 
 type SaKey = { client_email?: string; client_id?: string; private_key?: string; token_uri?: string };
@@ -131,6 +134,58 @@ async function loadKey(env: Env): Promise<SaKey | null> {
   try { return JSON.parse(raw) as SaKey; } catch { return null; }
 }
 
+async function loadWif(env: Env): Promise<WifConfig | null> {
+  const raw = await env.LICENSE.get(WIF_CONFIG);
+  if (!raw) return null;
+  try { return JSON.parse(raw) as WifConfig; } catch { return null; }
+}
+
+// 連携方式の判定。明示保存（SA_MODE）を優先し、未設定の旧データは実体から推定（key 既存連携の後退防止）。
+async function saMode(env: Env): Promise<"key" | "wif" | null> {
+  const m = await env.LICENSE.get(SA_MODE);
+  if (m === "key" || m === "wif") return m;
+  if (await env.LICENSE.get(WIF_CONFIG)) return "wif";
+  if (await hasApiKey(env, SA_KEY)) return "key";
+  return null;
+}
+
+// 方式に応じてトークンを発行（key=mintSaToken / wif=mintSaTokenWif）。subject/scope は共通。
+async function mintForMode(env: Env, subject: string, scope: string): Promise<{ ok: boolean; token?: string; expiresIn?: number; error?: string }> {
+  const mode = await saMode(env);
+  if (mode === "wif") {
+    const cfg = await loadWif(env);
+    if (!cfg) return { ok: false, error: "WIF設定が見つかりません" };
+    return mintSaTokenWif(cfg, subject, scope, (claims) => signOidcJwt(env, claims));
+  }
+  if (mode === "key") {
+    const key = await loadKey(env);
+    if (!key) return { ok: false, error: "サービスアカウント鍵が見つかりません" };
+    return mintSaToken(key, subject, scope);
+  }
+  return { ok: false, error: "サービスアカウントが未設定です" };
+}
+
+// WIF（キーレス）連携の設定：鍵JSONを保存せず、非秘密の WIF 設定＋代理subjectのみ保存。
+// OIDC 署名鍵を先に生成して JWKS を確実に公開状態にする（WIFプロバイダの検証に備える）。
+export async function saveWifConfig(env: Env, cfg: WifConfig, subject: string): Promise<{ ok: boolean; error?: string }> {
+  const sub = subject.trim();
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(sub)) return { ok: false, error: "代理するユーザーのメールアドレスを正しく入力してください" };
+  if (!cfg.sa_email || !cfg.client_id || !cfg.project_number || !cfg.pool || !cfg.provider) {
+    return { ok: false, error: "WIF設定（sa_email / client_id / project_number / pool / provider）が不足しています" };
+  }
+  if (!/^\d+$/.test(String(cfg.project_number))) return { ok: false, error: "project_number は数値（プロジェクト番号）を指定してください" };
+  await ensureOidcKey(env); // JWKS 存在保証
+  const clean: WifConfig = {
+    sa_email: cfg.sa_email.trim(), client_id: String(cfg.client_id).trim(), project_number: String(cfg.project_number).trim(),
+    pool: cfg.pool.trim(), provider: cfg.provider.trim(), issuer: cfg.issuer.replace(/\/$/, ""),
+  };
+  await kvPut(env, WIF_CONFIG, JSON.stringify(clean));
+  await kvPut(env, SA_MODE, "wif");
+  await kvPut(env, SA_SUBJECT, sub);
+  await env.LICENSE.delete(SA_TOKEN); // 設定変更でキャッシュ破棄
+  return { ok: true };
+}
+
 // SA連携の設定：鍵JSON（暗号化保管）＋代理subjectメール。client_email/private_key/client_id を検証。
 export async function saveServiceAccount(env: Env, keyJson: string, subject: string): Promise<{ ok: boolean; error?: string }> {
   let key: SaKey;
@@ -139,49 +194,64 @@ export async function saveServiceAccount(env: Env, keyJson: string, subject: str
   const sub = subject.trim();
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(sub)) return { ok: false, error: "代理するユーザーのメールアドレスを正しく入力してください" };
   await saveApiKey(env, SA_KEY, JSON.stringify(key)); // 暗号化保管
+  await kvPut(env, SA_MODE, "key");
   await kvPut(env, SA_SUBJECT, sub);
   await env.LICENSE.delete(SA_TOKEN); // 設定変更でキャッシュ破棄
   return { ok: true };
 }
 
 export async function serviceAccountConfigured(env: Env): Promise<boolean> {
-  return !!(await getApiKey(env, SA_KEY)) && !!(await env.LICENSE.get(SA_SUBJECT));
+  if (!(await env.LICENSE.get(SA_SUBJECT))) return false;
+  const mode = await saMode(env);
+  if (mode === "wif") return !!(await env.LICENSE.get(WIF_CONFIG));
+  if (mode === "key") return await hasApiKey(env, SA_KEY);
+  return false;
 }
 
-// 表示用情報（秘密鍵は返さない）。DWD登録に使う client_id（数値）とメールを返す。
-export async function getServiceAccountInfo(env: Env): Promise<{ clientEmail: string; clientId: string; subject: string } | null> {
-  const key = await loadKey(env);
+// 表示用情報（秘密は返さない）。DWD登録に使う client_id（数値）・SAメール・方式・subject を返す。
+export async function getServiceAccountInfo(env: Env): Promise<{ mode: "key" | "wif"; clientEmail: string; clientId: string; subject: string } | null> {
   const subject = await env.LICENSE.get(SA_SUBJECT);
-  if (!key?.client_email || !key.client_id || !subject) return null;
-  return { clientEmail: key.client_email, clientId: key.client_id, subject };
+  if (!subject) return null;
+  const mode = await saMode(env);
+  if (mode === "wif") {
+    const cfg = await loadWif(env);
+    if (!cfg?.sa_email || !cfg.client_id) return null;
+    return { mode, clientEmail: cfg.sa_email, clientId: cfg.client_id, subject };
+  }
+  if (mode === "key") {
+    const key = await loadKey(env);
+    if (!key?.client_email || !key.client_id) return null;
+    return { mode, clientEmail: key.client_email, clientId: key.client_id, subject };
+  }
+  return null;
 }
 
 export async function clearServiceAccount(env: Env): Promise<void> {
   await deleteApiKey(env, SA_KEY);
+  await env.LICENSE.delete(WIF_CONFIG);
+  await env.LICENSE.delete(SA_MODE);
   await env.LICENSE.delete(SA_SUBJECT);
   await env.LICENSE.delete(SA_TOKEN);
 }
 
-// SA経由のアクセストークン（scope指定）。同一scopeのキャッシュが有効ならそれを返す。
+// SA経由のアクセストークン（scope指定）。方式(key/wif)に応じて発行。同一scopeのキャッシュが有効ならそれを返す。
 export async function serviceAccountAccessToken(env: Env, scope: string): Promise<string | null> {
-  const key = await loadKey(env);
   const subject = await env.LICENSE.get(SA_SUBJECT);
-  if (!key || !subject) return null;
+  if (!subject) return null;
   try {
     const cached = JSON.parse((await env.LICENSE.get(SA_TOKEN)) ?? "null") as { token: string; exp: number; scope: string } | null;
     if (cached && cached.scope === scope && cached.exp > nowSec() + 60) return cached.token;
   } catch { /* fallthrough */ }
-  const res = await mintSaToken(key, subject, scope);
+  const res = await mintForMode(env, subject, scope);
   if (!res.ok || !res.token) return null;
   await kvPut(env, SA_TOKEN, JSON.stringify({ token: res.token, exp: nowSec() + (res.expiresIn ?? 3600), scope }));
   return res.token;
 }
 
-// 接続テスト：実際にトークンを発行してみる（成否＋理由を返す）。
+// 接続テスト：実際にトークンを発行してみる（成否＋理由を返す）。方式(key/wif)に応じて発行。
 export async function testServiceAccount(env: Env, scope: string): Promise<{ ok: boolean; error?: string }> {
-  const key = await loadKey(env);
   const subject = await env.LICENSE.get(SA_SUBJECT);
-  if (!key || !subject) return { ok: false, error: "サービスアカウントが未設定です" };
-  const res = await mintSaToken(key, subject, scope);
+  if (!subject) return { ok: false, error: "サービスアカウントが未設定です" };
+  const res = await mintForMode(env, subject, scope);
   return res.ok ? { ok: true } : { ok: false, error: res.error };
 }
