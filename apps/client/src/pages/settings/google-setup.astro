@@ -24,8 +24,10 @@ const groupList = (Object.keys(SCOPE_GROUPS) as ScopeGroupId[]).map((g) => ({ id
 // スクリプトは公開配布リポに同梱（build-release が cloudshell/ を生成）。
 // cloudshell_tutorial は cloudshell_workspace 基準で解決されるため、workspace=cloudshell のときは
 // "tutorial.md"（"cloudshell/tutorial.md" にすると cloudshell/cloudshell/tutorial.md になりチュートリアル＝実行ボタンが出ない）。
+// cloudshell_command でクローン後にセットアップを自動実行（▶ を押す手間を省く）。workspace=cloudshell 基準で実行。
+// ※ Google のセキュリティ上、「Authorize／実行確認」ダイアログは残る（ゼロクリック化は不可）。
 const CLOUDSHELL_REPO = "https://github.com/baku-team/baku-office-app";
-const cloudshellUrl = "https://shell.cloud.google.com/cloudshell/editor?cloudshell_git_repo=" + encodeURIComponent(CLOUDSHELL_REPO) + "&cloudshell_workspace=cloudshell&cloudshell_tutorial=tutorial.md";
+const cloudshellUrl = "https://shell.cloud.google.com/cloudshell/editor?cloudshell_git_repo=" + encodeURIComponent(CLOUDSHELL_REPO) + "&cloudshell_workspace=cloudshell&cloudshell_tutorial=tutorial.md&cloudshell_command=" + encodeURIComponent("bash google-service-account-setup.sh");
 const bySecret = { id: !!env.GOOGLE_CLIENT_ID, secret: !!env.GOOGLE_CLIENT_SECRET };
 // ID・シークレットとも Worker Secret 投入済み＝画面の入力欄は両方 disabled になり、
 // 保存ボタンを押しても変更しようがない。ボタン自体を無効化して「押せない理由」を明示する。
