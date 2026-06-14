@@ -20,8 +20,10 @@ const grantedSet = new Set(gstatus?.groups ?? []);
 const groupList = (Object.keys(SCOPE_GROUPS) as ScopeGroupId[]).map((g) => ({ id: g, label: SCOPE_GROUPS[g].label, restricted: SCOPE_GROUPS[g].restricted, scopes: SCOPE_GROUPS[g].scopes.join(" ") }));
 // Cloud Shell（ブラウザ内ターミナル）で公開バンドルの cloudshell/ を clone し、チュートリアル付きで開く。
 // スクリプトは公開配布リポに同梱（build-release が cloudshell/ を生成）。
+// cloudshell_tutorial は cloudshell_workspace 基準で解決されるため、workspace=cloudshell のときは
+// "tutorial.md"（"cloudshell/tutorial.md" にすると cloudshell/cloudshell/tutorial.md になりチュートリアル＝実行ボタンが出ない）。
 const CLOUDSHELL_REPO = "https://github.com/baku-team/baku-office-app";
-const cloudshellUrl = "https://shell.cloud.google.com/cloudshell/editor?cloudshell_git_repo=" + encodeURIComponent(CLOUDSHELL_REPO) + "&cloudshell_workspace=cloudshell&cloudshell_tutorial=cloudshell%2Ftutorial.md";
+const cloudshellUrl = "https://shell.cloud.google.com/cloudshell/editor?cloudshell_git_repo=" + encodeURIComponent(CLOUDSHELL_REPO) + "&cloudshell_workspace=cloudshell&cloudshell_tutorial=tutorial.md";
 const bySecret = { id: !!env.GOOGLE_CLIENT_ID, secret: !!env.GOOGLE_CLIENT_SECRET };
 // ID・シークレットとも Worker Secret 投入済み＝画面の入力欄は両方 disabled になり、
 // 保存ボタンを押しても変更しようがない。ボタン自体を無効化して「押せない理由」を明示する。
