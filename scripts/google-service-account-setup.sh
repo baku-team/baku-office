@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Google 連携（サービスアカウント＋ドメイン全体の委任 / DWD）の資格情報をほぼ自動で用意するヘルパー。
-#   ・代理ユーザー（Workspace）を対話で確認（既定はログイン中のアカウント）
+#   ・代理ユーザー（Workspace）はログイン中のアカウントを自動採用（入力不要・SUBJECT= で変更可）
 #   ・GCP プロジェクト作成（または既存を使用）／必要 API 有効化（Calendar / Gmail / Meet）
 #   ・サービスアカウント作成 ＋ 鍵(JSON) 発行
 #   ・鍵(JSON) をクリップボードへ自動コピー（OSC52・Cloud Shell 対応）
@@ -42,22 +42,17 @@ retry() { local n=0 max=12; until "$@" >/dev/null 2>&1; do n=$((n + 1)); [ "$n" 
 # 効かない端末では無害（エスケープが無視されるだけ）。最後に手動コピー用ブロックも必ず表示する。
 clip_copy() { local b64; b64="$(base64 -w0 <"$1" 2>/dev/null || base64 <"$1" | tr -d '\n')"; printf '\e]52;c;%s\a' "$b64"; }
 
-step 1 "前提チェック・代理ユーザーの確認"
+step 1 "前提チェック"
 command -v gcloud >/dev/null 2>&1 || die "gcloud が見つかりません: https://cloud.google.com/sdk/docs/install"
 ACTIVE_ACCOUNT="$(gcloud auth list --filter=status:ACTIVE --format='value(account)' 2>/dev/null || true)"
 [ -n "${ACTIVE_ACCOUNT}" ] || die "gcloud にログインしていません。まず実行: gcloud auth login"
 ok "アカウント : ${ACTIVE_ACCOUNT}"
 info "プロジェクト: ${PROJECT_ID} ／ サービスアカウント: ${SA_NAME}"
-# 代理ユーザー＝DWD で代理する Workspace ユーザー。対話で確認（既定はログイン中の団体アカウント）。
-DEFAULT_SUBJECT="${SUBJECT:-${ACTIVE_ACCOUNT}}"
-if [ -t 0 ]; then
-  printf '\n   %s代理ユーザー%s = 予定/メールを操作する Workspace ユーザーのメール\n' "$B" "$N"
-  read -r -p "   メール [${DEFAULT_SUBJECT}]: " _sub || true
-  SUBJECT="${_sub:-${DEFAULT_SUBJECT}}"
-else
-  SUBJECT="${DEFAULT_SUBJECT}"
-fi
-ok "代理ユーザー: ${SUBJECT}"
+# 代理ユーザー＝DWD で代理する Workspace ユーザー。確認は省き、ログイン中のアカウントを自動採用する
+# （ノンインタラクティブ）。変更したい場合のみ SUBJECT=メール bash ... で指定可。
+# WHY: スクリプトの subject は最終案内の表示用で、実際に効くのは設定画面の代理ユーザー欄（団体アカウント既定）。
+SUBJECT="${SUBJECT:-${ACTIVE_ACCOUNT}}"
+ok "代理ユーザー（自動）: ${SUBJECT}"
 
 step 2 "プロジェクトの用意"
 if gcloud projects describe "${PROJECT_ID}" >/dev/null 2>&1; then
