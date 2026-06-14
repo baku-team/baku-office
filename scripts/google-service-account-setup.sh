@@ -75,9 +75,32 @@ else
   gcloud iam service-accounts create "${SA_NAME}" --display-name="baku-office bot" >/dev/null || die "サービスアカウント作成に失敗"
   ok "SA 作成: ${SA_EMAIL}"
 fi
-# WHY: 作成直後は IAM 反映遅延で keys create が NOT_FOUND になる。成功するまでリトライする。
-retry gcloud iam service-accounts keys create "${KEY_FILE}" --iam-account="${SA_EMAIL}" \
-  || die "鍵の発行に失敗しました。数十秒おいて、同じコマンドをもう一度実行してください。"
+# 鍵発行：新規プロジェクトでは IAM 反映に時間がかかり keys create が NOT_FOUND を返すことがある（反映を待つ）。
+# 一方、組織ポリシー(iam.disableServiceAccountKeyCreation)等は「待っても直らない」ので、実エラーを見て即案内する。
+# WHY: 旧版は retry が gcloud の stderr を握りつぶし、真因（反映遅延か・ポリシーか）が分からなかった。
+KEY_ERR=""
+attempt_key() { KEY_ERR="$(gcloud iam service-accounts keys create "${KEY_FILE}" --iam-account="${SA_EMAIL}" 2>&1)"; }
+kn=0; kmax=24
+until attempt_key; do
+  # 待っても直らない失敗（組織ポリシーで鍵作成が無効）→ 即、対処法を案内して終了。
+  if printf '%s' "${KEY_ERR}" | grep -qiE 'disableServiceAccountKeyCreation|key creation is not allowed'; then
+    die "組織ポリシーでサービスアカウント鍵の作成が無効化されています（iam.disableServiceAccountKeyCreation）。
+   対処1：組織管理者に、このプロジェクトで鍵作成を許可してもらう（実行後に下のコマンドで再開）：
+     gcloud resource-manager org-policies disable-enforce iam.disableServiceAccountKeyCreation --project=${PROJECT_ID}
+     bash google-service-account-setup.sh ${PROJECT_ID}
+   対処2：baku-office 設定画面の「OAuthクライアント」方式を使う（鍵が不要）。
+   gcloud 詳細：${KEY_ERR}"
+  fi
+  kn=$((kn + 1))
+  if [ "${kn}" -ge "${kmax}" ]; then
+    die "鍵の発行が時間内に完了しませんでした（IAM反映待ちのタイムアウト）。
+   少し待ってから、同じプロジェクトで再実行してください（引数なしだと新規プロジェクトを作り直してしまうため ID を指定）：
+     bash google-service-account-setup.sh ${PROJECT_ID}
+   gcloud 詳細：${KEY_ERR}"
+  fi
+  printf '   %s…反映待ち (%s/%s)%s\n' "$D" "${kn}" "${kmax}" "$N"
+  sleep 5
+done
 ok "鍵を発行: ${KEY_FILE}（取扱注意・第三者に渡さない）"
 CLIENT_ID="$(gcloud iam service-accounts describe "${SA_EMAIL}" --format='value(oauth2ClientId)')"
 clip_copy "${KEY_FILE}" || true
