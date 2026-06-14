@@ -58,6 +58,73 @@ export async function mintSaToken(key: SaKey, subject: string, scope: string): P
   return { ok: true, token: t.access_token, expiresIn: t.expires_in ?? 3600 };
 }
 
+// ── キーレス WIF＋DWD（案B） ────────────────────────────────────────────────
+// SA鍵JSONを持たず、Worker 自署名の OIDC JWT を WIF に提示してフェデレーション資格情報を得て、
+// iamcredentials.signJwt で DWD アサーションを SA に署名させる。可搬な長期鍵はどこにも存在しない。
+export type WifConfig = {
+  sa_email: string;        // DWD で代理する SA（鍵なし）
+  client_id: string;       // 数値 oauth2ClientId（管理コンソールの委任登録に使う・表示のみ）
+  project_number: string;  // GCP プロジェクト番号（WIF audience に使う・project_id ではない）
+  pool: string;            // Workload Identity Pool ID
+  provider: string;        // Pool 内の OIDC Provider ID
+  issuer: string;          // この Worker の公開URL（OIDC iss＝WIF の issuer-uri と一致必須）
+};
+
+const STS_URL = "https://sts.googleapis.com/v1/token";
+
+// WIF＋signJwt の4ホップで対象ユーザーの access_token を発行。OIDC 署名関数を注入しテスト可能にする。
+export async function mintSaTokenWif(
+  cfg: WifConfig,
+  subject: string,
+  scope: string,
+  signOidc: (claims: Record<string, unknown>) => Promise<string>,
+): Promise<{ ok: boolean; token?: string; expiresIn?: number; error?: string }> {
+  if (!cfg.sa_email || !cfg.project_number || !cfg.pool || !cfg.provider || !cfg.issuer) {
+    return { ok: false, error: "WIF設定（sa_email/project_number/pool/provider/issuer）が不足しています" };
+  }
+  const providerResource = `projects/${cfg.project_number}/locations/global/workloadIdentityPools/${cfg.pool}/providers/${cfg.provider}`;
+  const iat = nowSec();
+
+  // ホップ0：Worker が短命 OIDC JWT を自署名。aud は **スキーム有り**（https://iam.googleapis.com/...）。
+  const oidcJwt = await signOidc({ iss: cfg.issuer, sub: "baku-office", aud: `https://iam.googleapis.com/${providerResource}`, iat, exp: iat + 300 });
+
+  // ホップ1：STS でフェデレーション access_token に交換。audience は **先頭`//`・スキーム無し**（#0 と別形式！最頻バグ）。
+  const sts = await fetch(STS_URL, {
+    method: "POST", headers: { "content-type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      grant_type: "urn:ietf:params:oauth:grant-type:token-exchange",
+      audience: `//iam.googleapis.com/${providerResource}`,
+      scope: "https://www.googleapis.com/auth/cloud-platform",
+      requested_token_type: "urn:ietf:params:oauth:token-type:access_token",
+      subject_token: oidcJwt,
+      subject_token_type: "urn:ietf:params:oauth:token-type:id_token",
+    }),
+  });
+  if (!sts.ok) return { ok: false, error: `STS交換に失敗（${sts.status}）：${(await sts.text()).slice(0, 200)}` };
+  const federated = ((await sts.json()) as { access_token?: string }).access_token;
+  if (!federated) return { ok: false, error: "STSがaccess_tokenを返しませんでした" };
+
+  // ホップ2：iamcredentials.signJwt で DWD アサーションを SA に署名させる（鍵を持たずに SA として署名）。
+  const dwdClaims = { iss: cfg.sa_email, sub: subject, scope, aud: TOKEN_URL, iat, exp: iat + 3600 };
+  const sj = await fetch(`https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/${encodeURIComponent(cfg.sa_email)}:signJwt`, {
+    method: "POST", headers: { authorization: `Bearer ${federated}`, "content-type": "application/json" },
+    body: JSON.stringify({ payload: JSON.stringify(dwdClaims) }),
+  });
+  if (!sj.ok) return { ok: false, error: `signJwtに失敗（${sj.status}）：${(await sj.text()).slice(0, 200)}` };
+  const signedJwt = ((await sj.json()) as { signedJwt?: string }).signedJwt;
+  if (!signedJwt) return { ok: false, error: "signJwtがsignedJwtを返しませんでした" };
+
+  // ホップ3：DWD トークンエンドポイントで対象ユーザーの access_token を得る。
+  const r = await fetch(TOKEN_URL, {
+    method: "POST", headers: { "content-type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer", assertion: signedJwt }),
+  });
+  if (!r.ok) return { ok: false, error: `DWDトークン取得に失敗（${r.status}）：${(await r.text()).slice(0, 200)}` };
+  const t = (await r.json()) as { access_token?: string; expires_in?: number };
+  if (!t.access_token) return { ok: false, error: "access_token が返りませんでした" };
+  return { ok: true, token: t.access_token, expiresIn: t.expires_in ?? 3600 };
+}
+
 async function loadKey(env: Env): Promise<SaKey | null> {
   const raw = await getApiKey(env, SA_KEY);
   if (!raw) return null;
