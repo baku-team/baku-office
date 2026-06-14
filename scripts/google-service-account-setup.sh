@@ -1,58 +1,66 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Google 連携（サービスアカウント＋ドメイン全体の委任 / DWD）の資格情報をほぼ自動で用意するヘルパー。
-#   ・代理ユーザー（Workspace）はログイン中のアカウントを自動採用（入力不要・SUBJECT= で変更可）
-#   ・GCP プロジェクト作成（または既存を使用）／必要 API 有効化（Calendar / Gmail / Meet）
-#   ・サービスアカウント作成 ＋ 鍵(JSON) 発行
-#   ・鍵(JSON) をクリップボードへ自動コピー（OSC52・Cloud Shell 対応）
-#   ・最後に、設定画面に貼る値（代理ユーザー・鍵・クライアントID・スコープ）を 1 画面に集約表示
-# OAuth クライアントID/シークレットや同意画面は不要。残る手動は管理コンソールでの委任承認 1 回のみ。
+# Google 連携（キーレス：Workload Identity Federation ＋ ドメイン全体の委任 / DWD）の資格情報を
+# ほぼ自動で用意するヘルパー。**サービスアカウント鍵(JSON)は一切作成しない**（鍵レス＝案B）。
+#   ・GCP プロジェクト作成（または既存）／必要 API 有効化（Calendar/Gmail/Meet ＋ IAMCredentials/STS）
+#   ・サービスアカウント作成（鍵なし）
+#   ・Workload Identity Pool ＋ OIDC プロバイダ作成（issuer = あなたの baku-office Worker の URL）
+#   ・IAM 付与（principalSet:subject/baku-office に workloadIdentityUser ＋ serviceAccountTokenCreator）
+#   ・最後に、設定画面に貼る JSON（sa_email/client_id/project_number/pool/provider）と DWD 用の値を表示
+# OAuth クライアントID/シークレットや SA 鍵は不要。組織ポリシー iam.disableServiceAccountKeyCreation 下でも動く。
+# 残る手動は管理コンソールでの委任承認 1 回のみ。
 #
 # 使い方:
-#   scripts/google-service-account-setup.sh [PROJECT_ID] [SA_NAME]
+#   WORKER_URL=https://<あなたのbaku-office>.workers.dev scripts/google-service-account-setup.sh [PROJECT_ID] [SA_NAME]
+#     WORKER_URL  必須。あなたの baku-office アプリの URL（OIDC issuer になる）。設定画面のコマンドに埋め込み済み。
 #     PROJECT_ID  省略時は baku-office-XXXX を自動生成
-#     SA_NAME     省略時は baku-office-bot（6〜30字・英小文字始まり）
-#   SUBJECT 環境変数で代理ユーザーを非対話指定も可（例: SUBJECT=admin@example.com ...）。
+#     SA_NAME     省略時は baku-office-bot
+#   SUBJECT 環境変数で代理ユーザーを表示用に指定可（実際に効くのは設定画面の代理ユーザー欄）。
 #
 # 前提: gcloud CLI 導入済み・`gcloud auth login` 済み・課金/権限が有効なこと。
 
 PROJECT_ID="${1:-baku-office-$(printf '%04d' $((RANDOM % 10000)))}"
 SA_NAME="${2:-baku-office-bot}"
-KEY_FILE="${SA_NAME}-key.json"
+POOL="${POOL:-baku-office-pool}"
+PROVIDER="${PROVIDER:-baku-office-prov}"
 
 # 委任するスコープ（設定画面で選んだ機能に合わせて取捨選択可。既定は Calendar + Meet）。
 SCOPES="https://www.googleapis.com/auth/calendar.events,https://www.googleapis.com/auth/meetings.space.created,https://www.googleapis.com/auth/meetings.space.readonly"
 APIS=(
-  "calendar-json.googleapis.com"  # Google Calendar API
-  "gmail.googleapis.com"          # Gmail API
-  "meet.googleapis.com"           # Google Meet API
+  "calendar-json.googleapis.com"      # Google Calendar API
+  "gmail.googleapis.com"              # Gmail API
+  "meet.googleapis.com"              # Google Meet API
+  "iamcredentials.googleapis.com"     # signJwt（DWDアサーション署名・鍵レスの要）
+  "sts.googleapis.com"               # Security Token Service（WIF トークン交換）
 )
 
-# ---- 視覚ヘルパ（Cloud Shell は色対応。非TTYなら無色）。値そのもの（鍵/ID/メール）には色を付けない＝コピー安全。 ----
+# ---- 視覚ヘルパ（Cloud Shell は色対応。非TTYなら無色）。値そのもの（ID/メール/URL）には色を付けない＝コピー安全。 ----
 if [ -t 1 ]; then B=$'\e[1m'; D=$'\e[2m'; G=$'\e[32m'; R=$'\e[31m'; N=$'\e[0m'; else B=; D=; G=; R=; N=; fi
-TOTAL=5
+TOTAL=6
 step() { printf '\n%s━━ [%s/%s] %s%s\n' "$B" "$1" "$TOTAL" "$2" "$N"; }
 ok()   { printf '   %s✓%s %s\n' "$G" "$N" "$1"; }
 info() { printf '   %s%s%s\n' "$D" "$1" "$N"; }
 die()  { printf '\n%s✗ %s%s\n' "$R" "$1" "$N" >&2; exit 1; }
-# gcloud の結果整合（作成直後の NOT_FOUND 等）を吸収するリトライ。成功するまで最大 max 回。
-retry() { local n=0 max=12; until "$@" >/dev/null 2>&1; do n=$((n + 1)); [ "$n" -ge "$max" ] && return 1; printf '   %s…反映待ち (%s/%s)%s\n' "$D" "$n" "$max" "$N"; sleep 5; done; }
-# 鍵(JSON)をターミナル経由でクリップボードへ。Cloud Shell の端末(hterm)は OSC52 クリップボード書込に対応。
-# 効かない端末では無害（エスケープが無視されるだけ）。最後に手動コピー用ブロックも必ず表示する。
-clip_copy() { local b64; b64="$(base64 -w0 <"$1" 2>/dev/null || base64 <"$1" | tr -d '\n')"; printf '\e]52;c;%s\a' "$b64"; }
 
 step 1 "前提チェック"
 command -v gcloud >/dev/null 2>&1 || die "gcloud が見つかりません: https://cloud.google.com/sdk/docs/install"
 ACTIVE_ACCOUNT="$(gcloud auth list --filter=status:ACTIVE --format='value(account)' 2>/dev/null || true)"
 [ -n "${ACTIVE_ACCOUNT}" ] || die "gcloud にログインしていません。まず実行: gcloud auth login"
-ok "アカウント : ${ACTIVE_ACCOUNT}"
-info "プロジェクト: ${PROJECT_ID} ／ サービスアカウント: ${SA_NAME}"
-# 代理ユーザー＝DWD で代理する Workspace ユーザー。確認は省き、ログイン中のアカウントを自動採用する
-# （ノンインタラクティブ）。変更したい場合のみ SUBJECT=メール bash ... で指定可。
-# WHY: スクリプトの subject は最終案内の表示用で、実際に効くのは設定画面の代理ユーザー欄（団体アカウント既定）。
+# WORKER_URL（OIDC issuer）は必須。未指定なら（対話端末では）入力を促し、非対話では中断。
+if [ -z "${WORKER_URL:-}" ]; then
+  if [ -t 0 ]; then
+    printf '   %sあなたの baku-office アプリの URL を入力してください（例 https://baku-office-app.example.workers.dev）%s\n' "$D" "$N"
+    printf '   WORKER_URL = '; read -r WORKER_URL
+  fi
+fi
+[ -n "${WORKER_URL:-}" ] || die "WORKER_URL（あなたの baku-office の URL）が必要です。設定画面に表示されたコマンドをそのままコピーして実行してください。"
+WORKER_URL="${WORKER_URL%/}" # 末尾スラッシュ除去（issuer は origin・OIDC iss と一致必須）
+case "${WORKER_URL}" in https://*) ;; *) die "WORKER_URL は https:// で始まる必要があります（現在: ${WORKER_URL}）";; esac
 SUBJECT="${SUBJECT:-${ACTIVE_ACCOUNT}}"
-ok "代理ユーザー（自動）: ${SUBJECT}"
+ok "アカウント   : ${ACTIVE_ACCOUNT}"
+ok "Worker URL  : ${WORKER_URL}（OIDC issuer）"
+info "プロジェクト: ${PROJECT_ID} ／ SA: ${SA_NAME} ／ Pool: ${POOL} ／ Provider: ${PROVIDER}"
 
 step 2 "プロジェクトの用意"
 if gcloud projects describe "${PROJECT_ID}" >/dev/null 2>&1; then
@@ -62,57 +70,58 @@ else
   ok "作成: ${PROJECT_ID}"
 fi
 gcloud config set project "${PROJECT_ID}" >/dev/null
+PROJECT_NUMBER="$(gcloud projects describe "${PROJECT_ID}" --format='value(projectNumber)')"
+[ -n "${PROJECT_NUMBER}" ] || die "プロジェクト番号の取得に失敗しました"
+ok "プロジェクト番号: ${PROJECT_NUMBER}"
 
-step 3 "API の有効化（Calendar / Gmail / Meet）"
+step 3 "API の有効化（Calendar / Gmail / Meet ＋ IAMCredentials / STS）"
 gcloud services enable "${APIS[@]}" >/dev/null || die "API 有効化に失敗"
 ok "有効化完了"
 
 SA_EMAIL="${SA_NAME}@${PROJECT_ID}.iam.gserviceaccount.com"
-step 4 "サービスアカウントと鍵の発行"
+step 4 "サービスアカウント作成（鍵は作りません）"
 if gcloud iam service-accounts describe "${SA_EMAIL}" >/dev/null 2>&1; then
   ok "SA 既存: ${SA_EMAIL}"
 else
   gcloud iam service-accounts create "${SA_NAME}" --display-name="baku-office bot" >/dev/null || die "サービスアカウント作成に失敗"
   ok "SA 作成: ${SA_EMAIL}"
 fi
-# 鍵発行：新規プロジェクトでは IAM 反映に時間がかかり keys create が NOT_FOUND を返すことがある（反映を待つ）。
-# 一方、組織ポリシー(iam.disableServiceAccountKeyCreation)等は「待っても直らない」ので、実エラーを見て即案内する。
-# WHY: 旧版は retry が gcloud の stderr を握りつぶし、真因（反映遅延か・ポリシーか）が分からなかった。
-KEY_ERR=""
-attempt_key() { KEY_ERR="$(gcloud iam service-accounts keys create "${KEY_FILE}" --iam-account="${SA_EMAIL}" 2>&1)"; }
-kn=0; kmax=24
-until attempt_key; do
-  # 待っても直らない失敗（組織ポリシーで鍵作成が無効）→ 即、対処法を案内して終了。
-  if printf '%s' "${KEY_ERR}" | grep -qiE 'disableServiceAccountKeyCreation|key creation is not allowed'; then
-    die "組織ポリシーでサービスアカウント鍵の作成が無効化されています（iam.disableServiceAccountKeyCreation）。
-   対処1：組織管理者に、このプロジェクトで鍵作成を許可してもらう（実行後に下のコマンドで再開）：
-     gcloud resource-manager org-policies disable-enforce iam.disableServiceAccountKeyCreation --project=${PROJECT_ID}
-     bash google-service-account-setup.sh ${PROJECT_ID}
-   対処2：baku-office 設定画面の「OAuthクライアント」方式を使う（鍵が不要）。
-   gcloud 詳細：${KEY_ERR}"
-  fi
-  kn=$((kn + 1))
-  if [ "${kn}" -ge "${kmax}" ]; then
-    die "鍵の発行が時間内に完了しませんでした（IAM反映待ちのタイムアウト）。
-   少し待ってから、同じプロジェクトで再実行してください（引数なしだと新規プロジェクトを作り直してしまうため ID を指定）：
-     bash google-service-account-setup.sh ${PROJECT_ID}
-   gcloud 詳細：${KEY_ERR}"
-  fi
-  printf '   %s…反映待ち (%s/%s)%s\n' "$D" "${kn}" "${kmax}" "$N"
-  sleep 5
-done
-ok "鍵を発行: ${KEY_FILE}（取扱注意・第三者に渡さない）"
 CLIENT_ID="$(gcloud iam service-accounts describe "${SA_EMAIL}" --format='value(oauth2ClientId)')"
-clip_copy "${KEY_FILE}" || true
-ok "鍵(JSON)をクリップボードにコピーしました（効かない場合は下のブロックを手動コピー）"
+[ -n "${CLIENT_ID}" ] || die "client_id（oauth2ClientId）の取得に失敗しました"
 
-step 5 "完了 — 下の値で登録してください"
-printf '\n%s【A】baku-office の「Google連携セットアップ」→ サービスアカウント方式%s\n' "$B" "$N"
-printf '   1) 代理ユーザー欄 : %s\n' "${SUBJECT}"
-printf '   2) 鍵(JSON)欄     : クリップボード済み → そのまま貼り付け（Ctrl+V / Cmd+V）\n'
+step 5 "Workload Identity Federation（プール / OIDC プロバイダ / IAM）"
+if gcloud iam workload-identity-pools describe "${POOL}" --location=global >/dev/null 2>&1; then
+  ok "Pool 既存: ${POOL}"
+else
+  gcloud iam workload-identity-pools create "${POOL}" --location=global --display-name="baku-office" >/dev/null || die "Pool 作成に失敗"
+  ok "Pool 作成: ${POOL}"
+fi
+# OIDC プロバイダ：issuer=あなたの Worker URL。subject クレームを google.subject にマップ（principalSet で参照）。
+# 既定の許可 audience（https://iam.googleapis.com/projects/.../providers/<PROV>）が Worker 自署名 JWT の aud と一致する。
+if gcloud iam workload-identity-pools providers describe "${PROVIDER}" --location=global --workload-identity-pool="${POOL}" >/dev/null 2>&1; then
+  ok "Provider 既存: ${PROVIDER}（issuer 更新）"
+  gcloud iam workload-identity-pools providers update-oidc "${PROVIDER}" --location=global --workload-identity-pool="${POOL}" \
+    --issuer-uri="${WORKER_URL}" --attribute-mapping="google.subject=assertion.sub" >/dev/null || die "Provider 更新に失敗"
+else
+  gcloud iam workload-identity-pools providers create-oidc "${PROVIDER}" --location=global --workload-identity-pool="${POOL}" \
+    --issuer-uri="${WORKER_URL}" --attribute-mapping="google.subject=assertion.sub" --display-name="baku-office" >/dev/null || die "Provider 作成に失敗"
+  ok "Provider 作成: ${PROVIDER}"
+fi
+# principalSet：自署名 JWT の sub="baku-office" を、この SA を使える主体として束縛。
+MEMBER="principalSet://iam.googleapis.com/projects/${PROJECT_NUMBER}/locations/global/workloadIdentityPools/${POOL}/subject/baku-office"
+# workloadIdentityUser＝この主体が SA として動ける。serviceAccountTokenCreator＝signJwt を呼べる（DWDアサーション署名）。
+gcloud iam service-accounts add-iam-policy-binding "${SA_EMAIL}" --role="roles/iam.workloadIdentityUser" --member="${MEMBER}" >/dev/null || die "IAM 付与(workloadIdentityUser)に失敗"
+gcloud iam service-accounts add-iam-policy-binding "${SA_EMAIL}" --role="roles/iam.serviceAccountTokenCreator" --member="${MEMBER}" >/dev/null || die "IAM 付与(serviceAccountTokenCreator)に失敗"
+ok "IAM 付与完了（workloadIdentityUser ＋ serviceAccountTokenCreator）"
+
+step 6 "完了 — 下の値で登録してください"
+printf '\n%s【A】baku-office の「Google連携セットアップ」→ サービスアカウント（キーレス）方式%s\n' "$B" "$N"
+printf '   1) 下の JSON を「WIF設定」欄にそのまま貼り付け（Ctrl+V / Cmd+V）\n'
+printf '   2) 代理ユーザー欄を確認（既定は団体アカウント）\n'
 printf '   3) 利用機能を選んで「登録して接続テスト」を押す\n'
-printf '%s┌─ 鍵(JSON)（クリップボードが効かない場合の手動コピー用）──────%s\n' "$D" "$N"
-cat "${KEY_FILE}"
+printf '%s┌─ WIF設定（この1行をコピー）─────────────────────────────────%s\n' "$D" "$N"
+printf '{"sa_email":"%s","client_id":"%s","project_number":"%s","pool":"%s","provider":"%s"}\n' \
+  "${SA_EMAIL}" "${CLIENT_ID}" "${PROJECT_NUMBER}" "${POOL}" "${PROVIDER}"
 printf '%s└─ ここまで ───────────────────────────────────────────────%s\n' "$D" "$N"
 printf '\n%s【B】Google Workspace 管理コンソールで「ドメイン全体の委任」を 1 回承認%s\n' "$B" "$N"
 printf '   URL          : https://admin.google.com/ac/owl/domainwidedelegation\n'

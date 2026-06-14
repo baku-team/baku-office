@@ -1,7 +1,7 @@
 import type { APIRoute } from "astro";
 import { getSession } from "../../lib/auth.ts";
 import { googleStatus, disconnectGoogle, setGoogleGroups, grantedScopeString, type ScopeGroupId } from "../../lib/google.ts";
-import { saveServiceAccount, getServiceAccountInfo, testServiceAccount } from "../../lib/google-sa.ts";
+import { saveServiceAccount, saveWifConfig, getServiceAccountInfo, testServiceAccount, type WifConfig } from "../../lib/google-sa.ts";
 import { env } from "cloudflare:workers";
 
 export const prerender = false;
@@ -11,7 +11,7 @@ const json = (o: unknown, s = 200) => new Response(JSON.stringify(o), { status: 
 export const POST: APIRoute = async ({ request, locals }) => {
   const ses = await getSession(env, request);
   if (!ses || ses.role !== "admin" || ses.ctx !== "org") return json({ error: "管理者のみ" }, 403);
-  const b = (await request.json().catch(() => ({}))) as { _action?: string; keyJson?: string; subject?: string; groups?: string[] };
+  const b = (await request.json().catch(() => ({}))) as { _action?: string; keyJson?: string; subject?: string; groups?: string[]; wif?: Partial<WifConfig> };
   if (b._action === "disconnect") {
     await disconnectGoogle(env);
     return json({ ok: true });
@@ -23,6 +23,18 @@ export const POST: APIRoute = async ({ request, locals }) => {
   // サービスアカウント＋ドメイン全体の委任(DWD)の設定。鍵JSON・代理ユーザー・付与グループを保存。
   if (b._action === "connect_sa") {
     const res = await saveServiceAccount(env, String(b.keyJson ?? ""), String(b.subject ?? ""));
+    if (!res.ok) return json({ error: res.error ?? "保存に失敗しました" }, 400);
+    await setGoogleGroups(env, (Array.isArray(b.groups) ? b.groups : []) as ScopeGroupId[]);
+    return json({ ok: true, sa: await getServiceAccountInfo(env) });
+  }
+  // キーレス WIF＋DWD の設定。鍵JSONを保存せず、非秘密の WIF 設定＋代理ユーザーを保存。issuer はこの Worker の origin。
+  if (b._action === "connect_wif") {
+    const w = b.wif ?? {};
+    const cfg: WifConfig = {
+      sa_email: String(w.sa_email ?? ""), client_id: String(w.client_id ?? ""), project_number: String(w.project_number ?? ""),
+      pool: String(w.pool ?? ""), provider: String(w.provider ?? ""), issuer: new URL(request.url).origin,
+    };
+    const res = await saveWifConfig(env, cfg, String(b.subject ?? ""));
     if (!res.ok) return json({ error: res.error ?? "保存に失敗しました" }, 400);
     await setGoogleGroups(env, (Array.isArray(b.groups) ? b.groups : []) as ScopeGroupId[]);
     return json({ ok: true, sa: await getServiceAccountInfo(env) });

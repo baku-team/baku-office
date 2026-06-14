@@ -92,7 +92,8 @@ export const onRequest = defineMiddleware(async (context, next) => {
     );
   }
 
-  const exempt = pathname.startsWith("/activate") || pathname.startsWith("/api/") || STATIC_EXT.test(pathname);
+  // /.well-known/ は無認証で公開（OIDC discovery/JWKS＝Google STS が取得・キーレスWIF）。ログイン誘導も同意ゲートも素通り。
+  const exempt = pathname.startsWith("/activate") || pathname.startsWith("/api/") || pathname.startsWith("/.well-known/") || STATIC_EXT.test(pathname);
   if (exempt) return withSec(await next());
 
   const token = await getToken(env);
