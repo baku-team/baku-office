@@ -75,7 +75,7 @@ scripts/google-service-account-setup.sh</code></pre>
             </details>
           </li>
           <li>
-            <h3>2. 鍵ファイルと代理ユーザーを登録</h3>
+            <h3>2. 鍵と代理ユーザーを登録して接続</h3>
             <p class="muted">発行した鍵(JSON)を選び、Google の予定・メール等を「誰として」操作するか（Workspace 内のユーザーのメール）を入力します。</p>
             <div class="field"><label for="sa-file">サービスアカウント鍵（JSON）</label><input id="sa-file" type="file" accept="application/json,.json" /></div>
             <div class="field"><label for="sa-paste">または鍵(JSON)を貼り付け</label><textarea id="sa-paste" rows="4" placeholder={'{ "type": "service_account", "client_email": "...", "private_key": "...", "client_id": "..." }'} style="width:100%;font-family:monospace;font-size:.78rem"></textarea><div class="muted" style="font-size:.8rem">Cloud Shell で <code>cat *-key.json</code> の出力をそのまま貼り付けできます。</div></div>
@@ -86,7 +86,8 @@ scripts/google-service-account-setup.sh</code></pre>
                 <label style="display:block;margin:.2rem 0"><input type="checkbox" class="sa-grp" value={g.id} data-scopes={g.scopes} checked={grantedSet.has(g.id) || g.id === "calendar"} /> {g.label}{g.restricted ? <span class="pill" style="background:#fee2e2;color:#b91c1c;margin-left:4px">審査対象</span> : ""}</label>
               ))}
             </fieldset>
-            <button class="btn btn-primary" id="sa-save" style="margin-top:.5rem">この内容で登録</button>
+            <button class="btn btn-primary" id="sa-go" style="margin-top:.5rem">登録して接続テスト</button>
+            <div id="sa-result" style="margin-top:.5rem"></div>
           </li>
           <li>
             <h3>3. 管理コンソールで「ドメイン全体の委任」を承認（1回のみ）</h3>
@@ -96,9 +97,9 @@ scripts/google-service-account-setup.sh</code></pre>
             <a class="btn btn-primary" href="https://admin.google.com/ac/owl/domainwidedelegation" target="_blank" rel="noopener">ドメイン全体の委任の設定を開く ↗</a>
           </li>
           <li>
-            <h3>4. 接続テスト</h3>
-            <p class="muted">委任の承認後にテストします。成功すれば連携完了です。</p>
-            <div class="row"><button class="btn btn-primary" id="sa-test" type="button" disabled={!saInfo}>接続テスト</button>{saInfo && (<button class="btn btn-ghost" id="sa-disconnect" type="button">連携を解除</button>)}</div>
+            <h3>4. 連携の確認・解除</h3>
+            <p class="muted">手順2の「登録して接続テスト」が、委任の承認後にもう一度押すと接続テストまで行います（成功すれば連携完了）。連携をやめる場合は下のボタンで解除します。</p>
+            <div class="row"><button class="btn btn-ghost" id="sa-disconnect" type="button" hidden={!saInfo}>連携を解除</button></div>
           </li>
         </ol>
       </div>
@@ -188,18 +189,38 @@ scripts/google-oauth-setup.sh</code></pre>
           const copy = async (id) => { const t = document.getElementById(id); try { await navigator.clipboard.writeText(t.value); window.bo?.toast?.("コピーしました"); } catch { t.select(); document.execCommand("copy"); } };
           document.getElementById("sa-copy-cid")?.addEventListener("click", () => copy("sa-cid"));
           document.getElementById("sa-copy-scopes")?.addEventListener("click", () => copy("sa-scopes"));
-          document.getElementById("sa-save")?.addEventListener("click", async (e) => {
+          // connect_sa の応答から、手順3のクライアントID/スコープをリロード無しで埋める。
+          const fillSa = (sa) => {
+            if (!sa) return;
+            const cid = document.getElementById("sa-cid");
+            if (cid && sa.clientId) cid.value = sa.clientId;
+            document.getElementById("sa-copy-cid")?.removeAttribute("disabled");
+            syncScopes();
+          };
+          // 接続テストは「DWD未承認なら失敗」が想定内のため、bo.api の自動エラートーストを避け静かに判定する。
+          const testSa = async () => {
+            try { const r = await fetch("/api/google", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ _action: "test_sa" }) }); return r.ok; }
+            catch { return false; }
+          };
+          // 1ボタン集約：登録 → クライアントID/スコープ反映 → 接続テストまで。DWD承認後はもう一度押すと成功する。
+          document.getElementById("sa-go")?.addEventListener("click", async (e) => {
             const subject = document.getElementById("sa-subject").value.trim();
             const key = resolveKey();
             if (!key) { window.bo.toast("鍵(JSON)をアップロードするか貼り付けてください", "err"); return; }
             if (!subject) { window.bo.toast("代理するユーザーのメールを入力してください", "err"); return; }
             const groups = grps().map((c) => c.value);
             const r = await window.bo.api("/api/google", { _action: "connect_sa", keyJson: key, subject, groups }, { btn: e.currentTarget, successMsg: null });
-            if (r.ok) { window.bo.toast("登録しました。手順3のドメイン全体の委任を承認してください。"); setTimeout(() => location.reload(), 900); }
-          });
-          document.getElementById("sa-test")?.addEventListener("click", async (e) => {
-            const r = await window.bo.api("/api/google", { _action: "test_sa" }, { btn: e.currentTarget, successMsg: null });
-            if (r.ok) window.bo.toast("接続できました。連携完了です。");
+            if (!r.ok) return; // connect_sa の失敗は bo.api がトースト済み
+            fillSa(r.data?.sa);
+            const ok = await testSa();
+            document.getElementById("sa-disconnect")?.removeAttribute("hidden");
+            const box = document.getElementById("sa-result");
+            if (ok) {
+              if (box) box.innerHTML = '<div class="banner banner-ok">✅ 連携が完了しました（接続テスト成功）。</div>';
+              window.bo.toast("連携完了しました");
+            } else if (box) {
+              box.innerHTML = '<div class="banner banner-warn">登録しました。下の<strong>手順3</strong>でクライアントID・スコープをコピーして「ドメイン全体の委任」を承認したら、<strong>もう一度このボタン</strong>を押してください（自動で接続テストします）。</div>';
+            }
           });
           document.getElementById("sa-disconnect")?.addEventListener("click", async (e) => {
             if (!(await window.bo.confirm("Google 連携を解除しますか？（サービスアカウント鍵を削除します）", { confirmLabel: "解除", danger: true }))) return;
