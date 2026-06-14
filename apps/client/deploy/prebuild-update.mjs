@@ -1,7 +1,7 @@
 // 第2層更新の「日和見ローダ」（deploy仕様§3.2）：
 //   再ビルド時だけ最新バンドルを取りに行く。初回や障害時は同梱版をそのまま使う（＝壊さない）。
 //   手順：①同梱 VERSION を読む ②HOST/api/release/latest を取得 ③latest>同梱 のときだけ tarball 取得
-//        ④【同梱】release-pubkey.json の Ed25519 公開鍵で署名検証 ⑤検証OK→_worker.js/_astro/migrations/release-pubkey.json を置換
+//        ④【同梱】release-pubkey.json の Ed25519 公開鍵で署名検証 ⑤検証OK→server/client/migrations/release-pubkey.json を置換
 //        検証NG／取得失敗／鍵欠落→何もしない（同梱版のまま・fail-closed）。続く wrangler deploy が同一プロジェクトへ反映。
 // ホストへは何も送らない（pull のみ＝原則1）。失敗は常に「現行版維持」へフォールバック（原則3）。
 //
@@ -58,7 +58,9 @@ try {
   mkdirSync(tmp, { recursive: true });
   writeFileSync(tmp + "/bundle.tgz", tarball);
   execSync(`tar -xzf ${tmp}/bundle.tgz -C ${tmp}`, { stdio: "ignore" });
-  for (const p of ["_worker.js", "_astro", "migrations", "release-pubkey.json"]) {
+  // v13（@astrojs/cloudflare 13）配布構成：コードは server/、静的アセットは client/。
+  // 旧 _worker.js/_astro はもう生成されないため、ここを置換対象から外すと自動更新がコードを差し替えられない。
+  for (const p of ["server", "client", "migrations", "release-pubkey.json"]) {
     const src = `${tmp}/${p}`;
     if (existsSync(src)) { rmSync(p, { recursive: true, force: true }); execSync(`cp -R ${src} ${p}`, { stdio: "ignore" }); }
   }
