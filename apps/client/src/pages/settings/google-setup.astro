@@ -24,10 +24,11 @@ const groupList = (Object.keys(SCOPE_GROUPS) as ScopeGroupId[]).map((g) => ({ id
 // スクリプトは公開配布リポに同梱（build-release が cloudshell/ を生成）。
 // cloudshell_tutorial は cloudshell_workspace 基準で解決されるため、workspace=cloudshell のときは
 // "tutorial.md"（"cloudshell/tutorial.md" にすると cloudshell/cloudshell/tutorial.md になりチュートリアル＝実行ボタンが出ない）。
-// cloudshell_command でクローン後にセットアップを自動実行（▶ を押す手間を省く）。workspace=cloudshell 基準で実行。
-// ※ Google のセキュリティ上、「Authorize／実行確認」ダイアログは残る（ゼロクリック化は不可）。
+// NOTE: cloudshell_command は現行の公式パラメータに無く、untrusted な公開リポをURLだけで自動実行する
+// 公式手段は存在しない（Google のセキュリティ仕様）。実行はチュートリアルの ```sh ブロックの
+// 「Cloud Shell にコピー」ボタン（1クリックでターミナル投入→Enter）に委ねる。
 const CLOUDSHELL_REPO = "https://github.com/baku-team/baku-office-app";
-const cloudshellUrl = "https://shell.cloud.google.com/cloudshell/editor?cloudshell_git_repo=" + encodeURIComponent(CLOUDSHELL_REPO) + "&cloudshell_workspace=cloudshell&cloudshell_tutorial=tutorial.md&cloudshell_command=" + encodeURIComponent("bash google-service-account-setup.sh");
+const cloudshellUrl = "https://shell.cloud.google.com/cloudshell/editor?cloudshell_git_repo=" + encodeURIComponent(CLOUDSHELL_REPO) + "&cloudshell_workspace=cloudshell&cloudshell_tutorial=tutorial.md";
 const bySecret = { id: !!env.GOOGLE_CLIENT_ID, secret: !!env.GOOGLE_CLIENT_SECRET };
 // ID・シークレットとも Worker Secret 投入済み＝画面の入力欄は両方 disabled になり、
 // 保存ボタンを押しても変更しようがない。ボタン自体を無効化して「押せない理由」を明示する。
@@ -67,10 +68,10 @@ const allScopes = (Object.keys(SCOPE_GROUPS) as (keyof typeof SCOPE_GROUPS)[]).f
         {saInfo && (<div class="banner banner-ok">✅ サービスアカウント設定済み（代理ユーザー：{saInfo.subject}）。接続が不安定なら下の「接続テスト」で確認してください。</div>)}
         <ol class="steps">
           <li>
-            <h3>1. サービスアカウントと鍵を作成（自動）</h3>
-            <p class="muted">下のボタンで <strong>Cloud Shell（ブラウザ内ターミナル）</strong> が開きます。ログイン済み・インストール不要で、プロジェクト作成・API有効化・サービスアカウント作成・鍵(JSON)発行までを自動実行し、手順ガイドも表示されます。</p>
-            <a class="btn btn-primary" href={cloudshellUrl} target="_blank" rel="noopener">▶ Cloud Shell で開いて自動セットアップ ↗</a>
-            <p class="muted" style="font-size:.82rem;margin-top:6px">開いたら「Authorize（承認）」→ ガイドのステップ1の実行ボタン（▶）を押すだけです。完了後に表示される<strong>鍵(JSON)</strong>・<strong>クライアントID</strong>・<strong>スコープ</strong>を次の手順で使います。</p>
+            <h3>1. サービスアカウントと鍵を作成（ほぼ自動）</h3>
+            <p class="muted">下のボタンで <strong>Cloud Shell（ブラウザ内ターミナル）</strong> が開きます。ログイン済み・インストール不要で、プロジェクト作成・API有効化・サービスアカウント作成・鍵(JSON)発行までを行い、右側に手順ガイドが出ます。</p>
+            <a class="btn btn-primary" href={cloudshellUrl} target="_blank" rel="noopener">Cloud Shell で開く ↗</a>
+            <p class="muted" style="font-size:.82rem;margin-top:6px">開いたら ①「Authorize（承認）」→ ②右の手順<strong>ステップ1の黒いコマンド枠にある「Cloud Shell にコピー」アイコン</strong>をクリック（コマンドがターミナルに入ります）→ ③ターミナルで <strong>Enter</strong>。完了後に表示される<strong>鍵(JSON)</strong>・<strong>クライアントID</strong>・<strong>スコープ</strong>を次の手順で使います。</p>
             <details class="adv" style="margin-top:6px"><summary>自分の端末の gcloud で実行する場合</summary>
               <pre style="background:#0f172a;color:#e2e8f0;padding:.8rem;border-radius:8px;overflow:auto;font-size:.8rem"><code>gcloud auth login
 scripts/google-service-account-setup.sh</code></pre>
