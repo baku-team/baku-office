@@ -23,7 +23,7 @@
 
   "vars": {
     // 配布の最新バージョン（クライアントの統合チェックに返す）。
-    "LATEST_VERSION": "0.2.1",
+    "LATEST_VERSION": "0.2.2",
     // 申込専用Worker（baku-office-apply）のURL。
     "APPLY_URL": "https://baku-office-apply.baku-027.workers.dev",
     // 団体ごと公開リポの自動生成（throwaway・§2.2-2.3）。
