@@ -5,7 +5,7 @@ set -euo pipefail
 #   ・GCP プロジェクト作成（または既存を使用）
 #   ・必要 API の有効化（Calendar / Gmail / Meet）
 #   ・サービスアカウント作成 ＋ 鍵(JSON) 発行
-#   ・最後に、設定画面に貼る鍵ファイルと、管理コンソールの「ドメイン全体の委任」に登録する
+#   ・最後に、設定画面に貼る鍵(JSON)と、管理コンソールの「ドメイン全体の委任」に登録する
 #     クライアントID・スコープ・手順を表示する。
 # OAuth クライアントID/シークレットや同意画面は不要。残る手動は管理コンソールでの委任承認 1 回のみ。
 #
@@ -28,65 +28,60 @@ APIS=(
   "meet.googleapis.com"           # Google Meet API
 )
 
-echo "==> 前提チェック"
-if ! command -v gcloud >/dev/null 2>&1; then
-  echo "✗ gcloud が見つかりません。Google Cloud SDK を入れてください: https://cloud.google.com/sdk/docs/install" >&2
-  exit 1
-fi
-ACTIVE_ACCOUNT="$(gcloud auth list --filter=status:ACTIVE --format='value(account)' 2>/dev/null || true)"
-if [ -z "${ACTIVE_ACCOUNT}" ]; then
-  echo "✗ gcloud にログインしていません。まず実行: gcloud auth login" >&2
-  exit 1
-fi
-echo "  アカウント     : ${ACTIVE_ACCOUNT}"
-echo "  プロジェクト   : ${PROJECT_ID}"
-echo "  サービスアカウント: ${SA_NAME}"
+# ---- 視覚ヘルパ（Cloud Shell は色対応。非TTYなら無色）。値そのもの（鍵/ID/スコープ）には色を付けない＝コピー安全。 ----
+if [ -t 1 ]; then B=$'\e[1m'; D=$'\e[2m'; G=$'\e[32m'; R=$'\e[31m'; N=$'\e[0m'; else B=; D=; G=; R=; N=; fi
+TOTAL=5
+step() { printf '\n%s━━ [%s/%s] %s%s\n' "$B" "$1" "$TOTAL" "$2" "$N"; }
+ok()   { printf '   %s✓%s %s\n' "$G" "$N" "$1"; }
+info() { printf '   %s%s%s\n' "$D" "$1" "$N"; }
+die()  { printf '\n%s✗ %s%s\n' "$R" "$1" "$N" >&2; exit 1; }
+# gcloud の結果整合（作成直後の NOT_FOUND 等）を吸収するリトライ。成功するまで最大 max 回。
+retry() { local n=0 max=12; until "$@" >/dev/null 2>&1; do n=$((n + 1)); [ "$n" -ge "$max" ] && return 1; printf '   %s…反映待ち (%s/%s)%s\n' "$D" "$n" "$max" "$N"; sleep 5; done; }
 
-echo "==> プロジェクトの用意"
-if ! gcloud projects describe "${PROJECT_ID}" >/dev/null 2>&1; then
-  echo "  作成: ${PROJECT_ID}"
-  gcloud projects create "${PROJECT_ID}" --name="baku-office" >/dev/null
+step 1 "前提チェック"
+command -v gcloud >/dev/null 2>&1 || die "gcloud が見つかりません: https://cloud.google.com/sdk/docs/install"
+ACTIVE_ACCOUNT="$(gcloud auth list --filter=status:ACTIVE --format='value(account)' 2>/dev/null || true)"
+[ -n "${ACTIVE_ACCOUNT}" ] || die "gcloud にログインしていません。まず実行: gcloud auth login"
+ok "アカウント : ${ACTIVE_ACCOUNT}"
+info "プロジェクト: ${PROJECT_ID} ／ サービスアカウント: ${SA_NAME}"
+
+step 2 "プロジェクトの用意"
+if gcloud projects describe "${PROJECT_ID}" >/dev/null 2>&1; then
+  ok "既存を使用: ${PROJECT_ID}"
 else
-  echo "  既存を使用: ${PROJECT_ID}"
+  gcloud projects create "${PROJECT_ID}" --name="baku-office" >/dev/null || die "プロジェクト作成に失敗（課金/権限をご確認ください）"
+  ok "作成: ${PROJECT_ID}"
 fi
 gcloud config set project "${PROJECT_ID}" >/dev/null
 
-echo "==> API の有効化"
-gcloud services enable "${APIS[@]}" >/dev/null
-echo "  有効化: ${APIS[*]}"
+step 3 "API の有効化（Calendar / Gmail / Meet）"
+gcloud services enable "${APIS[@]}" >/dev/null || die "API 有効化に失敗"
+ok "有効化完了"
 
 SA_EMAIL="${SA_NAME}@${PROJECT_ID}.iam.gserviceaccount.com"
-echo "==> サービスアカウントの用意"
-if ! gcloud iam service-accounts describe "${SA_EMAIL}" >/dev/null 2>&1; then
-  gcloud iam service-accounts create "${SA_NAME}" --display-name="baku-office bot" >/dev/null
-  echo "  作成: ${SA_EMAIL}"
+step 4 "サービスアカウントと鍵の発行"
+if gcloud iam service-accounts describe "${SA_EMAIL}" >/dev/null 2>&1; then
+  ok "SA 既存: ${SA_EMAIL}"
 else
-  echo "  既存を使用: ${SA_EMAIL}"
+  gcloud iam service-accounts create "${SA_NAME}" --display-name="baku-office bot" >/dev/null || die "サービスアカウント作成に失敗"
+  ok "SA 作成: ${SA_EMAIL}"
 fi
-
-echo "==> 鍵(JSON)の発行"
-gcloud iam service-accounts keys create "${KEY_FILE}" --iam-account="${SA_EMAIL}" >/dev/null
-echo "  鍵を書き出し: ${KEY_FILE}（取扱注意・第三者に渡さない）"
-
+# WHY: 作成直後は IAM 反映遅延で keys create が NOT_FOUND になる（旧版の失敗原因）。成功するまでリトライする。
+retry gcloud iam service-accounts keys create "${KEY_FILE}" --iam-account="${SA_EMAIL}" \
+  || die "鍵の発行に失敗しました。数十秒おいて、同じコマンドをもう一度実行してください。"
+ok "鍵を発行: ${KEY_FILE}（取扱注意・第三者に渡さない）"
 CLIENT_ID="$(gcloud iam service-accounts describe "${SA_EMAIL}" --format='value(oauth2ClientId)')"
 
-cat <<EOF
-
-============================================================
- セットアップ完了。あと 2 つの操作で連携できます。
-============================================================
-
-【A】baku-office の「Google連携セットアップ」画面（方法：サービスアカウント）で:
-  1. 鍵ファイル  : ${KEY_FILE} を選択
-  2. 代理ユーザー: Google の予定/メールを操作する Workspace ユーザーのメール（例 admin@yourdomain）
-  3. 利用する機能（スコープ）を選んで「この内容で登録」
-
-【B】Google Workspace 管理コンソール（超管理者）で「ドメイン全体の委任」を 1 回承認:
-  URL    : https://admin.google.com/ac/owl/domainwidedelegation
-  クライアントID : ${CLIENT_ID}
-  スコープ       : ${SCOPES}
-  （画面の値が最優先。利用機能を増やしたら、その分のスコープも委任に追加してください）
-
-承認後、設定画面の「接続テスト」が成功すれば連携完了です。
-============================================================
-EOF
+step 5 "完了 — 下の値をコピーして登録してください"
+printf '\n%s【A】baku-office の「Google連携セットアップ」→ サービスアカウント方式%s\n' "$B" "$N"
+printf '   1) 下の鍵(JSON)を丸ごとコピーして「鍵(JSON)を貼り付け」へ\n'
+printf '   2) 代理ユーザー = 予定/メールを操作する Workspace ユーザーのメール（例 admin@yourdomain）\n'
+printf '   3) 利用機能を選んで「この内容で登録」\n'
+printf '%s┌─ ここから鍵(JSON)をコピー ──────────────────────────────%s\n' "$D" "$N"
+cat "${KEY_FILE}"
+printf '%s└─ ここまで ───────────────────────────────────────────────%s\n' "$D" "$N"
+printf '\n%s【B】Google Workspace 管理コンソールで「ドメイン全体の委任」を 1 回承認%s\n' "$B" "$N"
+printf '   URL          : https://admin.google.com/ac/owl/domainwidedelegation\n'
+printf '   クライアントID : %s\n' "${CLIENT_ID}"
+printf '   スコープ       : %s\n' "${SCOPES}"
+printf '\n%s承認後、設定画面の「接続テスト」が成功すれば連携完了です。%s\n' "$G" "$N"

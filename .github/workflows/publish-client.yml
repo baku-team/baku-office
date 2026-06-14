@@ -8,6 +8,8 @@ on:
     paths:
       - "apps/client/**"
       - "packages/shared/**"
+      - "scripts/google-service-account-setup.sh"
+      - "scripts/google-cloudshell-tutorial.md"
       - ".github/workflows/publish-client.yml"
   workflow_dispatch: {}
 
